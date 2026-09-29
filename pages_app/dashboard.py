@@ -1,7 +1,8 @@
-"""Panel principal: totales generales del sistema."""
+"""Panel principal: totales generales del sistema, en tarjetas."""
 import streamlit as st
 
 from db import repository as repo
+from pages_app import ui
 
 
 def render(user: dict) -> None:
@@ -10,11 +11,19 @@ def render(user: dict) -> None:
 
     totals = repo.dashboard_totals()
 
-    c1, c2, c3, c4 = st.columns(4)
-    c1.metric("Materiales en catálogo", totals["materials"])
-    c2.metric("Proveedores registrados", totals["suppliers"])
-    c3.metric("Proveedores con algo disponible", totals["suppliers_with_available"])
-    c4.metric("Materiales sin proveedor", totals["materials_without_supplier"])
+    ui.stat_grid(
+        [
+            ui.stat_card("📦", totals["materials"], "Materiales en catálogo"),
+            ui.stat_card("🏭", totals["suppliers"], "Proveedores registrados"),
+            ui.stat_card("✅", totals["suppliers_with_available"], "Proveedores con algo disponible"),
+            ui.stat_card(
+                "⚠️",
+                totals["materials_without_supplier"],
+                "Materiales sin proveedor",
+                warn=totals["materials_without_supplier"] > 0,
+            ),
+        ]
+    )
 
     if totals["materials"] and totals["materials_without_supplier"]:
         st.warning(
