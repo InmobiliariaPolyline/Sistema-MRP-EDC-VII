@@ -21,20 +21,30 @@ def logout() -> None:
 
 
 def render() -> None:
-    st.title("📦 Sistema MRP")
+    st.markdown(
+        '<div class="mrp-brand" style="justify-content:center; margin: 40px 0 20px 0;">'
+        '<div class="mrp-brand-badge" style="width:48px;height:48px;font-size:22px;">📦</div>'
+        '<div><div class="mrp-brand-name" style="font-size:22px;">Sistema MRP</div>'
+        '<div class="mrp-brand-sub">Materiales y proveedores</div></div>'
+        "</div>",
+        unsafe_allow_html=True,
+    )
 
-    if repo.count_users() == 0:
-        _render_bootstrap()
-    else:
-        _render_login()
+    _, col, _ = st.columns([1, 1.3, 1])
+    with col:
+        if repo.count_users() == 0:
+            _render_bootstrap()
+        else:
+            _render_login()
 
 
 def _render_login() -> None:
-    st.subheader("Iniciar sesión")
-    with st.form("login_form"):
-        username = st.text_input("Usuario")
-        password = st.text_input("Contraseña", type="password")
-        submitted = st.form_submit_button("Entrar")
+    with st.container(border=True):
+        st.markdown('<div class="mrp-panel-title">Iniciar sesión</div>', unsafe_allow_html=True)
+        with st.form("login_form"):
+            username = st.text_input("Usuario")
+            password = st.text_input("Contraseña", type="password")
+            submitted = st.form_submit_button("Entrar", use_container_width=True)
 
     if not submitted:
         return
@@ -54,13 +64,15 @@ def _render_login() -> None:
 
 
 def _render_bootstrap() -> None:
-    st.info("Todavía no hay usuarios registrados. Crea la primera cuenta (quedará como Administrador).")
-    with st.form("bootstrap_form"):
-        name = st.text_input("Nombre completo")
-        username = st.text_input("Usuario")
-        password = st.text_input("Contraseña", type="password")
-        password2 = st.text_input("Repetir contraseña", type="password")
-        submitted = st.form_submit_button("Crear administrador")
+    with st.container(border=True):
+        st.markdown('<div class="mrp-panel-title">Crear administrador</div>', unsafe_allow_html=True)
+        st.caption("Todavía no hay usuarios registrados. Esta cuenta quedará como Administrador.")
+        with st.form("bootstrap_form"):
+            name = st.text_input("Nombre completo")
+            username = st.text_input("Usuario")
+            password = st.text_input("Contraseña", type="password")
+            password2 = st.text_input("Repetir contraseña", type="password")
+            submitted = st.form_submit_button("Crear administrador", use_container_width=True)
 
     if not submitted:
         return

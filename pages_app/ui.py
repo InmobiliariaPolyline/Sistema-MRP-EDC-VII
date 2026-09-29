@@ -150,6 +150,42 @@ section[data-testid="stSidebar"] .block-container {
 }
 .mrp-brand-name { font-weight: 800; font-size: 16px; line-height: 1.1; color: #1F2333; }
 .mrp-brand-sub { font-size: 12px; color: #9095A6; }
+
+/* Avatar circular con inicial (proveedores, usuarios) */
+.mrp-avatar {
+    width: 38px;
+    height: 38px;
+    min-width: 38px;
+    border-radius: 50%;
+    background: #EFECFD;
+    color: #6C5CE7;
+    font-weight: 800;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 15px;
+}
+.mrp-row {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+}
+.mrp-row-name { font-weight: 700; font-size: 15px; color: #1F2333; }
+.mrp-row-sub { font-size: 12.5px; color: #9095A6; }
+
+/* Pastillas de estado / rol */
+.mrp-pill {
+    display: inline-block;
+    font-size: 11px;
+    font-weight: 700;
+    padding: 3px 10px;
+    border-radius: 999px;
+    white-space: nowrap;
+}
+.mrp-pill-purple { background: #EFECFD; color: #6C5CE7; }
+.mrp-pill-green { background: #E3F9E9; color: #1F9254; }
+.mrp-pill-red { background: #FCE9E9; color: #D64545; }
+.mrp-pill-gray { background: #EEF0F4; color: #6B7280; }
 </style>
 """
 
@@ -195,3 +231,28 @@ def activity_item(name: str, sub: str, badge: str) -> str:
 
 def activity_list(items: list[str]) -> str:
     return "".join(items) if items else '<div class="mrp-activity-sub">Todavía no hay actividad.</div>'
+
+
+def panel_header(eyebrow: str, title: str) -> None:
+    """Encabezado a usar dentro de un `with st.container(border=True):`."""
+    st.markdown(
+        f'<div class="mrp-eyebrow">{eyebrow}</div><div class="mrp-panel-title">{title}</div>',
+        unsafe_allow_html=True,
+    )
+
+
+def avatar(name: str) -> str:
+    initial = (name or "?").strip()[:1].upper() or "?"
+    return f'<div class="mrp-avatar">{initial}</div>'
+
+
+def pill(text: str, color: str = "purple") -> str:
+    return f'<span class="mrp-pill mrp-pill-{color}">{text}</span>'
+
+
+def row_name_sub(avatar_html: str, name: str, sub: str) -> str:
+    return (
+        f'<div class="mrp-row">{avatar_html}'
+        f'<div><div class="mrp-row-name">{name}</div><div class="mrp-row-sub">{sub}</div></div>'
+        f"</div>"
+    )

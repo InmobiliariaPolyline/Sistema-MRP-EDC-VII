@@ -3,79 +3,90 @@ materiales por proveedor (disponible / no disponible, marcado a mano)."""
 import streamlit as st
 
 from db import repository as repo
+from pages_app import ui
 from utils.excel import dataframe_to_excel_bytes, read_excel_upload
 
 SELECTED_KEY = "selected_supplier_id"
 
 
 def render() -> None:
-    st.header("Proveedores")
-    st.caption("Pensado para contactar: teléfono/email a la mano y qué materiales tiene disponibles cada uno.")
-
     if st.session_state.get(SELECTED_KEY):
         _render_supplier_detail(st.session_state[SELECTED_KEY])
         return
 
+    ui.page_header(
+        "Gestión de proveedores",
+        "Proveedores",
+        "Pensado para contactar: teléfono/email a la mano y qué materiales tiene disponible cada uno.",
+    )
+
     _render_import_export()
-    st.divider()
     _render_form()
-    st.divider()
     _render_cards()
 
 
 def _render_import_export() -> None:
-    col1, col2 = st.columns(2)
+    with st.container(border=True):
+        ui.panel_header("Datos", "Importar / exportar")
+        col1, col2 = st.columns(2)
 
-    with col1:
-        st.subheader("Exportar")
-        df = repo.export_suppliers_df()
-        st.download_button(
-            "Descargar proveedores (Excel)",
-            data=dataframe_to_excel_bytes(df, "Proveedores"),
-            file_name="proveedores.xlsx",
-            mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-            disabled=df.empty,
-        )
+        with col1:
+            st.caption("EXPORTAR")
+            df = repo.export_suppliers_df()
+            st.download_button(
+                "⬇ Descargar proveedores (Excel)",
+                data=dataframe_to_excel_bytes(df, "Proveedores"),
+                file_name="proveedores.xlsx",
+                mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+                disabled=df.empty,
+                use_container_width=True,
+            )
 
-    with col2:
-        st.subheader("Importar")
-        uploaded = st.file_uploader(
-            "Excel con columnas: name, contact_name, phone, email, notes (solo name es obligatoria)",
-            type=["xlsx"],
-            key="suppliers_uploader",
-        )
-        if uploaded is not None and st.button("Importar proveedores", key="import_suppliers_btn"):
-            try:
-                df = read_excel_upload(uploaded)
-                ok, failed = repo.import_suppliers(df)
-                st.success(f"Proveedores creados: {ok}. Filas descartadas: {failed}.")
-                st.rerun()
-            except Exception as exc:
-                st.error(f"No fue posible importar el Excel: {exc}")
+        with col2:
+            st.caption("IMPORTAR")
+            uploaded = st.file_uploader(
+                "Excel: name, contact_name, phone, email, notes (solo name es obligatoria)",
+                type=["xlsx"],
+                key="suppliers_uploader",
+                label_visibility="collapsed",
+            )
+            if uploaded is not None and st.button("Importar proveedores", key="import_suppliers_btn", use_container_width=True):
+                try:
+                    df = read_excel_upload(uploaded)
+                    ok, failed = repo.import_suppliers(df)
+                    st.success(f"Proveedores creados: {ok}. Filas descartadas: {failed}.")
+                    st.rerun()
+                except Exception as exc:
+                    st.error(f"No fue posible importar el Excel: {exc}")
+    st.write("")
 
 
 def _render_form() -> None:
-    st.subheader("Registrar proveedor")
-    with st.form("new_supplier_form", clear_on_submit=True):
-        name = st.text_input("Nombre del proveedor")
-        c1, c2 = st.columns(2)
-        contact_name = c1.text_input("Persona de contacto (opcional)")
-        phone = c2.text_input("Teléfono")
-        c3, c4 = st.columns(2)
-        email = c3.text_input("Correo (opcional)")
-        notes = c4.text_input("Notas (opcional)")
-        submitted = st.form_submit_button("Guardar")
-        if submitted:
-            if not name.strip():
-                st.error("El nombre del proveedor es obligatorio.")
-            else:
-                repo.upsert_supplier(name.strip(), contact_name.strip() or None, phone.strip() or None, email.strip() or None, notes.strip() or None)
-                st.success(f"Proveedor «{name}» registrado.")
-                st.rerun()
+    with st.container(border=True):
+        ui.panel_header("Nuevo registro", "Registrar proveedor")
+        with st.form("new_supplier_form", clear_on_submit=True):
+            name = st.text_input("Nombre del proveedor")
+            c1, c2 = st.columns(2)
+            contact_name = c1.text_input("Persona de contacto (opcional)")
+            phone = c2.text_input("Teléfono")
+            c3, c4 = st.columns(2)
+            email = c3.text_input("Correo (opcional)")
+            notes = c4.text_input("Notas (opcional)")
+            submitted = st.form_submit_button("Guardar", use_container_width=True)
+            if submitted:
+                if not name.strip():
+                    st.error("El nombre del proveedor es obligatorio.")
+                else:
+                    repo.upsert_supplier(name.strip(), contact_name.strip() or None, phone.strip() or None, email.strip() or None, notes.strip() or None)
+                    st.success(f"Proveedor «{name}» registrado.")
+                    st.rerun()
+    st.write("")
 
 
 def _render_cards() -> None:
-    st.subheader("Proveedores registrados")
+    st.markdown('<div class="mrp-eyebrow">Directorio</div>', unsafe_allow_html=True)
+    st.markdown('<div class="mrp-panel-title">Proveedores registrados</div>', unsafe_allow_html=True)
+
     df = repo.list_suppliers()
     if df.empty:
         st.info("Todavía no hay proveedores registrados.")
@@ -83,16 +94,21 @@ def _render_cards() -> None:
 
     for row in df.to_dict("records"):
         with st.container(border=True):
-            c1, c2, c3, c4 = st.columns([3, 2, 2, 2])
-            c1.markdown(f"**{row['name']}**")
-            c2.write(f"📞 {row['phone']}" if row["phone"] else "📞 —")
-            c3.write(f"✉️ {row['email']}" if row["email"] else "✉️ —")
-            with c4:
-                cc1, cc2 = st.columns(2)
-                if cc1.button("Ver catálogo", key=f"open_{row['id']}"):
+            c1, c2, c3, c4 = st.columns([4, 3, 2, 1])
+            with c1:
+                sub = row["phone"] or "Sin teléfono"
+                st.markdown(ui.row_name_sub(ui.avatar(row["name"]), row["name"], sub), unsafe_allow_html=True)
+            with c2:
+                st.markdown(
+                    f'<div class="mrp-row-sub">✉️ {row["email"] or "—"}</div>',
+                    unsafe_allow_html=True,
+                )
+            with c3:
+                if st.button("Ver catálogo", key=f"open_{row['id']}", use_container_width=True):
                     st.session_state[SELECTED_KEY] = row["id"]
                     st.rerun()
-                if cc2.button("Eliminar", key=f"del_supplier_{row['id']}"):
+            with c4:
+                if st.button("🗑", key=f"del_supplier_{row['id']}", help="Eliminar proveedor"):
                     repo.delete_supplier(row["id"])
                     st.rerun()
 
@@ -110,16 +126,22 @@ def _render_supplier_detail(supplier_id: str) -> None:
         st.session_state[SELECTED_KEY] = None
         st.rerun()
 
-    st.subheader(supplier["name"])
-    c1, c2, c3 = st.columns(3)
-    c1.metric("Contacto", supplier["contact_name"] or "—")
-    c2.metric("Teléfono", supplier["phone"] or "—")
-    c3.metric("Correo", supplier["email"] or "—")
+    ui.page_header("Ficha de proveedor", supplier["name"])
+
+    ui.stat_grid(
+        [
+            ui.stat_card("🙍", supplier["contact_name"] or "—", "Contacto"),
+            ui.stat_card("📞", supplier["phone"] or "—", "Teléfono"),
+            ui.stat_card("✉️", supplier["email"] or "—", "Correo"),
+        ]
+    )
     if supplier["notes"]:
         st.caption(supplier["notes"])
 
-    st.divider()
-    st.write("**Catálogo de materiales de este proveedor**")
+    st.write("")
+    st.markdown('<div class="mrp-eyebrow">Catálogo</div>', unsafe_allow_html=True)
+    st.markdown('<div class="mrp-panel-title">Materiales de este proveedor</div>', unsafe_allow_html=True)
+
     catalog = repo.get_supplier_catalog(supplier_id)
     if catalog.empty:
         st.info("Todavía no hay materiales en el catálogo general para asignar.")
