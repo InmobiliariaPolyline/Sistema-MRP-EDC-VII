@@ -7,6 +7,7 @@ import streamlit as st
 
 from db import repository as repo
 from pages_app import ui
+from utils.timeago import time_ago
 
 MESES = [
     "enero", "febrero", "marzo", "abril", "mayo", "junio",
@@ -59,7 +60,7 @@ def render(user: dict) -> None:
 
 def _render_activity() -> None:
     items = repo.recent_activity(limit=6)
-    rows = [ui.activity_item(it["name"], it["sub"], it["kind"]) for it in items]
+    rows = [ui.activity_item(it["name"], it["sub"], it["kind"], time_ago(it["created_at"])) for it in items]
     st.markdown(
         '<div class="mrp-panel">'
         '<div class="mrp-eyebrow">Seguimiento</div>'

@@ -14,20 +14,40 @@ def render() -> None:
         _render_supplier_detail(st.session_state[SELECTED_KEY])
         return
 
-    ui.page_header(
+    clicked = ui.page_header(
         "Gestión de proveedores",
         "Proveedores",
         "Pensado para contactar: teléfono/email a la mano y qué materiales tiene disponible cada uno.",
+        action_label="＋ Nuevo proveedor",
+        action_key="new_supplier_open",
     )
+    if clicked:
+        _new_supplier_dialog()
 
     _render_import_export()
-    _render_form()
     _render_cards()
 
 
+@st.dialog("Registrar proveedor")
+def _new_supplier_dialog() -> None:
+    name = st.text_input("Nombre del proveedor")
+    c1, c2 = st.columns(2)
+    contact_name = c1.text_input("Persona de contacto (opcional)")
+    phone = c2.text_input("Teléfono")
+    c3, c4 = st.columns(2)
+    email = c3.text_input("Correo (opcional)")
+    notes = c4.text_input("Notas (opcional)")
+    if st.button("Guardar", type="primary", use_container_width=True):
+        if not name.strip():
+            st.error("El nombre del proveedor es obligatorio.")
+        else:
+            repo.upsert_supplier(name.strip(), contact_name.strip() or None, phone.strip() or None, email.strip() or None, notes.strip() or None)
+            st.success(f"Proveedor «{name}» registrado.")
+            st.rerun()
+
+
 def _render_import_export() -> None:
-    with st.container(border=True):
-        ui.panel_header("Datos", "Importar / exportar")
+    with st.expander("Importar / exportar Excel"):
         col1, col2 = st.columns(2)
 
         with col1:
@@ -61,40 +81,18 @@ def _render_import_export() -> None:
     st.write("")
 
 
-def _render_form() -> None:
-    with st.container(border=True):
-        ui.panel_header("Nuevo registro", "Registrar proveedor")
-        with st.form("new_supplier_form", clear_on_submit=True):
-            name = st.text_input("Nombre del proveedor")
-            c1, c2 = st.columns(2)
-            contact_name = c1.text_input("Persona de contacto (opcional)")
-            phone = c2.text_input("Teléfono")
-            c3, c4 = st.columns(2)
-            email = c3.text_input("Correo (opcional)")
-            notes = c4.text_input("Notas (opcional)")
-            submitted = st.form_submit_button("Guardar", use_container_width=True)
-            if submitted:
-                if not name.strip():
-                    st.error("El nombre del proveedor es obligatorio.")
-                else:
-                    repo.upsert_supplier(name.strip(), contact_name.strip() or None, phone.strip() or None, email.strip() or None, notes.strip() or None)
-                    st.success(f"Proveedor «{name}» registrado.")
-                    st.rerun()
-    st.write("")
-
-
 def _render_cards() -> None:
     st.markdown('<div class="mrp-eyebrow">Directorio</div>', unsafe_allow_html=True)
     st.markdown('<div class="mrp-panel-title">Proveedores registrados</div>', unsafe_allow_html=True)
 
     df = repo.list_suppliers()
     if df.empty:
-        st.info("Todavía no hay proveedores registrados.")
+        st.info("Todavía no hay proveedores registrados. Usa «＋ Nuevo proveedor» arriba para crear el primero.")
         return
 
     for row in df.to_dict("records"):
         with st.container(border=True):
-            c1, c2, c3, c4 = st.columns([4, 3, 2, 1])
+            c1, c2, c3, c4 = st.columns([4, 2, 3, 1])
             with c1:
                 sub = row["phone"] or "Sin teléfono"
                 st.markdown(ui.row_name_sub(ui.avatar(row["name"]), row["name"], sub), unsafe_allow_html=True)
@@ -104,7 +102,7 @@ def _render_cards() -> None:
                     unsafe_allow_html=True,
                 )
             with c3:
-                if st.button("Ver catálogo", key=f"open_{row['id']}", use_container_width=True):
+                if st.button("Catálogo", key=f"open_{row['id']}", use_container_width=True):
                     st.session_state[SELECTED_KEY] = row["id"]
                     st.rerun()
             with c4:

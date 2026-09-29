@@ -42,6 +42,8 @@ with st.sidebar:
         unsafe_allow_html=True,
     )
     st.caption(f"{user['name']} · {'Administrador' if user['role'] == 'admin' else 'Operador'}")
+    st.write("")
+    st.markdown('<div class="mrp-sidebar-section">Espacio de trabajo</div>', unsafe_allow_html=True)
 
     seccion = option_menu(
         menu_title=None,

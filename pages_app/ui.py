@@ -114,6 +114,22 @@ _CSS = """
     color: #6C5CE7;
     white-space: nowrap;
 }
+.mrp-activity-when {
+    font-size: 11px;
+    color: #B4B8C4;
+    margin-top: 4px;
+    white-space: nowrap;
+}
+
+/* Rótulo de sección arriba del menú lateral */
+.mrp-sidebar-section {
+    font-size: 11px;
+    font-weight: 700;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    color: #B4B8C4;
+    margin: 4px 0 8px 4px;
+}
 
 /* Tarjetas de lista genéricas (proveedores, usuarios, materiales) */
 .mrp-card {
@@ -194,11 +210,25 @@ def inject() -> None:
     st.markdown(_CSS, unsafe_allow_html=True)
 
 
-def page_header(eyebrow: str, title: str, subtitle: str = "") -> None:
+def page_header(eyebrow: str, title: str, subtitle: str = "", action_label: str | None = None, action_key: str | None = None) -> bool:
+    """Encabezado de página. Si se pasa `action_label`, dibuja un botón
+    primario a la derecha (tipo "+ Crear...") y devuelve True si se clickeó."""
     html = f'<div class="mrp-eyebrow">{eyebrow}</div><div class="mrp-page-title">{title}</div>'
     if subtitle:
         html += f'<div class="mrp-page-subtitle">{subtitle}</div>'
-    st.markdown(html, unsafe_allow_html=True)
+
+    if not action_label:
+        st.markdown(html, unsafe_allow_html=True)
+        return False
+
+    col1, col2 = st.columns([4, 1.3])
+    with col1:
+        st.markdown(html, unsafe_allow_html=True)
+    with col2:
+        st.write("")
+        st.write("")
+        clicked = st.button(action_label, key=action_key, type="primary", use_container_width=True)
+    return clicked
 
 
 def stat_card(icon: str, value, label: str, caption: str = "", warn: bool = False) -> str:
@@ -220,11 +250,14 @@ def stat_grid(cards: list[str]) -> None:
     st.markdown(f'<div class="mrp-stat-grid">{"".join(cards)}</div>', unsafe_allow_html=True)
 
 
-def activity_item(name: str, sub: str, badge: str) -> str:
+def activity_item(name: str, sub: str, badge: str, when: str = "") -> str:
+    when_html = f'<div class="mrp-activity-when">{when}</div>' if when else ""
     return (
         '<div class="mrp-activity-item">'
         f'<div><div class="mrp-activity-name">{name}</div><div class="mrp-activity-sub">{sub}</div></div>'
-        f'<div class="mrp-activity-badge">{badge}</div>'
+        f'<div style="text-align:right;">'
+        f'<div class="mrp-activity-badge">{badge}</div>{when_html}'
+        f"</div>"
         "</div>"
     )
 

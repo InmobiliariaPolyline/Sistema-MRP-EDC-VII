@@ -7,20 +7,39 @@ from utils.excel import dataframe_to_excel_bytes, read_excel_upload
 
 
 def render() -> None:
-    ui.page_header(
+    clicked = ui.page_header(
         "Catálogo",
         "Materiales",
         "Categoría, densidad y métrica de cómputo de cada material.",
+        action_label="＋ Nuevo material",
+        action_key="new_material_open",
     )
+    if clicked:
+        _new_material_dialog()
 
     _render_import_export()
-    _render_form()
     _render_table()
 
 
+@st.dialog("Agregar material")
+def _new_material_dialog() -> None:
+    c1, c2 = st.columns(2)
+    category = c1.text_input("Categoría", placeholder="Ej. Concreto")
+    name = c2.text_input("Nombre", placeholder="Ej. Concreto f'c=210")
+    c3, c4 = st.columns(2)
+    density = c3.number_input("Densidad (kg/m³, opcional)", min_value=0.0, step=0.1, value=0.0)
+    metric_label = c4.text_input("Métrica de cómputo", placeholder="Ej. Volumen (m³)")
+    if st.button("Guardar", type="primary", use_container_width=True):
+        if not category.strip() or not name.strip():
+            st.error("Categoría y nombre son obligatorios.")
+        else:
+            repo.upsert_material(category.strip(), name.strip(), density or None, metric_label.strip())
+            st.success(f"Material «{name}» guardado.")
+            st.rerun()
+
+
 def _render_import_export() -> None:
-    with st.container(border=True):
-        ui.panel_header("Datos", "Importar / exportar")
+    with st.expander("Importar / exportar Excel"):
         col1, col2 = st.columns(2)
 
         with col1:
@@ -54,34 +73,13 @@ def _render_import_export() -> None:
     st.write("")
 
 
-def _render_form() -> None:
-    with st.container(border=True):
-        ui.panel_header("Nuevo registro", "Agregar material")
-        with st.form("new_material_form", clear_on_submit=True):
-            c1, c2 = st.columns(2)
-            category = c1.text_input("Categoría", placeholder="Ej. Concreto")
-            name = c2.text_input("Nombre", placeholder="Ej. Concreto f'c=210")
-            c3, c4 = st.columns(2)
-            density = c3.number_input("Densidad (kg/m³, opcional)", min_value=0.0, step=0.1, value=0.0)
-            metric_label = c4.text_input("Métrica de cómputo", placeholder="Ej. Volumen (m³)")
-            submitted = st.form_submit_button("Guardar", use_container_width=True)
-            if submitted:
-                if not category.strip() or not name.strip():
-                    st.error("Categoría y nombre son obligatorios.")
-                else:
-                    repo.upsert_material(category.strip(), name.strip(), density or None, metric_label.strip())
-                    st.success(f"Material «{name}» guardado.")
-                    st.rerun()
-    st.write("")
-
-
 def _render_table() -> None:
     st.markdown('<div class="mrp-eyebrow">Inventario</div>', unsafe_allow_html=True)
     st.markdown('<div class="mrp-panel-title">Catálogo</div>', unsafe_allow_html=True)
 
     df = repo.list_materials()
     if df.empty:
-        st.info("Todavía no hay materiales cargados.")
+        st.info("Todavía no hay materiales cargados. Usa «＋ Nuevo material» arriba para crear el primero.")
         return
 
     for category, group in df.groupby("category"):

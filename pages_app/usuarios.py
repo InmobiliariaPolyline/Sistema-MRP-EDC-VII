@@ -15,36 +15,38 @@ def render(user: dict) -> None:
         st.error("Solo un administrador puede gestionar usuarios.")
         return
 
-    ui.page_header("Cuentas", "Usuarios", "Quién tiene acceso al sistema y con qué rol.")
+    clicked = ui.page_header(
+        "Cuentas",
+        "Usuarios",
+        "Quién tiene acceso al sistema y con qué rol.",
+        action_label="＋ Nuevo usuario",
+        action_key="new_user_open",
+    )
+    if clicked:
+        _new_user_dialog()
 
-    _render_form(user)
     _render_table(user)
 
 
-def _render_form(current_user: dict) -> None:
-    with st.container(border=True):
-        ui.panel_header("Nuevo registro", "Crear usuario")
-        with st.form("new_user_form", clear_on_submit=True):
-            c1, c2 = st.columns(2)
-            name = c1.text_input("Nombre completo")
-            username = c2.text_input("Usuario")
-            c3, c4 = st.columns(2)
-            password = c3.text_input("Contraseña", type="password")
-            role = c4.selectbox("Rol", ROLES)
-            submitted = st.form_submit_button("Crear", use_container_width=True)
-
-        if submitted:
-            if not name.strip() or not username.strip() or not password:
-                st.error("Completa todos los campos.")
-            elif len(password) < 6:
-                st.error("La contraseña debe tener al menos 6 caracteres.")
-            elif repo.get_user_by_username(username.strip()):
-                st.error(f"Ya existe un usuario con el nombre «{username}».")
-            else:
-                repo.create_user(username.strip(), hash_password(password), name.strip(), role)
-                st.success(f"Usuario «{username}» creado.")
-                st.rerun()
-    st.write("")
+@st.dialog("Crear usuario")
+def _new_user_dialog() -> None:
+    c1, c2 = st.columns(2)
+    name = c1.text_input("Nombre completo")
+    username = c2.text_input("Usuario")
+    c3, c4 = st.columns(2)
+    password = c3.text_input("Contraseña", type="password")
+    role = c4.selectbox("Rol", ROLES)
+    if st.button("Crear", type="primary", use_container_width=True):
+        if not name.strip() or not username.strip() or not password:
+            st.error("Completa todos los campos.")
+        elif len(password) < 6:
+            st.error("La contraseña debe tener al menos 6 caracteres.")
+        elif repo.get_user_by_username(username.strip()):
+            st.error(f"Ya existe un usuario con el nombre «{username}».")
+        else:
+            repo.create_user(username.strip(), hash_password(password), name.strip(), role)
+            st.success(f"Usuario «{username}» creado.")
+            st.rerun()
 
 
 def _render_table(current_user: dict) -> None:
