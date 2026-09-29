@@ -63,3 +63,4 @@ existe esa combinación, se actualiza; si no, se crea.
 **Proveedores** (`proveedores.xlsx`): columnas `name` (obligatoria),
 `contact_name`, `phone`, `email`, `notes` (todas opcionales). Cada fila
 importada crea un proveedor nuevo.
+>>>>>>> origin/main
