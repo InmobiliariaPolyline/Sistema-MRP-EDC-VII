@@ -246,3 +246,20 @@ def dashboard_totals() -> dict:
         "suppliers_with_available": int(suppliers_with_available),
         "materials_without_supplier": int(materials_without_supplier),
     }
+
+
+def recent_activity(limit: int = 6) -> list[dict]:
+    """Últimos materiales y proveedores agregados, mezclados por fecha."""
+    client = get_client()
+    mat_res = client.table("materials").select("name,category,created_at").order("created_at", desc=True).limit(limit).execute()
+    sup_res = client.table("suppliers").select("name,phone,created_at").order("created_at", desc=True).limit(limit).execute()
+
+    items = [
+        {"name": row["name"], "sub": row.get("category") or "Material", "kind": "Material", "created_at": row["created_at"]}
+        for row in (mat_res.data or [])
+    ] + [
+        {"name": row["name"], "sub": row.get("phone") or "Proveedor", "kind": "Proveedor", "created_at": row["created_at"]}
+        for row in (sup_res.data or [])
+    ]
+    items.sort(key=lambda it: it["created_at"] or "", reverse=True)
+    return items[:limit]

@@ -33,7 +33,14 @@ if user["role"] == "admin":
     MODULES.append(("Usuarios", "people"))
 
 with st.sidebar:
-    st.markdown("### 📦 Sistema MRP")
+    st.markdown(
+        '<div class="mrp-brand">'
+        '<div class="mrp-brand-badge">📦</div>'
+        '<div><div class="mrp-brand-name">Sistema MRP</div>'
+        '<div class="mrp-brand-sub">Materiales y proveedores</div></div>'
+        "</div>",
+        unsafe_allow_html=True,
+    )
     st.caption(f"{user['name']} · {'Administrador' if user['role'] == 'admin' else 'Operador'}")
 
     seccion = option_menu(
@@ -43,15 +50,21 @@ with st.sidebar:
         default_index=0,
         styles={
             "container": {"padding": "0", "background-color": "transparent"},
-            "icon": {"font-size": "16px"},
+            "icon": {"font-size": "16px", "color": "#6B7280"},
             "nav-link": {
                 "font-size": "15px",
                 "text-align": "left",
                 "margin": "4px 0",
                 "border-radius": "10px",
                 "padding": "10px 14px",
+                "color": "#1F2333",
             },
-            "nav-link-selected": {"background-color": "#2F80ED"},
+            "nav-link-selected": {
+                "background-color": "#EFECFD",
+                "color": "#6C5CE7",
+                "font-weight": "700",
+                "icon-color": "#6C5CE7",
+            },
         },
     )
 

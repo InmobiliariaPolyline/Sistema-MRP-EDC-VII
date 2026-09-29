@@ -334,3 +334,24 @@ def dashboard_totals() -> dict:
         "suppliers_with_available": suppliers_with_available,
         "materials_without_supplier": materials_without_supplier,
     }
+
+
+def recent_activity(limit: int = 6) -> list[dict]:
+    """Últimos materiales y proveedores agregados, mezclados por fecha."""
+    with _connect() as conn:
+        materials = conn.execute(
+            "select name, category, created_at from materials order by created_at desc limit ?", (limit,)
+        ).fetchall()
+        suppliers = conn.execute(
+            "select name, phone, created_at from suppliers order by created_at desc limit ?", (limit,)
+        ).fetchall()
+
+    items = [
+        {"name": name, "sub": category or "Material", "kind": "Material", "created_at": created_at}
+        for name, category, created_at in materials
+    ] + [
+        {"name": name, "sub": phone or "Proveedor", "kind": "Proveedor", "created_at": created_at}
+        for name, phone, created_at in suppliers
+    ]
+    items.sort(key=lambda it: it["created_at"] or "", reverse=True)
+    return items[:limit]
