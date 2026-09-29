@@ -8,6 +8,12 @@ from pages_app import dashboard, login, materiales, ordenes, proveedores, report
 st.set_page_config(page_title="Sistema MRP", page_icon="📦", layout="wide")
 ui.inject()
 
+if not login.is_logged_in():
+    login.render()
+    st.stop()
+
+user = login.current_user()
+
 if USING_LOCAL:
     st.sidebar.warning(
         "Modo local (sin Supabase): los datos se guardan en db/local.db, "
@@ -15,12 +21,6 @@ if USING_LOCAL:
         "para usar Supabase de verdad.",
         icon="⚠️",
     )
-
-if not login.is_logged_in():
-    login.render()
-    st.stop()
-
-user = login.current_user()
 
 MODULES = [
     ("Dashboard", "speedometer2"),
