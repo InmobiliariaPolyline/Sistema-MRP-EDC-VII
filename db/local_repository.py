@@ -1,6 +1,11 @@
 """Misma API que supabase_repository.py, pero contra un SQLite local
 (db/local.db). Se usa automáticamente cuando no hay SUPABASE_URL/SUPABASE_KEY
-configurados, para poder ver y probar la interfaz sin depender de Supabase."""
+configurados, para poder ver y probar la interfaz sin depender de Supabase.
+
+A diferencia de supabase_repository.py, aquí no se cachean las lecturas:
+SQLite es un archivo local (sin viaje de red), así que cada consulta ya es
+prácticamente instantánea y cachear solo sumaría riesgo de datos
+desactualizados sin ninguna ganancia real de velocidad."""
 from __future__ import annotations
 
 import sqlite3

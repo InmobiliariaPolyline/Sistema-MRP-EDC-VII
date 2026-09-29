@@ -1,18 +1,28 @@
 """Funciones de acceso a datos sobre Supabase (materiales, proveedores y
-la relación proveedor-material). Nada de lógica de interfaz aquí."""
+la relación proveedor-material). Nada de lógica de interfaz aquí.
+
+Las lecturas se cachean con `st.cache_data` porque cada clic en el sidebar
+dispara un rerun completo del script, y sin caché eso significa volver a
+llamar a la API de Supabase por red en cada cambio de módulo (de ahí la
+demora perceptible al navegar). Cada función que escribe limpia el caché
+de las lecturas que dejó desactualizadas."""
 from __future__ import annotations
 
 from typing import Any
 
 import pandas as pd
+import streamlit as st
 
 from db.client import get_client
+
+_CACHE_TTL = 30  # segundos: solo evita relecturas repetidas al navegar, no es "tiempo real"
 
 
 # ---------------------------------------------------------------------------
 # Materiales
 # ---------------------------------------------------------------------------
 
+@st.cache_data(ttl=_CACHE_TTL, show_spinner=False)
 def list_materials() -> pd.DataFrame:
     res = get_client().table("materials").select("*").order("category").order("name").execute()
     return pd.DataFrame(res.data or [], columns=["id", "category", "name", "density", "metric_label", "created_at", "updated_at"])
@@ -25,10 +35,12 @@ def upsert_material(category: str, name: str, density: float | None, metric_labe
         client.table("materials").update(payload).eq("id", material_id).execute()
     else:
         client.table("materials").upsert(payload, on_conflict="category,name").execute()
+    _invalidate_materials()
 
 
 def delete_material(material_id: str) -> None:
     get_client().table("materials").delete().eq("id", material_id).execute()
+    _invalidate_materials()
 
 
 def import_materials(df: pd.DataFrame) -> tuple[int, int]:
@@ -57,6 +69,7 @@ def import_materials(df: pd.DataFrame) -> tuple[int, int]:
 
     if rows:
         get_client().table("materials").upsert(rows, on_conflict="category,name").execute()
+        _invalidate_materials()
     return ok, failed
 
 
@@ -67,10 +80,18 @@ def export_materials_df() -> pd.DataFrame:
     )
 
 
+def _invalidate_materials() -> None:
+    list_materials.clear()
+    dashboard_totals.clear()
+    recent_activity.clear()
+    get_supplier_catalog.clear()
+
+
 # ---------------------------------------------------------------------------
 # Proveedores
 # ---------------------------------------------------------------------------
 
+@st.cache_data(ttl=_CACHE_TTL, show_spinner=False)
 def list_suppliers() -> pd.DataFrame:
     res = get_client().table("suppliers").select("*").order("name").execute()
     return pd.DataFrame(
@@ -93,10 +114,12 @@ def upsert_supplier(
         client.table("suppliers").update(payload).eq("id", supplier_id).execute()
     else:
         client.table("suppliers").insert(payload).execute()
+    _invalidate_suppliers()
 
 
 def delete_supplier(supplier_id: str) -> None:
     get_client().table("suppliers").delete().eq("id", supplier_id).execute()
+    _invalidate_suppliers()
 
 
 def import_suppliers(df: pd.DataFrame) -> tuple[int, int]:
@@ -126,12 +149,20 @@ def import_suppliers(df: pd.DataFrame) -> tuple[int, int]:
 
     if rows:
         get_client().table("suppliers").insert(rows).execute()
+        _invalidate_suppliers()
     return ok, failed
 
 
 def export_suppliers_df() -> pd.DataFrame:
     df = list_suppliers()
     return df[["name", "contact_name", "phone", "email", "notes"]]
+
+
+def _invalidate_suppliers() -> None:
+    list_suppliers.clear()
+    dashboard_totals.clear()
+    recent_activity.clear()
+    get_supplier_catalog.clear()
 
 
 def _text(value: Any) -> str:
@@ -150,6 +181,7 @@ def _clean(value: Any) -> str | None:
 # Catálogo de un proveedor (materiales que ofrece, con disponibilidad)
 # ---------------------------------------------------------------------------
 
+@st.cache_data(ttl=_CACHE_TTL, show_spinner=False)
 def get_supplier_catalog(supplier_id: str) -> pd.DataFrame:
     """Todos los materiales del catálogo general, indicando si este
     proveedor los ofrece y si están disponibles."""
@@ -181,16 +213,20 @@ def set_supplier_material(supplier_id: str, material_id: str, offered: bool, ava
     client = get_client()
     if not offered:
         client.table("supplier_materials").delete().eq("supplier_id", supplier_id).eq("material_id", material_id).execute()
-        return
-    client.table("supplier_materials").upsert(
-        {"supplier_id": supplier_id, "material_id": material_id, "available": available, "price": price},
-        on_conflict="supplier_id,material_id",
-    ).execute()
+    else:
+        client.table("supplier_materials").upsert(
+            {"supplier_id": supplier_id, "material_id": material_id, "available": available, "price": price},
+            on_conflict="supplier_id,material_id",
+        ).execute()
+    get_supplier_catalog.clear()
+    dashboard_totals.clear()
 
 
 # ---------------------------------------------------------------------------
 # Usuarios (login)
 # ---------------------------------------------------------------------------
+# Sin caché: son lecturas ligadas a autenticación/autorización, siempre deben
+# reflejar el estado real de la base (activo/inactivo, contraseña, etc.).
 
 def count_users() -> int:
     res = get_client().table("users").select("id", count="exact").execute()
@@ -230,6 +266,7 @@ def delete_user(user_id: str) -> None:
 # Dashboard
 # ---------------------------------------------------------------------------
 
+@st.cache_data(ttl=_CACHE_TTL, show_spinner=False)
 def dashboard_totals() -> dict:
     materials = list_materials()
     suppliers = list_suppliers()
@@ -248,6 +285,7 @@ def dashboard_totals() -> dict:
     }
 
 
+@st.cache_data(ttl=_CACHE_TTL, show_spinner=False)
 def recent_activity(limit: int = 6) -> list[dict]:
     """Últimos materiales y proveedores agregados, mezclados por fecha."""
     client = get_client()
