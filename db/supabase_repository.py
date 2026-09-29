@@ -186,3 +186,63 @@ def set_supplier_material(supplier_id: str, material_id: str, offered: bool, ava
         {"supplier_id": supplier_id, "material_id": material_id, "available": available, "price": price},
         on_conflict="supplier_id,material_id",
     ).execute()
+
+
+# ---------------------------------------------------------------------------
+# Usuarios (login)
+# ---------------------------------------------------------------------------
+
+def count_users() -> int:
+    res = get_client().table("users").select("id", count="exact").execute()
+    return res.count or 0
+
+
+def list_users() -> pd.DataFrame:
+    res = get_client().table("users").select("*").order("name").execute()
+    df = pd.DataFrame(
+        res.data or [],
+        columns=["id", "username", "password_hash", "name", "role", "active", "created_at", "updated_at"],
+    )
+    return df
+
+
+def get_user_by_username(username: str) -> dict | None:
+    res = get_client().table("users").select("*").eq("username", username).limit(1).execute()
+    rows = res.data or []
+    return rows[0] if rows else None
+
+
+def create_user(username: str, password_hash: str, name: str, role: str) -> None:
+    get_client().table("users").insert(
+        {"username": username, "password_hash": password_hash, "name": name, "role": role}
+    ).execute()
+
+
+def set_user_active(user_id: str, active: bool) -> None:
+    get_client().table("users").update({"active": active}).eq("id", user_id).execute()
+
+
+def delete_user(user_id: str) -> None:
+    get_client().table("users").delete().eq("id", user_id).execute()
+
+
+# ---------------------------------------------------------------------------
+# Dashboard
+# ---------------------------------------------------------------------------
+
+def dashboard_totals() -> dict:
+    materials = list_materials()
+    suppliers = list_suppliers()
+    res = get_client().table("supplier_materials").select("supplier_id,material_id,available").execute()
+    links = pd.DataFrame(res.data or [], columns=["supplier_id", "material_id", "available"])
+
+    suppliers_with_available = links.loc[links["available"] == True, "supplier_id"].nunique() if not links.empty else 0  # noqa: E712
+    materials_with_supplier = set(links["material_id"]) if not links.empty else set()
+    materials_without_supplier = len(materials) - len([m for m in materials["id"] if m in materials_with_supplier])
+
+    return {
+        "materials": len(materials),
+        "suppliers": len(suppliers),
+        "suppliers_with_available": int(suppliers_with_available),
+        "materials_without_supplier": int(materials_without_supplier),
+    }

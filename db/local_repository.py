@@ -48,6 +48,17 @@ def _init_db() -> None:
                 price real,
                 unique (supplier_id, material_id)
             );
+
+            create table if not exists users (
+                id text primary key,
+                username text not null unique,
+                password_hash text not null,
+                name text not null,
+                role text not null default 'operador',
+                active integer not null default 1,
+                created_at text default (datetime('now')),
+                updated_at text default (datetime('now'))
+            );
             """
         )
 
@@ -248,3 +259,78 @@ def set_supplier_material(supplier_id: str, material_id: str, offered: bool, ava
                 "insert into supplier_materials (id, supplier_id, material_id, available, price) values (?, ?, ?, ?, ?)",
                 (str(uuid.uuid4()), supplier_id, material_id, int(available), price),
             )
+
+
+# ---------------------------------------------------------------------------
+# Usuarios (login)
+# ---------------------------------------------------------------------------
+
+def count_users() -> int:
+    with _connect() as conn:
+        return conn.execute("select count(*) from users").fetchone()[0]
+
+
+def list_users() -> pd.DataFrame:
+    with _connect() as conn:
+        df = pd.read_sql_query("select * from users order by name", conn)
+    for col in ["id", "username", "password_hash", "name", "role", "active", "created_at", "updated_at"]:
+        if col not in df.columns:
+            df[col] = None
+    df = df.astype(object).where(pd.notnull(df), None)
+    df["active"] = df["active"].apply(lambda v: bool(v) if v is not None else True)
+    return df
+
+
+def get_user_by_username(username: str) -> dict | None:
+    with _connect() as conn:
+        df = pd.read_sql_query("select * from users where username = ?", conn, params=(username,))
+    if df.empty:
+        return None
+    row = df.astype(object).where(pd.notnull(df), None).to_dict("records")[0]
+    row["active"] = bool(row["active"]) if row["active"] is not None else True
+    return row
+
+
+def create_user(username: str, password_hash: str, name: str, role: str) -> None:
+    with _connect() as conn:
+        conn.execute(
+            "insert into users (id, username, password_hash, name, role) values (?, ?, ?, ?, ?)",
+            (str(uuid.uuid4()), username, password_hash, name, role),
+        )
+
+
+def set_user_active(user_id: str, active: bool) -> None:
+    with _connect() as conn:
+        conn.execute("update users set active = ?, updated_at = datetime('now') where id = ?", (int(active), user_id))
+
+
+def delete_user(user_id: str) -> None:
+    with _connect() as conn:
+        conn.execute("delete from users where id = ?", (user_id,))
+
+
+# ---------------------------------------------------------------------------
+# Dashboard
+# ---------------------------------------------------------------------------
+
+def dashboard_totals() -> dict:
+    with _connect() as conn:
+        materials = conn.execute("select count(*) from materials").fetchone()[0]
+        suppliers = conn.execute("select count(*) from suppliers").fetchone()[0]
+        suppliers_with_available = conn.execute(
+            "select count(distinct supplier_id) from supplier_materials where available = 1"
+        ).fetchone()[0]
+        materials_without_supplier = conn.execute(
+            """
+            select count(*) from materials m
+            where not exists (
+                select 1 from supplier_materials sm where sm.material_id = m.id
+            )
+            """
+        ).fetchone()[0]
+    return {
+        "materials": materials,
+        "suppliers": suppliers,
+        "suppliers_with_available": suppliers_with_available,
+        "materials_without_supplier": materials_without_supplier,
+    }

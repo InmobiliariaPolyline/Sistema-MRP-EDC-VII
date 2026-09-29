@@ -42,3 +42,16 @@ create table if not exists supplier_materials (
 create index if not exists idx_materials_category on materials(category);
 create index if not exists idx_supplier_materials_supplier on supplier_materials(supplier_id);
 create index if not exists idx_supplier_materials_material on supplier_materials(material_id);
+
+-- Cuentas del sistema. El primer usuario se crea desde la propia app
+-- (pantalla de "crear el primer administrador" cuando esta tabla está vacía).
+create table if not exists users (
+  id uuid primary key default gen_random_uuid(),
+  username text not null unique,
+  password_hash text not null,
+  name text not null,
+  role text not null default 'operador', -- 'admin' | 'operador'
+  active boolean not null default true,
+  created_at timestamptz not null default now(),
+  updated_at timestamptz not null default now()
+);
