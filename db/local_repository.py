@@ -16,6 +16,15 @@ from typing import Any
 
 import pandas as pd
 
+from utils.excel import (
+    MATERIAL_ALIASES,
+    MATERIAL_EXPORT_COLUMNS,
+    MATERIAL_REQUIRED,
+    SUPPLIER_ALIASES,
+    SUPPLIER_REQUIRED,
+    extract_columns,
+)
+
 DB_PATH = Path(__file__).resolve().parent / "local.db"
 
 
@@ -116,12 +125,7 @@ def delete_material(material_id: str) -> None:
 
 
 def import_materials(df: pd.DataFrame) -> tuple[int, int]:
-    required = {"category", "name"}
-    missing = required - set(c.lower() for c in df.columns)
-    if missing:
-        raise ValueError(f"Faltan columnas obligatorias en el Excel: {', '.join(sorted(missing))}")
-
-    df = df.rename(columns={c: c.lower() for c in df.columns})
+    df = extract_columns(df, MATERIAL_ALIASES, MATERIAL_REQUIRED)
     ok, failed = 0, 0
     for row in df.to_dict("records"):
         category = _text(row.get("category"))
@@ -139,7 +143,7 @@ def import_materials(df: pd.DataFrame) -> tuple[int, int]:
 
 def export_materials_df() -> pd.DataFrame:
     df = list_materials()
-    return df[["category", "name", "density", "metric_label"]]
+    return df[["category", "name", "density", "metric_label"]].rename(columns=MATERIAL_EXPORT_COLUMNS)
 
 
 # ---------------------------------------------------------------------------
@@ -182,10 +186,7 @@ def delete_supplier(supplier_id: str) -> None:
 
 
 def import_suppliers(df: pd.DataFrame) -> tuple[int, int]:
-    df = df.rename(columns={c: c.lower() for c in df.columns})
-    if "name" not in df.columns:
-        raise ValueError("Falta la columna obligatoria 'name' en el Excel")
-
+    df = extract_columns(df, SUPPLIER_ALIASES, SUPPLIER_REQUIRED)
     ok, failed = 0, 0
     for row in df.to_dict("records"):
         name = _text(row.get("name"))

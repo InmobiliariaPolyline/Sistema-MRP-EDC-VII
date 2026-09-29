@@ -14,6 +14,14 @@ import pandas as pd
 import streamlit as st
 
 from db.client import get_client
+from utils.excel import (
+    MATERIAL_ALIASES,
+    MATERIAL_EXPORT_COLUMNS,
+    MATERIAL_REQUIRED,
+    SUPPLIER_ALIASES,
+    SUPPLIER_REQUIRED,
+    extract_columns,
+)
 
 _CACHE_TTL = 30  # segundos: solo evita relecturas repetidas al navegar, no es "tiempo real"
 
@@ -47,12 +55,7 @@ def import_materials(df: pd.DataFrame) -> tuple[int, int]:
     """Crea o actualiza materiales a partir de un DataFrame con columnas
     category, name, density (opcional), metric_label. Devuelve
     (filas procesadas, filas con error)."""
-    required = {"category", "name"}
-    missing = required - set(c.lower() for c in df.columns)
-    if missing:
-        raise ValueError(f"Faltan columnas obligatorias en el Excel: {', '.join(sorted(missing))}")
-
-    df = df.rename(columns={c: c.lower() for c in df.columns})
+    df = extract_columns(df, MATERIAL_ALIASES, MATERIAL_REQUIRED)
     ok, failed = 0, 0
     rows = []
     for row in df.to_dict("records"):
@@ -75,9 +78,7 @@ def import_materials(df: pd.DataFrame) -> tuple[int, int]:
 
 def export_materials_df() -> pd.DataFrame:
     df = list_materials()
-    return df[["category", "name", "density", "metric_label"]].rename(
-        columns={"category": "category", "name": "name", "density": "density", "metric_label": "metric_label"}
-    )
+    return df[["category", "name", "density", "metric_label"]].rename(columns=MATERIAL_EXPORT_COLUMNS)
 
 
 def _invalidate_materials() -> None:
@@ -125,10 +126,7 @@ def delete_supplier(supplier_id: str) -> None:
 def import_suppliers(df: pd.DataFrame) -> tuple[int, int]:
     """Crea proveedores a partir de un DataFrame con columnas name,
     contact_name, phone, email, notes (todas menos name son opcionales)."""
-    df = df.rename(columns={c: c.lower() for c in df.columns})
-    if "name" not in df.columns:
-        raise ValueError("Falta la columna obligatoria 'name' en el Excel")
-
+    df = extract_columns(df, SUPPLIER_ALIASES, SUPPLIER_REQUIRED)
     ok, failed = 0, 0
     rows = []
     for row in df.to_dict("records"):

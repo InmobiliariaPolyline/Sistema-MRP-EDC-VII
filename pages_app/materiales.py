@@ -57,7 +57,9 @@ def _render_import_export() -> None:
         with col2:
             st.caption("IMPORTAR")
             uploaded = st.file_uploader(
-                "Excel: category, name, density (opcional), metric_label",
+                "Excel con columnas Categoría, Material, Densidad (opcional) y Métrica "
+                "(acepta también el catálogo de referencia con filas de título arriba, "
+                "o el propio archivo exportado por este botón)",
                 type=["xlsx"],
                 key="materials_uploader",
                 label_visibility="collapsed",
