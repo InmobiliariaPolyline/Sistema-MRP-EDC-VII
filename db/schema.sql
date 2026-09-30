@@ -55,3 +55,41 @@ create table if not exists users (
   created_at timestamptz not null default now(),
   updated_at timestamptz not null default now()
 );
+
+-- Cuadrillas/equipos de trabajo (ej. "Electricistas", "Cuadrilla A").
+create table if not exists work_groups (
+  id uuid primary key default gen_random_uuid(),
+  name text not null unique,
+  created_at timestamptz not null default now()
+);
+
+-- Obras/proyectos de construcción, con ubicación geocodificada (OpenStreetMap)
+-- para mostrarlas en el mapa.
+create table if not exists project_sites (
+  id uuid primary key default gen_random_uuid(),
+  name text not null,
+  address text,
+  latitude double precision,
+  longitude double precision,
+  created_at timestamptz not null default now()
+);
+
+-- Trabajadores de obra: su información personal, a qué cuadrilla
+-- pertenecen y en qué obra están trabajando. `user_id` es opcional: solo
+-- se llena si además tiene cuenta para entrar al sistema (ver `users`).
+create table if not exists workers (
+  id uuid primary key default gen_random_uuid(),
+  full_name text not null,
+  document_id text,
+  phone text,
+  position text,
+  work_group_id uuid references work_groups(id) on delete set null,
+  project_site_id uuid references project_sites(id) on delete set null,
+  user_id uuid references users(id) on delete set null,
+  active boolean not null default true,
+  created_at timestamptz not null default now(),
+  updated_at timestamptz not null default now()
+);
+
+create index if not exists idx_workers_group on workers(work_group_id);
+create index if not exists idx_workers_site on workers(project_site_id);

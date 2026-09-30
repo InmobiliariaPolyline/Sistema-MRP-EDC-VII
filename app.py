@@ -3,7 +3,7 @@ import streamlit as st
 from streamlit_option_menu import option_menu
 
 from db.repository import USING_LOCAL
-from pages_app import dashboard, login, materiales, ordenes, proveedores, reportes, ui, usuarios
+from pages_app import dashboard, login, materiales, ordenes, proveedores, reportes, trabajadores, ui
 
 st.set_page_config(page_title="Sistema MRP", page_icon="📦", layout="wide")
 ui.inject()
@@ -30,7 +30,7 @@ MODULES = [
     ("Reportes", "bar-chart-line"),
 ]
 if user["role"] == "admin":
-    MODULES.append(("Usuarios", "people"))
+    MODULES.append(("Trabajadores", "people"))
 
 with st.sidebar:
     st.markdown(
@@ -85,5 +85,5 @@ elif seccion == "Órdenes de compra":
     ordenes.render()
 elif seccion == "Reportes":
     reportes.render()
-elif seccion == "Usuarios":
-    usuarios.render(user)
+elif seccion == "Trabajadores":
+    trabajadores.render(user)

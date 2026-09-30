@@ -261,6 +261,124 @@ def delete_user(user_id: str) -> None:
 
 
 # ---------------------------------------------------------------------------
+# Trabajadores: cuadrillas, obras y el propio catálogo de trabajadores
+# ---------------------------------------------------------------------------
+
+@st.cache_data(ttl=_CACHE_TTL, show_spinner=False)
+def list_work_groups() -> pd.DataFrame:
+    res = get_client().table("work_groups").select("*").order("name").execute()
+    return pd.DataFrame(res.data or [], columns=["id", "name", "created_at"])
+
+
+def create_work_group(name: str) -> None:
+    get_client().table("work_groups").insert({"name": name}).execute()
+    list_work_groups.clear()
+
+
+def delete_work_group(group_id: str) -> None:
+    get_client().table("work_groups").delete().eq("id", group_id).execute()
+    list_work_groups.clear()
+    list_workers.clear()
+
+
+@st.cache_data(ttl=_CACHE_TTL, show_spinner=False)
+def list_project_sites() -> pd.DataFrame:
+    res = get_client().table("project_sites").select("*").order("name").execute()
+    return pd.DataFrame(res.data or [], columns=["id", "name", "address", "latitude", "longitude", "created_at"])
+
+
+def create_project_site(name: str, address: str | None, latitude: float | None, longitude: float | None) -> None:
+    get_client().table("project_sites").insert(
+        {"name": name, "address": address, "latitude": latitude, "longitude": longitude}
+    ).execute()
+    list_project_sites.clear()
+
+
+def delete_project_site(site_id: str) -> None:
+    get_client().table("project_sites").delete().eq("id", site_id).execute()
+    list_project_sites.clear()
+    list_workers.clear()
+
+
+@st.cache_data(ttl=_CACHE_TTL, show_spinner=False)
+def list_workers() -> pd.DataFrame:
+    res = (
+        get_client()
+        .table("workers")
+        .select("*, work_groups(name), project_sites(name,address,latitude,longitude), users(username,role)")
+        .order("full_name")
+        .execute()
+    )
+    rows = []
+    for row in res.data or []:
+        group = row.pop("work_groups", None) or {}
+        site = row.pop("project_sites", None) or {}
+        user = row.pop("users", None) or {}
+        rows.append(
+            {
+                **row,
+                "group_name": group.get("name"),
+                "site_name": site.get("name"),
+                "site_address": site.get("address"),
+                "latitude": site.get("latitude"),
+                "longitude": site.get("longitude"),
+                "username": user.get("username"),
+                "role": user.get("role"),
+            }
+        )
+    return pd.DataFrame(rows)
+
+
+def create_worker(
+    full_name: str,
+    document_id: str | None,
+    phone: str | None,
+    position: str | None,
+    work_group_id: str | None,
+    project_site_id: str | None,
+) -> str:
+    res = (
+        get_client()
+        .table("workers")
+        .insert(
+            {
+                "full_name": full_name,
+                "document_id": document_id,
+                "phone": phone,
+                "position": position,
+                "work_group_id": work_group_id,
+                "project_site_id": project_site_id,
+            }
+        )
+        .execute()
+    )
+    list_workers.clear()
+    return res.data[0]["id"]
+
+
+def delete_worker(worker_id: str) -> None:
+    get_client().table("workers").delete().eq("id", worker_id).execute()
+    list_workers.clear()
+
+
+def grant_worker_access(worker_id: str, username: str, password_hash: str, name: str, role: str) -> None:
+    client = get_client()
+    res = client.table("users").insert(
+        {"username": username, "password_hash": password_hash, "name": name, "role": role}
+    ).execute()
+    user_id = res.data[0]["id"]
+    client.table("workers").update({"user_id": user_id}).eq("id", worker_id).execute()
+    list_workers.clear()
+
+
+def revoke_worker_access(worker_id: str, user_id: str) -> None:
+    client = get_client()
+    client.table("workers").update({"user_id": None}).eq("id", worker_id).execute()
+    client.table("users").delete().eq("id", user_id).execute()
+    list_workers.clear()
+
+
+# ---------------------------------------------------------------------------
 # Dashboard
 # ---------------------------------------------------------------------------
 

@@ -73,6 +73,35 @@ def _init_db() -> None:
                 created_at text default (datetime('now')),
                 updated_at text default (datetime('now'))
             );
+
+            create table if not exists work_groups (
+                id text primary key,
+                name text not null unique,
+                created_at text default (datetime('now'))
+            );
+
+            create table if not exists project_sites (
+                id text primary key,
+                name text not null,
+                address text,
+                latitude real,
+                longitude real,
+                created_at text default (datetime('now'))
+            );
+
+            create table if not exists workers (
+                id text primary key,
+                full_name text not null,
+                document_id text,
+                phone text,
+                position text,
+                work_group_id text references work_groups(id) on delete set null,
+                project_site_id text references project_sites(id) on delete set null,
+                user_id text references users(id) on delete set null,
+                active integer not null default 1,
+                created_at text default (datetime('now')),
+                updated_at text default (datetime('now'))
+            );
             """
         )
 
@@ -312,6 +341,107 @@ def set_user_active(user_id: str, active: bool) -> None:
 
 def delete_user(user_id: str) -> None:
     with _connect() as conn:
+        conn.execute("delete from users where id = ?", (user_id,))
+
+
+# ---------------------------------------------------------------------------
+# Trabajadores: cuadrillas, obras y el propio catálogo de trabajadores
+# ---------------------------------------------------------------------------
+
+def list_work_groups() -> pd.DataFrame:
+    with _connect() as conn:
+        df = pd.read_sql_query("select * from work_groups order by name", conn)
+    return df.astype(object).where(pd.notnull(df), None)
+
+
+def create_work_group(name: str) -> None:
+    with _connect() as conn:
+        conn.execute("insert into work_groups (id, name) values (?, ?)", (str(uuid.uuid4()), name))
+
+
+def delete_work_group(group_id: str) -> None:
+    with _connect() as conn:
+        conn.execute("delete from work_groups where id = ?", (group_id,))
+
+
+def list_project_sites() -> pd.DataFrame:
+    with _connect() as conn:
+        df = pd.read_sql_query("select * from project_sites order by name", conn)
+    return df.astype(object).where(pd.notnull(df), None)
+
+
+def create_project_site(name: str, address: str | None, latitude: float | None, longitude: float | None) -> None:
+    with _connect() as conn:
+        conn.execute(
+            "insert into project_sites (id, name, address, latitude, longitude) values (?, ?, ?, ?, ?)",
+            (str(uuid.uuid4()), name, address, latitude, longitude),
+        )
+
+
+def delete_project_site(site_id: str) -> None:
+    with _connect() as conn:
+        conn.execute("delete from project_sites where id = ?", (site_id,))
+
+
+def list_workers() -> pd.DataFrame:
+    with _connect() as conn:
+        df = pd.read_sql_query(
+            """
+            select
+                w.id, w.full_name, w.document_id, w.phone, w.position, w.active,
+                w.work_group_id, wg.name as group_name,
+                w.project_site_id, ps.name as site_name, ps.address as site_address,
+                ps.latitude, ps.longitude,
+                w.user_id, u.username, u.role
+            from workers w
+            left join work_groups wg on wg.id = w.work_group_id
+            left join project_sites ps on ps.id = w.project_site_id
+            left join users u on u.id = w.user_id
+            order by w.full_name
+            """,
+            conn,
+        )
+    return df.astype(object).where(pd.notnull(df), None)
+
+
+def create_worker(
+    full_name: str,
+    document_id: str | None,
+    phone: str | None,
+    position: str | None,
+    work_group_id: str | None,
+    project_site_id: str | None,
+) -> str:
+    worker_id = str(uuid.uuid4())
+    with _connect() as conn:
+        conn.execute(
+            """
+            insert into workers (id, full_name, document_id, phone, position, work_group_id, project_site_id)
+            values (?, ?, ?, ?, ?, ?, ?)
+            """,
+            (worker_id, full_name, document_id, phone, position, work_group_id, project_site_id),
+        )
+    return worker_id
+
+
+def delete_worker(worker_id: str) -> None:
+    with _connect() as conn:
+        conn.execute("delete from workers where id = ?", (worker_id,))
+
+
+def grant_worker_access(worker_id: str, username: str, password_hash: str, name: str, role: str) -> None:
+    user_id = str(uuid.uuid4())
+    with _connect() as conn:
+        conn.execute(
+            "insert into users (id, username, password_hash, name, role) values (?, ?, ?, ?, ?)",
+            (user_id, username, password_hash, name, role),
+        )
+        conn.execute("update workers set user_id = ?, updated_at = datetime('now') where id = ?", (user_id, worker_id))
+
+
+def revoke_worker_access(worker_id: str, user_id: str) -> None:
+    with _connect() as conn:
+        conn.execute("update workers set user_id = null, updated_at = datetime('now') where id = ?", (worker_id,))
         conn.execute("delete from users where id = ?", (user_id,))
 
 

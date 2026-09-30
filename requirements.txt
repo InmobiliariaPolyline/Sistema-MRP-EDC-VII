@@ -6,3 +6,4 @@ python-dotenv>=1.0
 bcrypt>=4.1
 streamlit-option-menu>=0.4
 plotly>=5.20
+requests>=2.31
