@@ -12,18 +12,8 @@ import sqlite3
 import uuid
 from contextlib import contextmanager
 from pathlib import Path
-from typing import Any
 
 import pandas as pd
-
-from utils.excel import (
-    MATERIAL_ALIASES,
-    MATERIAL_EXPORT_COLUMNS,
-    MATERIAL_REQUIRED,
-    SUPPLIER_ALIASES,
-    SUPPLIER_REQUIRED,
-    extract_columns,
-)
 
 DB_PATH = Path(__file__).resolve().parent / "local.db"
 
@@ -153,28 +143,6 @@ def delete_material(material_id: str) -> None:
         conn.execute("delete from materials where id = ?", (material_id,))
 
 
-def import_materials(df: pd.DataFrame) -> tuple[int, int]:
-    df = extract_columns(df, MATERIAL_ALIASES, MATERIAL_REQUIRED)
-    ok, failed = 0, 0
-    for row in df.to_dict("records"):
-        category = _text(row.get("category"))
-        name = _text(row.get("name"))
-        if not category or not name:
-            failed += 1
-            continue
-        density_raw = row.get("density")
-        density = float(density_raw) if pd.notna(density_raw) and str(density_raw).strip() != "" else None
-        metric_label = _text(row.get("metric_label"))
-        upsert_material(category, name, density, metric_label)
-        ok += 1
-    return ok, failed
-
-
-def export_materials_df() -> pd.DataFrame:
-    df = list_materials()
-    return df[["category", "name", "density", "metric_label"]].rename(columns=MATERIAL_EXPORT_COLUMNS)
-
-
 # ---------------------------------------------------------------------------
 # Proveedores
 # ---------------------------------------------------------------------------
@@ -212,42 +180,6 @@ def upsert_supplier(
 def delete_supplier(supplier_id: str) -> None:
     with _connect() as conn:
         conn.execute("delete from suppliers where id = ?", (supplier_id,))
-
-
-def import_suppliers(df: pd.DataFrame) -> tuple[int, int]:
-    df = extract_columns(df, SUPPLIER_ALIASES, SUPPLIER_REQUIRED)
-    ok, failed = 0, 0
-    for row in df.to_dict("records"):
-        name = _text(row.get("name"))
-        if not name:
-            failed += 1
-            continue
-        upsert_supplier(
-            name,
-            _clean(row.get("contact_name")),
-            _clean(row.get("phone")),
-            _clean(row.get("email")),
-            _clean(row.get("notes")),
-        )
-        ok += 1
-    return ok, failed
-
-
-def export_suppliers_df() -> pd.DataFrame:
-    df = list_suppliers()
-    return df[["name", "contact_name", "phone", "email", "notes"]]
-
-
-def _text(value: Any) -> str:
-    """Como _clean, pero para campos obligatorios: nunca devuelve None."""
-    return _clean(value) or ""
-
-
-def _clean(value: Any) -> str | None:
-    if value is None or (isinstance(value, float) and pd.isna(value)):
-        return None
-    text = str(value).strip()
-    return text or None
 
 
 # ---------------------------------------------------------------------------

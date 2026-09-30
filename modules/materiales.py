@@ -1,9 +1,8 @@
-"""Módulo de Materiales: catálogo, alta/edición/baja e importar/exportar Excel."""
+"""Módulo de Materiales: catálogo maestro, alta y baja."""
 import streamlit as st
 
 from db import repository as repo
 from modules import ui
-from utils.excel import dataframe_to_excel_bytes, read_excel_upload
 
 
 def render() -> None:
@@ -17,7 +16,6 @@ def render() -> None:
     if clicked:
         _new_material_dialog()
 
-    _render_import_export()
     _render_table()
 
 
@@ -36,43 +34,6 @@ def _new_material_dialog() -> None:
             repo.upsert_material(category.strip(), name.strip(), density or None, metric_label.strip())
             st.success(f"Material «{name}» guardado.")
             st.rerun()
-
-
-def _render_import_export() -> None:
-    with st.expander("Importar / exportar Excel"):
-        col1, col2 = st.columns(2)
-
-        with col1:
-            st.caption("EXPORTAR")
-            df = repo.export_materials_df()
-            st.download_button(
-                "⬇ Descargar materiales (Excel)",
-                data=dataframe_to_excel_bytes(df, "Materiales"),
-                file_name="materiales.xlsx",
-                mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-                disabled=df.empty,
-                use_container_width=True,
-            )
-
-        with col2:
-            st.caption("IMPORTAR")
-            uploaded = st.file_uploader(
-                "Excel con columnas Categoría, Material, Densidad (opcional) y Métrica "
-                "(acepta también el catálogo de referencia con filas de título arriba, "
-                "o el propio archivo exportado por este botón)",
-                type=["xlsx"],
-                key="materials_uploader",
-                label_visibility="collapsed",
-            )
-            if uploaded is not None and st.button("Importar materiales", key="import_materials_btn", use_container_width=True):
-                try:
-                    df = read_excel_upload(uploaded)
-                    ok, failed = repo.import_materials(df)
-                    st.success(f"Importados/actualizados: {ok}. Filas descartadas: {failed}.")
-                    st.rerun()
-                except Exception as exc:
-                    st.error(f"No fue posible importar el Excel: {exc}")
-    st.write("")
 
 
 def _render_table() -> None:

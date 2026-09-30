@@ -14,14 +14,6 @@ import pandas as pd
 import streamlit as st
 
 from db.client import get_client
-from utils.excel import (
-    MATERIAL_ALIASES,
-    MATERIAL_EXPORT_COLUMNS,
-    MATERIAL_REQUIRED,
-    SUPPLIER_ALIASES,
-    SUPPLIER_REQUIRED,
-    extract_columns,
-)
 
 _CACHE_TTL = 30  # segundos: solo evita relecturas repetidas al navegar, no es "tiempo real"
 
@@ -49,36 +41,6 @@ def upsert_material(category: str, name: str, density: float | None, metric_labe
 def delete_material(material_id: str) -> None:
     get_client().table("materials").delete().eq("id", material_id).execute()
     _invalidate_materials()
-
-
-def import_materials(df: pd.DataFrame) -> tuple[int, int]:
-    """Crea o actualiza materiales a partir de un DataFrame con columnas
-    category, name, density (opcional), metric_label. Devuelve
-    (filas procesadas, filas con error)."""
-    df = extract_columns(df, MATERIAL_ALIASES, MATERIAL_REQUIRED)
-    ok, failed = 0, 0
-    rows = []
-    for row in df.to_dict("records"):
-        category = _text(row.get("category"))
-        name = _text(row.get("name"))
-        if not category or not name:
-            failed += 1
-            continue
-        density_raw = row.get("density")
-        density = float(density_raw) if pd.notna(density_raw) and str(density_raw).strip() != "" else None
-        metric_label = _text(row.get("metric_label"))
-        rows.append({"category": category, "name": name, "density": density, "metric_label": metric_label})
-        ok += 1
-
-    if rows:
-        get_client().table("materials").upsert(rows, on_conflict="category,name").execute()
-        _invalidate_materials()
-    return ok, failed
-
-
-def export_materials_df() -> pd.DataFrame:
-    df = list_materials()
-    return df[["category", "name", "density", "metric_label"]].rename(columns=MATERIAL_EXPORT_COLUMNS)
 
 
 def _invalidate_materials() -> None:
@@ -123,56 +85,11 @@ def delete_supplier(supplier_id: str) -> None:
     _invalidate_suppliers()
 
 
-def import_suppliers(df: pd.DataFrame) -> tuple[int, int]:
-    """Crea proveedores a partir de un DataFrame con columnas name,
-    contact_name, phone, email, notes (todas menos name son opcionales)."""
-    df = extract_columns(df, SUPPLIER_ALIASES, SUPPLIER_REQUIRED)
-    ok, failed = 0, 0
-    rows = []
-    for row in df.to_dict("records"):
-        name = _text(row.get("name"))
-        if not name:
-            failed += 1
-            continue
-        rows.append(
-            {
-                "name": name,
-                "contact_name": _clean(row.get("contact_name")),
-                "phone": _clean(row.get("phone")),
-                "email": _clean(row.get("email")),
-                "notes": _clean(row.get("notes")),
-            }
-        )
-        ok += 1
-
-    if rows:
-        get_client().table("suppliers").insert(rows).execute()
-        _invalidate_suppliers()
-    return ok, failed
-
-
-def export_suppliers_df() -> pd.DataFrame:
-    df = list_suppliers()
-    return df[["name", "contact_name", "phone", "email", "notes"]]
-
-
 def _invalidate_suppliers() -> None:
     list_suppliers.clear()
     dashboard_totals.clear()
     recent_activity.clear()
     get_supplier_catalog.clear()
-
-
-def _text(value: Any) -> str:
-    """Como _clean, pero para campos obligatorios: nunca devuelve None."""
-    return _clean(value) or ""
-
-
-def _clean(value: Any) -> str | None:
-    if value is None or (isinstance(value, float) and pd.isna(value)):
-        return None
-    text = str(value).strip()
-    return text or None
 
 
 # ---------------------------------------------------------------------------

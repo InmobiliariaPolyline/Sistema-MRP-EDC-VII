@@ -4,7 +4,6 @@ import streamlit as st
 
 from db import repository as repo
 from modules import ui
-from utils.excel import dataframe_to_excel_bytes, read_excel_upload
 
 SELECTED_KEY = "selected_supplier_id"
 
@@ -24,7 +23,6 @@ def render() -> None:
     if clicked:
         _new_supplier_dialog()
 
-    _render_import_export()
     _render_cards()
 
 
@@ -44,41 +42,6 @@ def _new_supplier_dialog() -> None:
             repo.upsert_supplier(name.strip(), contact_name.strip() or None, phone.strip() or None, email.strip() or None, notes.strip() or None)
             st.success(f"Proveedor «{name}» registrado.")
             st.rerun()
-
-
-def _render_import_export() -> None:
-    with st.expander("Importar / exportar Excel"):
-        col1, col2 = st.columns(2)
-
-        with col1:
-            st.caption("EXPORTAR")
-            df = repo.export_suppliers_df()
-            st.download_button(
-                "⬇ Descargar proveedores (Excel)",
-                data=dataframe_to_excel_bytes(df, "Proveedores"),
-                file_name="proveedores.xlsx",
-                mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-                disabled=df.empty,
-                use_container_width=True,
-            )
-
-        with col2:
-            st.caption("IMPORTAR")
-            uploaded = st.file_uploader(
-                "Excel: name, contact_name, phone, email, notes (solo name es obligatoria)",
-                type=["xlsx"],
-                key="suppliers_uploader",
-                label_visibility="collapsed",
-            )
-            if uploaded is not None and st.button("Importar proveedores", key="import_suppliers_btn", use_container_width=True):
-                try:
-                    df = read_excel_upload(uploaded)
-                    ok, failed = repo.import_suppliers(df)
-                    st.success(f"Proveedores creados: {ok}. Filas descartadas: {failed}.")
-                    st.rerun()
-                except Exception as exc:
-                    st.error(f"No fue posible importar el Excel: {exc}")
-    st.write("")
 
 
 def _render_cards() -> None:

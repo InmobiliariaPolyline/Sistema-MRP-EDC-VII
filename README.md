@@ -4,17 +4,12 @@ Sistema con login propio, dashboard y varios módulos:
 
 - **Dashboard**: totales generales (materiales, proveedores, proveedores con
   algo disponible, materiales sin proveedor).
-- **Materiales**: catálogo general (categoría, nombre, densidad, métrica de
-  cómputo), con alta/edición/baja e importar/exportar en Excel. El
-  importador reconoce tanto encabezados en español como en inglés, y
-  también el catálogo de referencia (501 materiales / 27 categorías) tal
-  cual viene, con sus filas de título antes de la tabla.
+- **Materiales**: catálogo maestro (categoría, nombre, densidad, métrica de
+  cómputo), con alta y baja.
 - **Proveedores**: tarjetas de proveedores con su contacto (teléfono, correo,
   notas). Al abrir un proveedor se ve el catálogo completo de materiales
   agrupado por categoría, marcando cuáles ofrece y si está disponible ahora
-  mismo (se marca a mano, pensado para saber a quién contactar). Importar y
-  exportar proveedores también en Excel, en un archivo separado al de
-  materiales.
+  mismo (se marca a mano, pensado para saber a quién contactar).
 - **Trabajadores** (solo administradores, reemplaza al antiguo módulo
   "Usuarios"): catálogo de personal de obra — nombre, documento, teléfono,
   puesto, a qué **cuadrilla** pertenece y en qué **obra/proyecto** está
@@ -23,7 +18,8 @@ Sistema con login propio, dashboard y varios módulos:
   entrar al sistema, se le puede dar acceso (usuario/contraseña/rol) desde
   la misma ficha; ese acceso vive en la tabla `users` de siempre.
 - **Órdenes de compra** y **Reportes**: todavía sin implementar (pantallas
-  "próximamente").
+  "próximamente"). Reportes exportables (Excel/PDF) del catálogo, proveedores
+  y trabajadores están contemplados a futuro, pero no confirmados todavía.
 
 Todavía no incluye expedientes/tareas del planner original; se evaluará más
 adelante.
@@ -47,8 +43,8 @@ capas, cada una en su carpeta:
   / `local_repository.py`), y `client.py`/`auth.py`/`schema.sql` acompañan
   a eso.
 
-`utils/` son helpers sin estado (Excel, geocodificación, fechas relativas)
-que no le pertenecen a ningún módulo en particular.
+`utils/` son helpers sin estado (geocodificación, fechas relativas) que no
+le pertenecen a ningún módulo en particular.
 
 ## Stack
 
@@ -116,21 +112,6 @@ modules/ordenes.py           # Placeholder: Órdenes de compra
 modules/reportes.py          # Placeholder: Reportes
 modules/ui.py                # CSS y componentes visuales compartidos (tarjetas, pastillas...)
 
-utils/excel.py                # Importar/exportar Excel (alias español/inglés)
 utils/geocode.py              # Geocodificación de direcciones (Nominatim)
 utils/timeago.py              # Fechas relativas ("hace 5 min")
 ```
-
-## Formato de los Excel
-
-**Materiales** (`materiales.xlsx`): acepta encabezados `category`/`name`/
-`density`/`metric_label` o sus equivalentes en español (`Categoría`,
-`Material`, `Densidad (kg/m³)`, `Métrica que usa`), y detecta la fila de
-encabezado aunque el archivo traiga filas de título antes de la tabla (como
-el catálogo de referencia). Se identifican por categoría + nombre: si ya
-existe esa combinación, se actualiza; si no, se crea.
-
-**Proveedores** (`proveedores.xlsx`): columnas `name`/`nombre` (obligatoria),
-`contact_name`/`contacto`, `phone`/`telefono`, `email`/`correo`,
-`notes`/`notas` (todas menos el nombre son opcionales). Cada fila importada
-crea un proveedor nuevo.
