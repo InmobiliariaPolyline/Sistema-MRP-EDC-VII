@@ -45,11 +45,14 @@ def render(user: dict) -> None:
                 "icon": {"font-size": "16px", "color": "#6B7280"},
                 "nav-link": {
                     "font-size": "15px",
+                    "font-family": "Inter, sans-serif",
                     "text-align": "left",
                     "margin": "4px 0",
                     "border-radius": "10px",
                     "padding": "10px 14px",
                     "color": "#1F2333",
+                    "transition": "background-color 0.15s ease, color 0.15s ease",
+                    "--hover-color": "#F5F3FF",
                 },
                 "nav-link-selected": {
                     "background-color": "#EFECFD",

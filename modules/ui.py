@@ -5,6 +5,108 @@ import streamlit as st
 
 _CSS = """
 <style>
+/* ---------------------------------------------------------------------
+   Pulido global: tipografía, botones, inputs, alertas, expander, modal.
+   Se aplica a TODA la app (login incluido) porque ui.inject() corre antes
+   de la pantalla de login en app.py.
+   ------------------------------------------------------------------- */
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap');
+
+html, body, .stApp {
+    font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
+}
+
+/* Bordes de cualquier st.container(border=True): esquinas más suaves y
+   un tono de borde más discreto que el gris default. border-radius y
+   border-color no hacen nada visible si el bloque no tiene borde, así que
+   es seguro aplicarlo a todos los stVerticalBlock sin distinguirlos. */
+div[data-testid="stVerticalBlock"] {
+    border-radius: 12px;
+    border-color: rgba(17, 24, 39, 0.08) !important;
+}
+
+/* Botones */
+button[kind="primary"], button[kind="primaryFormSubmit"] {
+    background: linear-gradient(135deg, #6C5CE7, #4B2FD1) !important;
+    border: none !important;
+    border-radius: 10px !important;
+    font-weight: 600 !important;
+    transition: transform 0.15s ease, box-shadow 0.15s ease, filter 0.15s ease;
+}
+button[kind="primary"]:hover, button[kind="primaryFormSubmit"]:hover {
+    filter: brightness(1.08);
+    box-shadow: 0 6px 16px rgba(108, 92, 231, 0.28);
+    transform: translateY(-1px);
+}
+button[kind="secondary"], button[kind="secondaryFormSubmit"] {
+    border-radius: 10px !important;
+    border: 1px solid rgba(17, 24, 39, 0.14) !important;
+    font-weight: 600 !important;
+    transition: border-color 0.15s ease, color 0.15s ease, background 0.15s ease;
+}
+button[kind="secondary"]:hover, button[kind="secondaryFormSubmit"]:hover {
+    border-color: #6C5CE7 !important;
+    color: #6C5CE7 !important;
+}
+
+/* Inputs, selects y textareas (BaseWeb, atributos estables entre versiones) */
+div[data-baseweb="input"], div[data-baseweb="select"] > div, div[data-baseweb="textarea"] {
+    border-radius: 10px !important;
+    transition: border-color 0.15s ease, box-shadow 0.15s ease;
+}
+div[data-baseweb="input"]:focus-within,
+div[data-baseweb="select"] > div:focus-within,
+div[data-baseweb="textarea"]:focus-within {
+    border-color: #6C5CE7 !important;
+    box-shadow: 0 0 0 3px rgba(108, 92, 231, 0.14) !important;
+}
+
+/* Checkbox: el cuadrito toma el morado de marca al marcarse */
+label[data-baseweb="checkbox"] span:first-child {
+    transition: all 0.15s ease;
+    border-radius: 6px !important;
+}
+
+/* Alertas (st.info / st.success / st.warning / st.error) */
+div[data-testid="stAlertContainer"] {
+    border-radius: 12px !important;
+    border: 1px solid transparent !important;
+}
+div[data-testid="stAlertContainer"]:has(div[data-testid="stAlertContentInfo"]) {
+    background: #EFECFD !important;
+    border-color: rgba(108, 92, 231, 0.18) !important;
+}
+div[data-testid="stAlertContainer"]:has(div[data-testid="stAlertContentSuccess"]) {
+    background: #E3F9E9 !important;
+    border-color: rgba(31, 146, 84, 0.2) !important;
+}
+div[data-testid="stAlertContainer"]:has(div[data-testid="stAlertContentWarning"]) {
+    background: #FDEFD9 !important;
+    border-color: rgba(214, 138, 12, 0.22) !important;
+}
+div[data-testid="stAlertContainer"]:has(div[data-testid="stAlertContentError"]) {
+    background: #FCE9E9 !important;
+    border-color: rgba(214, 69, 69, 0.2) !important;
+}
+
+/* Expander */
+div[data-testid="stExpander"] {
+    border-radius: 12px !important;
+    border: 1px solid rgba(17, 24, 39, 0.08) !important;
+    overflow: hidden;
+}
+
+/* Modal (st.dialog) */
+div[data-testid="stDialog"] div[role="dialog"] {
+    border-radius: 18px !important;
+}
+
+/* Scrollbar discreto */
+::-webkit-scrollbar { width: 10px; height: 10px; }
+::-webkit-scrollbar-track { background: transparent; }
+::-webkit-scrollbar-thumb { background: rgba(17, 24, 39, 0.16); border-radius: 999px; }
+::-webkit-scrollbar-thumb:hover { background: rgba(108, 92, 231, 0.4); }
+
 /* Encabezado de página: eyebrow + título grande */
 .mrp-eyebrow {
     font-size: 12px;
