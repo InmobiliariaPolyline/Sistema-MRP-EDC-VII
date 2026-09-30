@@ -2,7 +2,7 @@
 import streamlit as st
 
 from db import repository as repo
-from pages_app import ui
+from modules import ui
 from utils.excel import dataframe_to_excel_bytes, read_excel_upload
 
 

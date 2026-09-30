@@ -28,10 +28,32 @@ Sistema con login propio, dashboard y varios módulos:
 Todavía no incluye expedientes/tareas del planner original; se evaluará más
 adelante.
 
+## Arquitectura
+
+Streamlit **no separa frontend y backend** como el planner original
+(Next.js + Express): es un solo proceso Python que arma la página completa
+en cada interacción. `app.py` no es "el frontend" — es apenas el arranque
+(configura la página, exige sesión iniciada). El resto se organiza en tres
+capas, cada una en su carpeta:
+
+- `core/` — el cascarón ya autenticado: sidebar (marca, menú, cerrar
+  sesión) y qué módulo mostrar según lo que el usuario elija. No sabe nada
+  de materiales, proveedores, etc.; solo orquesta.
+- `modules/` — una pantalla por archivo (Dashboard, Materiales,
+  Proveedores, Trabajadores...). Cada una arma su propia interfaz y le pide
+  los datos a `db/`; no habla con Supabase directamente.
+- `db/` — el acceso a datos: `repository.py` es la fachada que los módulos
+  usan sin saber si hay Supabase o SQLite local detrás (`supabase_repository.py`
+  / `local_repository.py`), y `client.py`/`auth.py`/`schema.sql` acompañan
+  a eso.
+
+`utils/` son helpers sin estado (Excel, geocodificación, fechas relativas)
+que no le pertenecen a ningún módulo en particular.
+
 ## Stack
 
-- **Frontend/backend**: [Streamlit](https://streamlit.io) (todo en un solo
-  proceso, sin API aparte).
+- **Todo en un proceso**: [Streamlit](https://streamlit.io) (sin API aparte;
+  ver "Arquitectura" arriba).
 - **Base de datos**: [Supabase](https://supabase.com) (Postgres), vía el
   cliente `supabase-py`.
 - **Login**: tabla `users` propia (no Supabase Auth), contraseñas con hash
@@ -74,22 +96,29 @@ adelante.
 ## Estructura
 
 ```
-app.py                     # Punto de entrada: login + sidebar + navegación
-db/auth.py                 # Hash y verificación de contraseñas (bcrypt)
-db/client.py                # Cliente de Supabase (cacheado)
-db/repository.py            # Fachada: Supabase o SQLite local según haya credenciales
-db/local_repository.py      # Implementación SQLite (modo local/demo)
-db/supabase_repository.py   # Implementación Supabase (con cache de lecturas)
-db/schema.sql                # DDL de las tablas en Supabase
-pages_app/login.py          # Login y alta del primer administrador
-pages_app/dashboard.py      # Totales generales
-pages_app/materiales.py     # Módulo de Materiales
-pages_app/proveedores.py    # Módulo de Proveedores
-pages_app/trabajadores.py   # Módulo de Trabajadores (cuadrillas, obras, acceso)
-pages_app/ordenes.py        # Placeholder: Órdenes de compra
-pages_app/reportes.py       # Placeholder: Reportes
-utils/excel.py               # Importar/exportar Excel (alias español/inglés)
-utils/geocode.py             # Geocodificación de direcciones (Nominatim)
+app.py                      # Arranque: config de página, exige login, llama a core/shell.py
+
+core/shell.py                # Sidebar (marca, menú, cerrar sesión) y ruteo entre módulos
+
+db/auth.py                   # Hash y verificación de contraseñas (bcrypt)
+db/client.py                 # Cliente de Supabase (cacheado)
+db/repository.py             # Fachada: Supabase o SQLite local según haya credenciales
+db/local_repository.py       # Implementación SQLite (modo local/demo)
+db/supabase_repository.py    # Implementación Supabase (con cache de lecturas)
+db/schema.sql                 # DDL de las tablas en Supabase
+
+modules/login.py             # Login y alta del primer administrador
+modules/dashboard.py         # Totales generales
+modules/materiales.py        # Módulo de Materiales
+modules/proveedores.py       # Módulo de Proveedores
+modules/trabajadores.py      # Módulo de Trabajadores (cuadrillas, obras, acceso)
+modules/ordenes.py           # Placeholder: Órdenes de compra
+modules/reportes.py          # Placeholder: Reportes
+modules/ui.py                # CSS y componentes visuales compartidos (tarjetas, pastillas...)
+
+utils/excel.py                # Importar/exportar Excel (alias español/inglés)
+utils/geocode.py              # Geocodificación de direcciones (Nominatim)
+utils/timeago.py              # Fechas relativas ("hace 5 min")
 ```
 
 ## Formato de los Excel

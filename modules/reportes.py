@@ -1,7 +1,7 @@
 """Módulo de Reportes: todavía no implementado."""
 import streamlit as st
 
-from pages_app import ui
+from modules import ui
 
 
 def render() -> None:

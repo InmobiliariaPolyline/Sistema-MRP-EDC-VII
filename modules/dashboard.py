@@ -6,7 +6,7 @@ import plotly.graph_objects as go
 import streamlit as st
 
 from db import repository as repo
-from pages_app import ui
+from modules import ui
 from utils.timeago import time_ago
 
 MESES = [

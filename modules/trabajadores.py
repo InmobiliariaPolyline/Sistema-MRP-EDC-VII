@@ -7,7 +7,7 @@ import streamlit as st
 
 from db import repository as repo
 from db.auth import hash_password
-from pages_app import ui
+from modules import ui
 from utils.geocode import geocode_address
 
 ROLES = ["operador", "admin"]
