@@ -46,6 +46,7 @@ def movement_dialog(default_site_id: str | None = None) -> None:
     if materials.empty:
         st.info("Primero carga materiales en el catálogo.")
         return
+    ui.tip("Ejemplo: «Consumo en una obra», Concreto, 2, obra Torre Central. Las entradas de órdenes se registran solas al recibirlas.")
     sites = repo.list_project_sites()
     stock = stock_by_material().set_index("material_id")["stock"].to_dict()
 

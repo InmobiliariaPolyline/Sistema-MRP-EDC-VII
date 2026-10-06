@@ -29,6 +29,7 @@ def render() -> None:
 
 
 def _supplier_form(supplier: dict | None) -> tuple[str, str | None, str | None, str | None, str | None]:
+    ui.tip("Ejemplo: «Ferretería Norte», contacto «Ana Ruiz», teléfono «51987654321» (con código de país para usar WhatsApp).")
     name = st.text_input("Nombre del proveedor", value=supplier["name"] if supplier else "")
     c1, c2 = st.columns(2)
     contact_name = c1.text_input("Persona de contacto (opcional)", value=(supplier["contact_name"] or "") if supplier else "")

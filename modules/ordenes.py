@@ -129,6 +129,7 @@ def _new_order_dialog() -> None:
     if suppliers.empty:
         st.info("Primero registra un proveedor en el módulo Proveedores.")
         return
+    ui.tip("Ejemplo: elige el proveedor, la obra destino, luego un material con cantidad 12 y pulsa «Agregar al pedido». Repite por cada material y al final «Crear orden».")
     sites = repo.list_project_sites()
     offers = repo.list_offers()
 

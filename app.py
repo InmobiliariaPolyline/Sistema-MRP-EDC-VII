@@ -10,7 +10,7 @@ vive aparte en `db/`."""
 import streamlit as st
 
 from core import shell
-from modules import login, session, ui
+from modules import live_validation, login, session, ui
 
 st.set_page_config(
     page_title="Sistema MRP",
@@ -27,9 +27,11 @@ try:
 
     if not login.is_logged_in():
         login.render()
+        live_validation.inject()
         st.stop()
 
     shell.render(login.current_user())
+    live_validation.inject()
 except st.errors.StreamlitAPIException:
     raise  # st.stop()/st.rerun() y errores de uso de Streamlit siguen su curso normal
 except Exception as exc:  # fallo de red/base de datos: mensaje claro en vez del traceback

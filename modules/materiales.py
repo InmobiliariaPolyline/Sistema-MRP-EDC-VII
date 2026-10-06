@@ -3,7 +3,7 @@ Cada material muestra el mejor precio disponible entre los proveedores."""
 import streamlit as st
 
 from db import repository as repo
-from modules import ui
+from modules import inventario, ui
 
 ALL_CATEGORIES = "Todas las categorías"
 
@@ -23,6 +23,7 @@ def render() -> None:
 
 
 def _material_form(material: dict | None) -> tuple[str, str, float | None, str]:
+    ui.tip("Ejemplo: categoría «Concreto», nombre «Concreto f'c=210», densidad 2400 y métrica «Volumen (m³)». Categoría + nombre no pueden repetirse.")
     c1, c2 = st.columns(2)
     category = c1.text_input("Categoría", value=material["category"] if material else "", placeholder="Ej. Concreto")
     name = c2.text_input("Nombre", value=material["name"] if material else "", placeholder="Ej. Concreto f'c=210")
@@ -65,6 +66,65 @@ def _edit_material_dialog(material: dict) -> None:
     values = _material_form(material)
     if st.button("Guardar cambios", type="primary", use_container_width=True):
         _save(values, material["id"])
+
+
+@st.dialog("Ficha del material", width="large")
+def info_dialog(material_id: str) -> None:
+    """Todo lo que hay que saber de un material: qué es, cuánto pesa, quién lo
+    vende y a qué precio, cuánto hay en el almacén y en qué obras se usa."""
+    materials = repo.list_materials()
+    match = materials[materials["id"] == material_id]
+    if match.empty:
+        st.info("Este material ya no existe.")
+        return
+    m = match.to_dict("records")[0]
+
+    st.markdown(f'<div class="mrp-eyebrow">{m["category"]}</div><div class="mrp-page-title" style="font-size:24px">{m["name"]}</div>', unsafe_allow_html=True)
+    st.markdown(ui.pill(m["metric_label"] or "Sin métrica", "purple"), unsafe_allow_html=True)
+
+    st.markdown("**Qué significan sus datos**")
+    if m["density"]:
+        d = float(m["density"])
+        st.write(
+            f"**Densidad {d:,.0f} kg/m³:** un metro cúbico pesa ≈ {d:,.0f} kg ({d / 1000:,.2f} t). "
+            f"Para convertir: peso (kg) = volumen (m³) × {d:,.0f}. Ejemplo: 10 m³ ≈ {10 * d:,.0f} kg."
+        )
+    else:
+        st.write("Sin densidad registrada: no se puede convertir entre volumen y peso.")
+    st.write(f"**Métrica de cómputo:** {m['metric_label'] or 'sin definir'} — es la unidad en la que se mide y se pide este material.")
+
+    offers = repo.list_offers()
+    offers = offers[offers["material_id"] == material_id] if not offers.empty else offers
+    st.markdown("**Proveedores y precios**")
+    if offers.empty:
+        st.caption("Ningún proveedor lo ofrece todavía.")
+    else:
+        table = offers.assign(price=offers["price"].astype(float), Disponible=offers["available"].map(lambda v: "Sí" if v else "No"))
+        st.dataframe(
+            table[["supplier_name", "price", "Disponible"]].rename(columns={"supplier_name": "Proveedor", "price": "Precio"}),
+            hide_index=True,
+            use_container_width=True,
+            column_config={"Precio": st.column_config.NumberColumn(format="%.2f")},
+        )
+
+    stock = inventario.stock_by_material()
+    stock = stock[stock["material_id"] == material_id]
+    st.markdown("**Inventario**")
+    if stock.empty:
+        st.caption("Sin movimientos de stock.")
+    else:
+        row = stock.to_dict("records")[0]
+        st.write(f"En stock: **{row['stock']:g}** (entradas {row['entradas']:g} · salidas {row['salidas']:g})")
+
+    budgets = repo.list_budgets()
+    budgets = budgets[budgets["material_id"] == material_id] if not budgets.empty else budgets
+    st.markdown("**Obras donde se usa**")
+    if budgets.empty:
+        st.caption("No está en el presupuesto de ninguna obra.")
+    else:
+        sites = repo.list_project_sites().set_index("id")["name"].to_dict()
+        for b in budgets.to_dict("records"):
+            st.write(f"• {sites.get(b['project_site_id'], 'Obra')}: {float(b['planned_qty']):g} previstos × {float(b['planned_unit_price']):,.2f}")
 
 
 def _delete_material(material_id: str, name: str) -> None:
@@ -119,7 +179,7 @@ def _render_table() -> None:
         with st.expander(f"{category} ({len(group)})", expanded=searching):
             for row in group.to_dict("records"):
                 with st.container(border=True):
-                    c1, c2, c3, c4 = st.columns([4, 3, 1, 1])
+                    c1, c2, c0, c3, c4 = st.columns([4, 3, 1, 1, 1])
                     with c1:
                         sub = f"{row['density']} kg/m³" if row["density"] else "Sin densidad"
                         st.markdown(ui.row_name_sub(ui.avatar(row["name"]), row["name"], sub), unsafe_allow_html=True)
@@ -129,6 +189,9 @@ def _render_table() -> None:
                         if offer:
                             pills += " " + ui.pill(f"Mejor: {offer['price']:,.2f} · {offer['supplier']}", "green")
                         st.markdown(pills, unsafe_allow_html=True)
+                    with c0:
+                        if st.button("ℹ️", key=f"info_material_{row['id']}", help="Ver información del material"):
+                            info_dialog(row["id"])
                     with c3:
                         if st.button("✏️", key=f"edit_material_{row['id']}", help="Editar material"):
                             _edit_material_dialog(row)

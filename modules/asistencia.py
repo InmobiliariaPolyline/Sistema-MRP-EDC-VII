@@ -21,6 +21,7 @@ def render() -> None:
         "Pasa lista cada día: quién vino, a qué obra fue y quién faltó.",
     )
     tab_list, tab_summary = st.tabs(["Pasar lista", "Resumen"])
+    ui.tip("Ejemplo: en la tabla pulsa la celda «Estado» de cada trabajador y elige presente / ausente; luego «Guardar asistencia». «—» significa sin registrar.")
     with tab_list:
         _render_roll_call()
     with tab_summary:

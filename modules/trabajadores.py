@@ -188,6 +188,7 @@ def _revoke_access(worker_id: str, user_id: str, name: str) -> None:
 
 def _worker_fields(worker: dict | None, groups: pd.DataFrame, sites: pd.DataFrame) -> dict:
     """Campos comunes del formulario de alta y de edición."""
+    ui.tip("Ejemplo: «Juan Pérez», documento «45879632», teléfono «51987654321», puesto «Capataz». Asígnale cuadrilla y obra para verlo en Asistencia y Obras.")
     full_name = st.text_input("Nombre completo", value=worker["full_name"] if worker else "")
     c1, c2 = st.columns(2)
     document_id = c1.text_input("Documento (opcional)", value=(worker.get("document_id") or "") if worker else "")

@@ -9,17 +9,33 @@ import pandas as pd
 import streamlit as st
 
 from db import repository as repo
+from modules.guides import guide_for
 
 # Modo oscuro: se invierte toda la página (luminosidad) conservando el tono, y
 # se vuelve a invertir lo que no debe cambiar (imágenes). Los fondos se aclaran
 # un poco antes de invertir para que el resultado sea gris oscuro y no negro.
 _DARK_CSS = """
 <style>
+/* Se invierte la luminosidad de toda la página conservando el tono; los
+   valores de abajo son los colores CLAROS previos a invertir (el resultado es
+   un gris azulado oscuro con buen contraste). */
 html { filter: invert(1) hue-rotate(180deg); }
 img, video { filter: invert(1) hue-rotate(180deg); }
-.stApp { background: #EDEDF1 !important; }
-.mrp-stat-card, .mrp-panel, .mrp-card { background: #DEDEE4 !important; }
-section[data-testid="stSidebar"] { background: #E3E3E9 !important; }
+.stApp { background: #D9DBE6 !important; }
+section[data-testid="stSidebar"] { background: #E6E8F1 !important; }
+.mrp-stat-card, .mrp-panel, .mrp-card { background: #C9CCDB !important; border-color: rgba(0,0,0,.18) !important; }
+/* contenedores con borde (filas de lista): más claros que el fondo y con borde visible */
+div[data-testid="stVerticalBlock"] { border-color: rgba(0,0,0,.28) !important; }
+div[data-testid="stLayoutWrapper"] > div[data-testid="stVerticalBlock"]:has(.mrp-row) { background: #D0D3E1; }
+div[data-testid="stLayoutWrapper"] > div[data-testid="stVerticalBlock"]:has(.mrp-row):hover { background: #C4C8DA; }
+/* campos: algo más claros que el fondo para distinguirlos */
+div[data-baseweb="input"], div[data-baseweb="select"] > div, div[data-baseweb="textarea"] { background: #C2C6D8 !important; }
+div[data-testid="stExpander"] { background: #D0D3E1; border-color: rgba(0,0,0,.25) !important; }
+button[kind="secondary"], button[kind="secondaryFormSubmit"] { background: #CDD0DF !important; }
+/* textos secundarios: más oscuros antes de invertir = más claros al verlos */
+.mrp-row-sub, .mrp-activity-sub, .mrp-stat-caption, .mrp-stat-label, .mrp-page-subtitle,
+.mrp-sidebar-section, .mrp-brand-sub, div[data-testid="stCaptionContainer"] { color: #3A3F52 !important; }
+.mrp-row-name, .mrp-activity-name, .mrp-stat-value, .mrp-page-title, .mrp-panel-title { color: #0B0D16 !important; }
 /* el menú del sidebar vive en un iframe con fondo blanco: que adopte el del sidebar */
 section[data-testid="stSidebar"] iframe { mix-blend-mode: multiply; }
 </style>
@@ -57,6 +73,28 @@ div[data-testid="stLayoutWrapper"] > div[data-testid="stVerticalBlock"]:has(.mrp
     border-color: rgba(108, 92, 231, 0.45) !important;
     background: #FBFAFF;
     box-shadow: 0 6px 18px rgba(108, 92, 231, 0.10);
+}
+
+/* Validación en vivo (live_validation.py) y consejos de formulario */
+.mrp-live {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px;
+    max-width: 78%;
+    font-size: 12px;
+    font-weight: 600;
+    margin-top: 4px;
+    line-height: 1.3;
+}
+.mrp-live-count { font-variant-numeric: tabular-nums; white-space: nowrap; opacity: 0.85; }
+.mrp-tip {
+    background: #F4F3FB;
+    border: 1px dashed rgba(108, 92, 231, 0.35);
+    border-radius: 10px;
+    padding: 8px 12px;
+    font-size: 12.5px;
+    color: #4B2FD1;
+    margin-bottom: 8px;
 }
 
 /* Botones */
@@ -382,18 +420,33 @@ def page_header(eyebrow: str, title: str, subtitle: str = "", action_label: str 
     if subtitle:
         html += f'<div class="mrp-page-subtitle">{subtitle}</div>'
 
+    guide = guide_for(eyebrow, title)
+
     if not action_label:
         st.markdown(html, unsafe_allow_html=True)
+        _guide_popover(guide)
         return False
 
     col1, col2 = st.columns([4, 1.3])
     with col1:
         st.markdown(html, unsafe_allow_html=True)
+        _guide_popover(guide)
     with col2:
         st.write("")
         st.write("")
         clicked = st.button(action_label, key=action_key, type="primary", use_container_width=True)
     return clicked
+
+
+def _guide_popover(guide: str | None) -> None:
+    if guide:
+        with st.popover("❓ Cómo usar"):
+            st.markdown(guide)
+
+
+def tip(text: str) -> None:
+    """Consejo breve con ejemplo, para el inicio de un formulario."""
+    st.markdown(f'<div class="mrp-tip">💡 {text}</div>', unsafe_allow_html=True)
 
 
 def stat_card(icon: str, value, label: str, caption: str = "", warn: bool = False) -> str:
