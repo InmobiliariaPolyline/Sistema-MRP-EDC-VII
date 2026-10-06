@@ -7,6 +7,7 @@ en sí (que vive en `modules/`) y del acceso a datos (que vive en `db/`)."""
 import streamlit as st
 from streamlit_option_menu import option_menu
 
+from core.version import APP_VERSION
 from db.repository import USING_LOCAL
 from modules import (
     asistencia, dashboard, historial, inventario, login, materiales, obras, ordenes, proveedores, reportes,
@@ -75,6 +76,7 @@ def render(user: dict) -> None:
         if st.button("Cerrar sesión", use_container_width=True):
             login.logout()
             st.rerun()
+        st.caption(f"Sistema MRP · {APP_VERSION}")
 
     render_fn = next(r[2] for r in routes if r[0] == seccion)
     render_fn(user)

@@ -36,6 +36,7 @@ Sistema con login propio, dashboard y varios módulos:
   y consumido, con aviso cuando un material excede lo previsto.
 - **Asistencia**: pasar lista por día (estado y obra de cada trabajador) y
   resumen por trabajador y por obra.
+- **Sesión persistente**: al recargar la página no se pierde el login (cookie firmada, 7 días; define `SESSION_SECRET` en `.env`/secrets para tu propio secreto).
 - **Historial** (solo administradores): quién creó, editó, recibió o
   eliminó qué y cuándo.
 - **Reportes**: descarga en Excel (una hoja por conjunto de datos) o PDF de

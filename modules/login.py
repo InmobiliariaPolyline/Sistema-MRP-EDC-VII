@@ -9,6 +9,7 @@ import streamlit as st
 from db import repository as repo
 from db.auth import hash_password, verify_password
 from db.repository import USING_LOCAL
+from modules import session
 
 SESSION_KEY = "auth_user"
 BOOTED_KEY = "_mrp_booted"
@@ -162,6 +163,7 @@ def current_user() -> dict:
 
 def logout() -> None:
     st.session_state.pop(SESSION_KEY, None)
+    session.forget()
 
 
 def render() -> None:
@@ -280,6 +282,7 @@ def _render_login() -> None:
         "name": user["name"],
         "role": user["role"],
     }
+    session.remember(user["username"])
     st.rerun()
 
 
