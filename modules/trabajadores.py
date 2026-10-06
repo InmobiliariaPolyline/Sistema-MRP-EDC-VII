@@ -8,7 +8,7 @@ import streamlit as st
 from db import repository as repo
 from db.auth import hash_password
 from modules import ui
-from utils.geocode import geocode_address
+from utils.geocode import google_maps_search_url, parse_coordinates, search_address
 
 ROLES = ["operador", "admin"]
 NO_GROUP = "Sin cuadrilla"
@@ -74,23 +74,59 @@ def _render_sites_panel() -> None:
     with st.expander("Obras / Proyectos"):
         with st.form("new_site_form"):
             name = st.text_input("Nombre de la obra", placeholder="Ej. Torre Central")
-            address = st.text_input("Dirección", placeholder="Calle, ciudad, país")
+            address = st.text_input("Dirección", placeholder="Calle y número, distrito, ciudad")
+            pin = st.text_input(
+                "Enlace de Google Maps o coordenadas (opcional, ubicación exacta)",
+                placeholder="Pega aquí el enlace de Google Maps o «-12.0098, -76.9836»",
+                help="El buscador gratuito solo conoce la calle, no el número de puerta. "
+                "Para el punto exacto: busca la dirección en Google Maps, copia el enlace de la barra "
+                "de direcciones (o «Compartir → Copiar enlace») y pégalo aquí.",
+            )
             c1, c2 = st.columns(2)
-            search = c1.form_submit_button("🔍 Buscar dirección", use_container_width=True)
+            search = c1.form_submit_button("🔍 Ubicar en el mapa", use_container_width=True)
             save = c2.form_submit_button("Guardar obra", type="primary", use_container_width=True)
 
+        if address.strip():
+            st.markdown(
+                f'<a class="mrp-link" href="{google_maps_search_url(address.strip())}" target="_blank" rel="noopener">'
+                "🗺️ Abrir esta dirección en Google Maps</a>",
+                unsafe_allow_html=True,
+            )
+
         if search:
-            result = geocode_address(address)
-            if result:
-                st.session_state["_site_geocode"] = result
-            else:
+            st.session_state.pop("_site_candidates", None)
+            exact = parse_coordinates(pin)
+            if exact:
+                st.session_state["_site_geocode"] = {**exact, "exact": True}
+            elif pin.strip():
                 st.session_state.pop("_site_geocode", None)
-                st.warning("No se encontró esa dirección. Intenta ser más específico (ciudad, país).")
+                st.warning("No reconocí ese enlace o coordenadas. Pega el enlace completo de Google Maps o «lat, lon».")
+            else:
+                found = search_address(address)
+                if found:
+                    st.session_state["_site_candidates"] = found
+                    st.session_state["_site_geocode"] = {**found[0], "exact": False}
+                else:
+                    st.session_state.pop("_site_geocode", None)
+                    st.warning("No se encontró esa dirección. Prueba con distrito y ciudad, o pega el enlace de Google Maps.")
+
+        candidates = st.session_state.get("_site_candidates")
+        if candidates and len(candidates) > 1:
+            labels = [c["display_name"] for c in candidates]
+            current = st.session_state.get("_site_geocode") or {}
+            index = next((i for i, c in enumerate(candidates) if c["lat"] == current.get("lat")), 0)
+            chosen = st.selectbox("Resultados encontrados (elige el correcto)", labels, index=index, key="_site_candidate_pick")
+            st.session_state["_site_geocode"] = {**candidates[labels.index(chosen)], "exact": False}
 
         geocode = st.session_state.get("_site_geocode")
         if geocode:
             st.caption(f"📍 {geocode['display_name']}")
-            st.map(pd.DataFrame([{"lat": geocode["lat"], "lon": geocode["lon"]}]), zoom=14)
+            if not geocode.get("exact"):
+                st.caption(
+                    "⚠️ Ubicación aproximada (OpenStreetMap suele ubicar solo la calle). "
+                    "Para el punto exacto pega el enlace de Google Maps arriba."
+                )
+            st.map(pd.DataFrame([{"lat": geocode["lat"], "lon": geocode["lon"]}]), zoom=17 if geocode.get("exact") else 15)
 
         if save:
             if not name.strip():
@@ -101,6 +137,7 @@ def _render_sites_panel() -> None:
                 lon = geocode["lon"] if geocode else None
                 repo.create_project_site(name.strip(), address.strip() or None, lat, lon)
                 st.session_state.pop("_site_geocode", None)
+                st.session_state.pop("_site_candidates", None)
                 ui.flash(f"Obra «{name.strip()}» guardada.")
                 st.rerun()
 
