@@ -2,8 +2,9 @@
 
 Sistema con login propio, dashboard y varios módulos:
 
-- **Dashboard**: totales generales (materiales, proveedores, proveedores con
-  algo disponible, materiales sin proveedor).
+- **Dashboard**: totales generales, gasto por mes y por proveedor, órdenes
+  por estado, alertas de órdenes atrasadas y mapa de obras. Hay **modo
+  oscuro** (interruptor en el sidebar).
 - **Materiales**: catálogo maestro (categoría, nombre, densidad, métrica de
   cómputo) con búsqueda, filtro por categoría, alta, edición y baja. Cada
   material muestra el mejor precio disponible entre los proveedores.
@@ -22,8 +23,21 @@ Sistema con login propio, dashboard y varios módulos:
 - **Órdenes de compra**: pedidos a un proveedor con sus líneas de material
   (cantidad y precio, que se precarga del catálogo del proveedor), obra
   destino y un estado que avanza de pendiente a enviada y recibida (o
-  cancelada). Las órdenes conservan el nombre del proveedor y del material
-  aunque después se borren.
+  cancelada). Al armar el pedido, un **comparador de cotizaciones** muestra
+  el precio de cada proveedor lado a lado y sugiere el más barato (por
+  material y para el pedido completo). La **recepción es parcial por
+  línea** (lo que llega se suma al inventario y la orden queda «Recibida
+  parcial» hasta completarse). Cada orden se puede **duplicar**, bajar en
+  **PDF** o enviar por **WhatsApp** con el pedido ya escrito. Las órdenes
+  abiertas hace más de X días se marcan con ⏰ aquí y en el dashboard.
+- **Inventario**: stock por material (entradas por recepciones y ajustes,
+  menos consumo en obra y mermas) e historial de movimientos.
+- **Obras**: presupuesto de materiales por obra frente a lo pedido, recibido
+  y consumido, con aviso cuando un material excede lo previsto.
+- **Asistencia**: pasar lista por día (estado y obra de cada trabajador) y
+  resumen por trabajador y por obra.
+- **Historial** (solo administradores): quién creó, editó, recibió o
+  eliminó qué y cuándo.
 - **Reportes**: descarga en Excel (una hoja por conjunto de datos) o PDF de
   materiales, proveedores, catálogo y precios por proveedor, trabajadores y
   órdenes de compra.
@@ -76,8 +90,9 @@ le pertenecen a ningún módulo en particular.
 
 1. Crea un proyecto en Supabase y corre `db/schema.sql` en su SQL Editor
    (crea las tablas `materials`, `suppliers`, `supplier_materials`, `users`,
-   `work_groups`, `project_sites`, `workers`, `purchase_orders` y
-   `purchase_order_items`). Si actualizas un proyecto existente, corre solo
+   `work_groups`, `project_sites`, `workers`, `purchase_orders`,
+   `purchase_order_items`, `stock_movements`, `site_budgets`, `attendance`
+   y `audit_log`). Si actualizas un proyecto existente, corre solo
    las tablas que falten. Si alguna queda con Row Level Security activado,
    la app no podrá escribir en ella: el propio `schema.sql` trae los
    `alter table ... disable row level security`.
@@ -92,13 +107,21 @@ le pertenecen a ningún módulo en particular.
    - O copia `.streamlit/secrets.toml.example` a `.streamlit/secrets.toml`
      (recomendado si vas a desplegar en Streamlit Community Cloud).
 
-4. Corre la app:
+4. (Opcional, una sola vez) Carga el catálogo de materiales desde el Excel:
+
+   ```bash
+   python scripts/seed_catalog.py ruta/al/listado_materiales.xlsx
+   ```
+
+   Es idempotente (si el material ya existe solo actualiza densidad y métrica).
+
+5. Corre la app:
 
    ```bash
    streamlit run app.py
    ```
 
-5. Como todavía no hay usuarios, la primera vez la app te pide crear el
+6. Como todavía no hay usuarios, la primera vez la app te pide crear el
    Administrador (nombre, usuario y contraseña). Desde ahí puedes crear más
    cuentas en el módulo **Trabajadores** (o dar acceso a un trabajador ya
    registrado).
@@ -123,8 +146,14 @@ modules/materiales.py        # Módulo de Materiales
 modules/proveedores.py       # Módulo de Proveedores
 modules/trabajadores.py      # Módulo de Trabajadores (cuadrillas, obras, acceso)
 modules/ordenes.py           # Módulo de Órdenes de compra (alta, estados, detalle)
+modules/inventario.py        # Stock y movimientos
+modules/obras.py             # Presupuesto por obra vs. pedido/recibido/consumido
+modules/asistencia.py        # Pasar lista y resumen
+modules/historial.py         # Auditoría (quién hizo qué)
 modules/reportes.py          # Módulo de Reportes (Excel y PDF)
 modules/ui.py                # CSS y componentes visuales compartidos (tarjetas, pastillas...)
+
+scripts/seed_catalog.py       # Carga única del catálogo de materiales desde Excel
 
 utils/geocode.py              # Geocodificación de direcciones (Nominatim)
 utils/reports.py              # Generación de Excel (openpyxl) y PDF (fpdf2)

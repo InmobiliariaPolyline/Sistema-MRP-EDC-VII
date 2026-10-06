@@ -113,10 +113,55 @@ def _init_db() -> None:
                 unit text,
                 quantity real not null,
                 unit_price real not null default 0,
+                received_qty real not null default 0,
+                created_at text default (datetime('now'))
+            );
+
+            create table if not exists stock_movements (
+                id text primary key,
+                material_id text not null references materials(id) on delete cascade,
+                project_site_id text references project_sites(id) on delete set null,
+                kind text not null,
+                quantity real not null,
+                note text,
+                order_id text references purchase_orders(id) on delete set null,
+                actor text,
+                created_at text default (datetime('now'))
+            );
+
+            create table if not exists site_budgets (
+                id text primary key,
+                project_site_id text not null references project_sites(id) on delete cascade,
+                material_id text not null references materials(id) on delete cascade,
+                planned_qty real not null default 0,
+                planned_unit_price real not null default 0,
+                created_at text default (datetime('now')),
+                updated_at text default (datetime('now')),
+                unique (project_site_id, material_id)
+            );
+
+            create table if not exists attendance (
+                id text primary key,
+                worker_id text not null references workers(id) on delete cascade,
+                project_site_id text references project_sites(id) on delete set null,
+                work_date text not null,
+                status text not null default 'presente',
+                note text,
+                created_at text default (datetime('now')),
+                unique (worker_id, work_date)
+            );
+
+            create table if not exists audit_log (
+                id text primary key,
+                actor text not null,
+                summary text not null,
                 created_at text default (datetime('now'))
             );
             """
         )
+        cols = [r[1] for r in conn.execute("pragma table_info(purchase_order_items)").fetchall()]
+        if "received_qty" not in cols:
+            conn.execute("alter table purchase_order_items add column received_qty real not null default 0")
 
 
 @contextmanager
@@ -473,7 +518,7 @@ def list_order_items(order_id: str | None = None) -> pd.DataFrame:
     """Líneas de una orden, o de todas (con el código de su orden) si no se pasa id."""
     query = """
         select i.id, i.order_id, o.code as order_code, i.material_id, i.material_name,
-               i.unit, i.quantity, i.unit_price, (i.quantity * i.unit_price) as subtotal
+               i.unit, i.quantity, i.unit_price, i.received_qty, (i.quantity * i.unit_price) as subtotal
         from purchase_order_items i join purchase_orders o on o.id = i.order_id
     """
     params: tuple = ()
@@ -518,6 +563,159 @@ def delete_order(order_id: str) -> None:
         conn.execute("delete from purchase_orders where id = ?", (order_id,))
 
 
+def receive_order_items(order_id: str, receipts: dict[str, float], actor: str | None = None) -> str:
+    """Registra lo recibido por línea (id de línea -> cantidad que llegó ahora),
+    genera las entradas de stock y deja la orden en 'parcial' o 'recibida'.
+    Devuelve el nuevo estado."""
+    with _connect() as conn:
+        code = conn.execute("select code from purchase_orders where id = ?", (order_id,)).fetchone()[0]
+        for item_id, qty in receipts.items():
+            if not qty or qty <= 0:
+                continue
+            row = conn.execute("select material_id from purchase_order_items where id = ?", (item_id,)).fetchone()
+            conn.execute("update purchase_order_items set received_qty = received_qty + ? where id = ?", (qty, item_id))
+            if row and row[0]:
+                conn.execute(
+                    "insert into stock_movements (id, material_id, kind, quantity, note, order_id, actor) values (?, ?, 'entrada', ?, ?, ?, ?)",
+                    (str(uuid.uuid4()), row[0], qty, f"Recepción {code}", order_id, actor),
+                )
+        pending = conn.execute(
+            "select count(*) from purchase_order_items where order_id = ? and received_qty < quantity", (order_id,)
+        ).fetchone()[0]
+        status = "parcial" if pending else "recibida"
+        conn.execute("update purchase_orders set status = ?, updated_at = datetime('now') where id = ?", (status, order_id))
+    return status
+
+
+# ---------------------------------------------------------------------------
+# Inventario (movimientos de stock) y presupuesto por obra
+# ---------------------------------------------------------------------------
+
+def add_movement(material_id: str, kind: str, quantity: float, project_site_id: str | None, note: str | None, actor: str | None) -> None:
+    with _connect() as conn:
+        conn.execute(
+            "insert into stock_movements (id, material_id, project_site_id, kind, quantity, note, actor) values (?, ?, ?, ?, ?, ?, ?)",
+            (str(uuid.uuid4()), material_id, project_site_id, kind, quantity, note, actor),
+        )
+
+
+def list_movements(project_site_id: str | None = None, limit: int = 500) -> pd.DataFrame:
+    query = """
+        select sm.id, sm.material_id, m.name as material_name, m.category, m.metric_label as unit,
+               sm.project_site_id, ps.name as site_name, sm.kind, sm.quantity, sm.note,
+               o.code as order_code, sm.actor, sm.created_at
+        from stock_movements sm
+        join materials m on m.id = sm.material_id
+        left join project_sites ps on ps.id = sm.project_site_id
+        left join purchase_orders o on o.id = sm.order_id
+    """
+    params: tuple = ()
+    if project_site_id:
+        query += " where sm.project_site_id = ?"
+        params = (project_site_id,)
+    query += " order by sm.created_at desc, sm.rowid desc limit ?"
+    with _connect() as conn:
+        df = pd.read_sql_query(query, conn, params=params + (limit,))
+    return df.astype(object).where(pd.notnull(df), None)
+
+
+def list_budgets(project_site_id: str | None = None) -> pd.DataFrame:
+    query = """
+        select b.id, b.project_site_id, b.material_id, m.category, m.name as material_name,
+               m.metric_label as unit, b.planned_qty, b.planned_unit_price
+        from site_budgets b join materials m on m.id = b.material_id
+    """
+    params: tuple = ()
+    if project_site_id:
+        query += " where b.project_site_id = ?"
+        params = (project_site_id,)
+    query += " order by m.category, m.name"
+    with _connect() as conn:
+        df = pd.read_sql_query(query, conn, params=params)
+    return df.astype(object).where(pd.notnull(df), None)
+
+
+def set_budget(project_site_id: str, material_id: str, planned_qty: float, planned_unit_price: float) -> None:
+    with _connect() as conn:
+        existing = conn.execute(
+            "select id from site_budgets where project_site_id = ? and material_id = ?", (project_site_id, material_id)
+        ).fetchone()
+        if existing:
+            conn.execute(
+                "update site_budgets set planned_qty = ?, planned_unit_price = ?, updated_at = datetime('now') where id = ?",
+                (planned_qty, planned_unit_price, existing[0]),
+            )
+        else:
+            conn.execute(
+                "insert into site_budgets (id, project_site_id, material_id, planned_qty, planned_unit_price) values (?, ?, ?, ?, ?)",
+                (str(uuid.uuid4()), project_site_id, material_id, planned_qty, planned_unit_price),
+            )
+
+
+def delete_budget(budget_id: str) -> None:
+    with _connect() as conn:
+        conn.execute("delete from site_budgets where id = ?", (budget_id,))
+
+
+# ---------------------------------------------------------------------------
+# Asistencia
+# ---------------------------------------------------------------------------
+
+def list_attendance(start: str, end: str) -> pd.DataFrame:
+    """Asistencia entre dos fechas (YYYY-MM-DD, ambas incluidas)."""
+    with _connect() as conn:
+        df = pd.read_sql_query(
+            """
+            select a.id, a.worker_id, w.full_name as worker_name, a.project_site_id, ps.name as site_name,
+                   a.work_date, a.status, a.note
+            from attendance a
+            join workers w on w.id = a.worker_id
+            left join project_sites ps on ps.id = a.project_site_id
+            where a.work_date >= ? and a.work_date <= ?
+            order by a.work_date desc, w.full_name
+            """,
+            conn,
+            params=(start, end),
+        )
+    return df.astype(object).where(pd.notnull(df), None)
+
+
+def set_attendance(worker_id: str, project_site_id: str | None, work_date: str, status: str, note: str | None) -> None:
+    with _connect() as conn:
+        existing = conn.execute(
+            "select id from attendance where worker_id = ? and work_date = ?", (worker_id, work_date)
+        ).fetchone()
+        if existing:
+            conn.execute(
+                "update attendance set project_site_id = ?, status = ?, note = ? where id = ?",
+                (project_site_id, status, note, existing[0]),
+            )
+        else:
+            conn.execute(
+                "insert into attendance (id, worker_id, project_site_id, work_date, status, note) values (?, ?, ?, ?, ?, ?)",
+                (str(uuid.uuid4()), worker_id, project_site_id, work_date, status, note),
+            )
+
+
+# ---------------------------------------------------------------------------
+# Historial de cambios
+# ---------------------------------------------------------------------------
+
+def log_action(actor: str, summary: str) -> None:
+    with _connect() as conn:
+        conn.execute("insert into audit_log (id, actor, summary) values (?, ?, ?)", (str(uuid.uuid4()), actor, summary))
+
+
+def list_audit(limit: int = 300) -> pd.DataFrame:
+    with _connect() as conn:
+        df = pd.read_sql_query(
+            "select id, actor, summary, created_at from audit_log order by created_at desc, rowid desc limit ?",
+            conn,
+            params=(limit,),
+        )
+    return df.astype(object).where(pd.notnull(df), None)
+
+
 # ---------------------------------------------------------------------------
 # Dashboard
 # ---------------------------------------------------------------------------
@@ -525,7 +723,7 @@ def delete_order(order_id: str) -> None:
 def dashboard_totals() -> dict:
     with _connect() as conn:
         orders_open = conn.execute(
-            "select count(*) from purchase_orders where status in ('pendiente', 'enviada')"
+            "select count(*) from purchase_orders where status in ('pendiente', 'enviada', 'parcial')"
         ).fetchone()[0]
         materials = conn.execute("select count(*) from materials").fetchone()[0]
         suppliers = conn.execute("select count(*) from suppliers").fetchone()[0]

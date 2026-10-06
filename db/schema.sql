@@ -128,3 +128,69 @@ create index if not exists idx_po_items_order on purchase_order_items(order_id);
 -- desactivarlo para que la app pueda leer/escribir:
 alter table purchase_orders disable row level security;
 alter table purchase_order_items disable row level security;
+
+-- ---------------------------------------------------------------------------
+-- Ronda 3: stock, presupuesto por obra, asistencia e historial de cambios
+-- ---------------------------------------------------------------------------
+
+-- Recepción parcial: cuánto de cada línea ya llegó.
+alter table purchase_order_items add column if not exists received_qty numeric not null default 0;
+
+-- Movimientos de inventario. Stock de un material = entradas - salidas.
+-- Las recepciones de órdenes generan entradas; el consumo en una obra es una
+-- salida con `project_site_id`; mermas u otros ajustes, una salida sin obra.
+create table if not exists stock_movements (
+  id uuid primary key default gen_random_uuid(),
+  material_id uuid not null references materials(id) on delete cascade,
+  project_site_id uuid references project_sites(id) on delete set null,
+  kind text not null, -- entrada | salida
+  quantity numeric not null,
+  note text,
+  order_id uuid references purchase_orders(id) on delete set null,
+  actor text,
+  created_at timestamptz not null default now()
+);
+
+-- Qué materiales (y cuánto) se planea usar en cada obra, para comparar contra
+-- lo pedido, recibido y consumido.
+create table if not exists site_budgets (
+  id uuid primary key default gen_random_uuid(),
+  project_site_id uuid not null references project_sites(id) on delete cascade,
+  material_id uuid not null references materials(id) on delete cascade,
+  planned_qty numeric not null default 0,
+  planned_unit_price numeric not null default 0,
+  created_at timestamptz not null default now(),
+  updated_at timestamptz not null default now(),
+  unique (project_site_id, material_id)
+);
+
+-- Asistencia diaria de trabajadores.
+create table if not exists attendance (
+  id uuid primary key default gen_random_uuid(),
+  worker_id uuid not null references workers(id) on delete cascade,
+  project_site_id uuid references project_sites(id) on delete set null,
+  work_date date not null,
+  status text not null default 'presente', -- presente | ausente | tardanza | permiso
+  note text,
+  created_at timestamptz not null default now(),
+  unique (worker_id, work_date)
+);
+
+-- Historial de cambios: quién hizo qué y cuándo.
+create table if not exists audit_log (
+  id uuid primary key default gen_random_uuid(),
+  actor text not null,
+  summary text not null,
+  created_at timestamptz not null default now()
+);
+
+create index if not exists idx_movements_material on stock_movements(material_id);
+create index if not exists idx_movements_site on stock_movements(project_site_id);
+create index if not exists idx_budgets_site on site_budgets(project_site_id);
+create index if not exists idx_attendance_date on attendance(work_date);
+create index if not exists idx_audit_created on audit_log(created_at desc);
+
+alter table stock_movements disable row level security;
+alter table site_budgets disable row level security;
+alter table attendance disable row level security;
+alter table audit_log disable row level security;

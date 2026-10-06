@@ -407,10 +407,11 @@ def list_order_items(order_id: str | None = None) -> pd.DataFrame:
                 "unit": row.get("unit"),
                 "quantity": float(row["quantity"]),
                 "unit_price": float(row["unit_price"]),
+                "received_qty": float(row.get("received_qty") or 0),
                 "subtotal": float(row["quantity"]) * float(row["unit_price"]),
             }
         )
-    columns = ["id", "order_id", "order_code", "material_id", "material_name", "unit", "quantity", "unit_price", "subtotal"]
+    columns = ["id", "order_id", "order_code", "material_id", "material_name", "unit", "quantity", "unit_price", "received_qty", "subtotal"]
     df = pd.DataFrame(rows, columns=columns)
     return df.sort_values(["order_code", "material_name"]).reset_index(drop=True) if not df.empty else df
 
@@ -462,7 +463,211 @@ def delete_order(order_id: str) -> None:
 def _invalidate_orders() -> None:
     list_orders.clear()
     list_order_items.clear()
+    list_movements.clear()
     dashboard_totals.clear()
+
+
+def receive_order_items(order_id: str, receipts: dict[str, float], actor: str | None = None) -> str:
+    """Registra lo recibido por línea (id de línea -> cantidad que llegó ahora),
+    genera las entradas de stock y deja la orden en 'parcial' o 'recibida'.
+    Devuelve el nuevo estado."""
+    client = get_client()
+    code = client.table("purchase_orders").select("code").eq("id", order_id).limit(1).execute().data[0]["code"]
+    items = client.table("purchase_order_items").select("*").eq("order_id", order_id).execute().data or []
+    pending = False
+    movements = []
+    for item in items:
+        received = float(item.get("received_qty") or 0)
+        arrived = float(receipts.get(item["id"]) or 0)
+        if arrived > 0:
+            received += arrived
+            client.table("purchase_order_items").update({"received_qty": received}).eq("id", item["id"]).execute()
+            if item.get("material_id"):
+                movements.append(
+                    {
+                        "material_id": item["material_id"],
+                        "kind": "entrada",
+                        "quantity": arrived,
+                        "note": f"Recepción {code}",
+                        "order_id": order_id,
+                        "actor": actor,
+                    }
+                )
+        if received < float(item["quantity"]):
+            pending = True
+    if movements:
+        client.table("stock_movements").insert(movements).execute()
+    status = "parcial" if pending else "recibida"
+    client.table("purchase_orders").update({"status": status}).eq("id", order_id).execute()
+    _invalidate_orders()
+    return status
+
+
+# ---------------------------------------------------------------------------
+# Inventario (movimientos de stock) y presupuesto por obra
+# ---------------------------------------------------------------------------
+
+def add_movement(material_id: str, kind: str, quantity: float, project_site_id: str | None, note: str | None, actor: str | None) -> None:
+    get_client().table("stock_movements").insert(
+        {
+            "material_id": material_id,
+            "project_site_id": project_site_id,
+            "kind": kind,
+            "quantity": quantity,
+            "note": note,
+            "actor": actor,
+        }
+    ).execute()
+    list_movements.clear()
+
+
+@st.cache_data(ttl=_CACHE_TTL, show_spinner=False)
+def list_movements(project_site_id: str | None = None, limit: int = 500) -> pd.DataFrame:
+    query = (
+        get_client()
+        .table("stock_movements")
+        .select("*, materials(name,category,metric_label), project_sites(name), purchase_orders(code)")
+        .order("created_at", desc=True)
+        .limit(limit)
+    )
+    if project_site_id:
+        query = query.eq("project_site_id", project_site_id)
+    rows = []
+    for row in query.execute().data or []:
+        material = row.pop("materials", None) or {}
+        site = row.pop("project_sites", None) or {}
+        order = row.pop("purchase_orders", None) or {}
+        rows.append(
+            {
+                "id": row["id"],
+                "material_id": row["material_id"],
+                "material_name": material.get("name"),
+                "category": material.get("category"),
+                "unit": material.get("metric_label"),
+                "project_site_id": row.get("project_site_id"),
+                "site_name": site.get("name"),
+                "kind": row["kind"],
+                "quantity": float(row["quantity"]),
+                "note": row.get("note"),
+                "order_code": order.get("code"),
+                "actor": row.get("actor"),
+                "created_at": row["created_at"],
+            }
+        )
+    columns = [
+        "id", "material_id", "material_name", "category", "unit", "project_site_id", "site_name",
+        "kind", "quantity", "note", "order_code", "actor", "created_at",
+    ]
+    return pd.DataFrame(rows, columns=columns)
+
+
+@st.cache_data(ttl=_CACHE_TTL, show_spinner=False)
+def list_budgets(project_site_id: str | None = None) -> pd.DataFrame:
+    query = get_client().table("site_budgets").select("*, materials(category,name,metric_label)")
+    if project_site_id:
+        query = query.eq("project_site_id", project_site_id)
+    rows = []
+    for row in query.execute().data or []:
+        material = row.pop("materials", None) or {}
+        rows.append(
+            {
+                "id": row["id"],
+                "project_site_id": row["project_site_id"],
+                "material_id": row["material_id"],
+                "category": material.get("category"),
+                "material_name": material.get("name"),
+                "unit": material.get("metric_label"),
+                "planned_qty": float(row["planned_qty"]),
+                "planned_unit_price": float(row["planned_unit_price"]),
+            }
+        )
+    columns = ["id", "project_site_id", "material_id", "category", "material_name", "unit", "planned_qty", "planned_unit_price"]
+    df = pd.DataFrame(rows, columns=columns)
+    return df.sort_values(["category", "material_name"]).reset_index(drop=True) if not df.empty else df
+
+
+def set_budget(project_site_id: str, material_id: str, planned_qty: float, planned_unit_price: float) -> None:
+    get_client().table("site_budgets").upsert(
+        {
+            "project_site_id": project_site_id,
+            "material_id": material_id,
+            "planned_qty": planned_qty,
+            "planned_unit_price": planned_unit_price,
+        },
+        on_conflict="project_site_id,material_id",
+    ).execute()
+    list_budgets.clear()
+
+
+def delete_budget(budget_id: str) -> None:
+    get_client().table("site_budgets").delete().eq("id", budget_id).execute()
+    list_budgets.clear()
+
+
+# ---------------------------------------------------------------------------
+# Asistencia
+# ---------------------------------------------------------------------------
+
+@st.cache_data(ttl=_CACHE_TTL, show_spinner=False)
+def list_attendance(start: str, end: str) -> pd.DataFrame:
+    """Asistencia entre dos fechas (YYYY-MM-DD, ambas incluidas)."""
+    res = (
+        get_client()
+        .table("attendance")
+        .select("*, workers(full_name), project_sites(name)")
+        .gte("work_date", start)
+        .lte("work_date", end)
+        .order("work_date", desc=True)
+        .execute()
+    )
+    rows = []
+    for row in res.data or []:
+        worker = row.pop("workers", None) or {}
+        site = row.pop("project_sites", None) or {}
+        rows.append(
+            {
+                "id": row["id"],
+                "worker_id": row["worker_id"],
+                "worker_name": worker.get("full_name"),
+                "project_site_id": row.get("project_site_id"),
+                "site_name": site.get("name"),
+                "work_date": row["work_date"],
+                "status": row["status"],
+                "note": row.get("note"),
+            }
+        )
+    columns = ["id", "worker_id", "worker_name", "project_site_id", "site_name", "work_date", "status", "note"]
+    df = pd.DataFrame(rows, columns=columns)
+    return df.sort_values(["work_date", "worker_name"], ascending=[False, True]).reset_index(drop=True) if not df.empty else df
+
+
+def set_attendance(worker_id: str, project_site_id: str | None, work_date: str, status: str, note: str | None) -> None:
+    get_client().table("attendance").upsert(
+        {
+            "worker_id": worker_id,
+            "project_site_id": project_site_id,
+            "work_date": work_date,
+            "status": status,
+            "note": note,
+        },
+        on_conflict="worker_id,work_date",
+    ).execute()
+    list_attendance.clear()
+
+
+# ---------------------------------------------------------------------------
+# Historial de cambios
+# ---------------------------------------------------------------------------
+
+def log_action(actor: str, summary: str) -> None:
+    get_client().table("audit_log").insert({"actor": actor, "summary": summary}).execute()
+    list_audit.clear()
+
+
+@st.cache_data(ttl=_CACHE_TTL, show_spinner=False)
+def list_audit(limit: int = 300) -> pd.DataFrame:
+    res = get_client().table("audit_log").select("*").order("created_at", desc=True).limit(limit).execute()
+    return pd.DataFrame(res.data or [], columns=["id", "actor", "summary", "created_at"])
 
 
 # ---------------------------------------------------------------------------
@@ -481,7 +686,7 @@ def dashboard_totals() -> dict:
     materials_without_supplier = len(materials) - len([m for m in materials["id"] if m in materials_with_supplier])
 
     orders = list_orders()
-    orders_open = int(orders["status"].isin(["pendiente", "enviada"]).sum()) if not orders.empty else 0
+    orders_open = int(orders["status"].isin(["pendiente", "enviada", "parcial"]).sum()) if not orders.empty else 0
 
     return {
         "materials": len(materials),

@@ -98,3 +98,90 @@ def to_pdf(title: str, sections: dict[str, pd.DataFrame]) -> bytes:
         pdf.ln(5)
 
     return bytes(pdf.output())
+
+
+def order_pdf(order: dict, items: pd.DataFrame, supplier: dict | None = None) -> bytes:
+    """PDF de una sola orden de compra, listo para imprimir o mandar al proveedor."""
+    pdf = FPDF(orientation="P", unit="mm", format="A4")
+    pdf.set_auto_page_break(auto=True, margin=16)
+    pdf.add_page()
+
+    pdf.set_font("Helvetica", "B", 20)
+    pdf.cell(0, 10, _latin1(f"Orden de compra {order['code']}"), new_x="LMARGIN", new_y="NEXT")
+    pdf.set_font("Helvetica", "", 10)
+    pdf.set_text_color(110, 110, 110)
+    pdf.cell(0, 6, _latin1(f"Fecha: {str(order['created_at'])[:10]}   -   Estado: {order['status']}"), new_x="LMARGIN", new_y="NEXT")
+    pdf.set_text_color(0, 0, 0)
+    pdf.ln(4)
+
+    def line(label: str, value) -> None:
+        if not value:
+            return
+        pdf.set_font("Helvetica", "B", 10)
+        pdf.cell(32, 6, _latin1(label))
+        pdf.set_font("Helvetica", "", 10)
+        pdf.multi_cell(0, 6, _latin1(str(value)), new_x="LMARGIN", new_y="NEXT")
+
+    line("Proveedor:", order["supplier_name"])
+    if supplier:
+        line("Contacto:", supplier.get("contact_name"))
+        line("Teléfono:", supplier.get("phone"))
+        line("Correo:", supplier.get("email"))
+    line("Obra destino:", order.get("site_name"))
+    line("Notas:", order.get("notes"))
+    pdf.ln(4)
+
+    widths = [80, 22, 28, 28, 32]
+    heads = ["Material", "Unidad", "Cantidad", "Precio unit.", "Subtotal"]
+    pdf.set_font("Helvetica", "B", 9)
+    pdf.set_fill_color(239, 236, 253)
+    for head, w in zip(heads, widths):
+        pdf.cell(w, 8, _latin1(head), border=1, fill=True, align="L" if head in ("Material", "Unidad") else "R")
+    pdf.ln()
+
+    pdf.set_font("Helvetica", "", 9)
+    total = 0.0
+    for row in items.to_dict("records"):
+        subtotal = float(row["quantity"]) * float(row["unit_price"])
+        total += subtotal
+        cells = [
+            _latin1(str(row["material_name"]))[:48],
+            _latin1(str(row.get("unit") or ""))[:12],
+            f"{float(row['quantity']):,.2f}",
+            f"{float(row['unit_price']):,.2f}",
+            f"{subtotal:,.2f}",
+        ]
+        for i, (value, w) in enumerate(zip(cells, widths)):
+            pdf.cell(w, 7, value, border=1, align="L" if i < 2 else "R")
+        pdf.ln()
+
+    pdf.set_font("Helvetica", "B", 11)
+    pdf.cell(sum(widths[:4]), 9, "TOTAL", border=1, align="R")
+    pdf.cell(widths[4], 9, f"{total:,.2f}", border=1, align="R")
+    pdf.ln(18)
+
+    pdf.set_font("Helvetica", "", 9)
+    pdf.set_text_color(110, 110, 110)
+    pdf.cell(80, 6, "______________________________", new_x="RIGHT")
+    pdf.cell(0, 6, "______________________________", new_x="LMARGIN", new_y="NEXT")
+    pdf.cell(80, 5, "Autoriza")
+    pdf.cell(0, 5, "Recibe proveedor", new_x="LMARGIN", new_y="NEXT")
+    return bytes(pdf.output())
+
+
+def order_whatsapp_text(order: dict, items: pd.DataFrame) -> str:
+    """Texto del pedido para abrir en WhatsApp."""
+    lines = [f"Hola {order['supplier_name']}, quisiera hacer el siguiente pedido ({order['code']}):", ""]
+    total = 0.0
+    for row in items.to_dict("records"):
+        subtotal = float(row["quantity"]) * float(row["unit_price"])
+        total += subtotal
+        unit = f" {row['unit']}" if row.get("unit") else ""
+        lines.append(f"- {row['material_name']}: {float(row['quantity']):g}{unit} x {float(row['unit_price']):,.2f} = {subtotal:,.2f}")
+    lines += ["", f"Total: {total:,.2f}"]
+    if order.get("site_name"):
+        lines.append(f"Entrega en: {order['site_name']}")
+    if order.get("notes"):
+        lines.append(f"Notas: {order['notes']}")
+    lines.append("¿Me confirman disponibilidad y fecha de entrega? Gracias.")
+    return "\n".join(lines)

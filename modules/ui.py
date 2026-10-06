@@ -8,6 +8,23 @@ from typing import Callable
 import pandas as pd
 import streamlit as st
 
+from db import repository as repo
+
+# Modo oscuro: se invierte toda la página (luminosidad) conservando el tono, y
+# se vuelve a invertir lo que no debe cambiar (imágenes). Los fondos se aclaran
+# un poco antes de invertir para que el resultado sea gris oscuro y no negro.
+_DARK_CSS = """
+<style>
+html { filter: invert(1) hue-rotate(180deg); }
+img, video { filter: invert(1) hue-rotate(180deg); }
+.stApp { background: #EDEDF1 !important; }
+.mrp-stat-card, .mrp-panel, .mrp-card { background: #DEDEE4 !important; }
+section[data-testid="stSidebar"] { background: #E3E3E9 !important; }
+/* el menú del sidebar vive en un iframe con fondo blanco: que adopte el del sidebar */
+section[data-testid="stSidebar"] iframe { mix-blend-mode: multiply; }
+</style>
+"""
+
 _CSS = """
 <style>
 /* ---------------------------------------------------------------------
@@ -28,6 +45,18 @@ html, body, .stApp {
 div[data-testid="stVerticalBlock"] {
     border-radius: 12px;
     border-color: rgba(17, 24, 39, 0.08) !important;
+}
+
+/* Filas de lista (st.container(border=True) que contienen un .mrp-row):
+   se resaltan al pasar el mouse. No hay selector propio para los
+   contenedores con borde, pero este es el único que cubre solo esos. */
+div[data-testid="stLayoutWrapper"] > div[data-testid="stVerticalBlock"]:has(.mrp-row) {
+    transition: box-shadow 0.15s ease, border-color 0.15s ease, background 0.15s ease;
+}
+div[data-testid="stLayoutWrapper"] > div[data-testid="stVerticalBlock"]:has(.mrp-row):hover {
+    border-color: rgba(108, 92, 231, 0.45) !important;
+    background: #FBFAFF;
+    box-shadow: 0 6px 18px rgba(108, 92, 231, 0.10);
 }
 
 /* Botones */
@@ -342,6 +371,8 @@ a.mrp-link:hover { background: #EFECFD; transform: translateY(-1px); }
 
 def inject() -> None:
     st.markdown(_CSS, unsafe_allow_html=True)
+    if st.session_state.get("dark_mode"):
+        st.markdown(_DARK_CSS, unsafe_allow_html=True)
 
 
 def page_header(eyebrow: str, title: str, subtitle: str = "", action_label: str | None = None, action_key: str | None = None) -> bool:
@@ -429,11 +460,23 @@ def row_name_sub(avatar_html: str, name: str, sub: str) -> str:
 # Avisos, confirmaciones, búsqueda y contacto
 # ---------------------------------------------------------------------------
 
-def flash(message: str, icon: str = "✅") -> None:
+def current_actor() -> str:
+    """Nombre de quien tiene la sesión iniciada (para el historial)."""
+    user = st.session_state.get("auth_user") or {}
+    return user.get("name") or user.get("username") or "Sistema"
+
+
+def flash(message: str, icon: str = "✅", log: bool = True) -> None:
     """Deja un aviso (toast) para mostrarse en la próxima recarga: sirve para
     confirmar una acción justo antes de un st.rerun(), que de otro modo se
-    llevaría el mensaje."""
+    llevaría el mensaje. Cada aviso es una acción ya hecha, así que también
+    se anota en el historial de cambios (quién y cuándo)."""
     st.session_state["_flash"] = (message, icon)
+    if log:
+        try:
+            repo.log_action(current_actor(), message)
+        except Exception:  # el historial nunca debe romper la acción en sí
+            pass
 
 
 def show_flash() -> None:

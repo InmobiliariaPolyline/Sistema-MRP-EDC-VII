@@ -8,7 +8,10 @@ import streamlit as st
 from streamlit_option_menu import option_menu
 
 from db.repository import USING_LOCAL
-from modules import dashboard, login, materiales, ordenes, proveedores, reportes, trabajadores, ui
+from modules import (
+    asistencia, dashboard, historial, inventario, login, materiales, obras, ordenes, proveedores, reportes,
+    trabajadores, ui,
+)
 
 # (etiqueta en el menú, ícono bootstrap, función que dibuja el módulo, solo-admin)
 _ROUTES = [
@@ -16,8 +19,12 @@ _ROUTES = [
     ("Proveedores", "truck", lambda user: proveedores.render(), False),
     ("Materiales", "box-seam", lambda user: materiales.render(), False),
     ("Órdenes de compra", "cart3", lambda user: ordenes.render(), False),
+    ("Inventario", "boxes", lambda user: inventario.render(), False),
+    ("Obras", "building", lambda user: obras.render(), False),
+    ("Asistencia", "calendar-check", lambda user: asistencia.render(), False),
     ("Reportes", "bar-chart-line", lambda user: reportes.render(), False),
     ("Trabajadores", "people", lambda user: trabajadores.render(user), True),
+    ("Historial", "clock-history", lambda user: historial.render(), True),
 ]
 
 
@@ -64,6 +71,7 @@ def render(user: dict) -> None:
             },
         )
         st.divider()
+        st.toggle("🌙 Modo oscuro", key="dark_mode")
         if st.button("Cerrar sesión", use_container_width=True):
             login.logout()
             st.rerun()

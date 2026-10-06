@@ -7,7 +7,7 @@ import plotly.graph_objects as go
 import streamlit as st
 
 from db import repository as repo
-from modules import ui
+from modules import ordenes, ui
 from utils.timeago import time_ago
 
 MESES = [
@@ -51,6 +51,9 @@ def render(user: dict) -> None:
         ]
     )
 
+    _render_alerts()
+    _render_order_charts()
+
     col_left, col_right = st.columns([3, 2])
 
     with col_left:
@@ -61,6 +64,78 @@ def render(user: dict) -> None:
 
     st.write("")
     _render_sites_map()
+
+
+def _render_alerts() -> None:
+    stale = ordenes.stale_orders(repo.list_orders())
+    if stale.empty:
+        return
+    detail = ", ".join(f"{r['code']} ({r['supplier_name']}, {int(r['age'])} d)" for r in stale.to_dict("records")[:5])
+    st.warning(
+        f"⏰ {len(stale)} orden(es) abierta(s) hace más de {ordenes.alert_days()} días: {detail}. "
+        "Revísalas en Órdenes de compra.",
+    )
+
+
+def _bar_layout(fig: go.Figure, height: int = 240) -> go.Figure:
+    fig.update_layout(
+        margin=dict(t=8, b=0, l=0, r=0),
+        height=height,
+        showlegend=False,
+        plot_bgcolor="rgba(0,0,0,0)",
+        paper_bgcolor="rgba(0,0,0,0)",
+        xaxis=dict(showgrid=False, type="category"),
+        yaxis=dict(gridcolor="rgba(17,24,39,0.08)"),
+    )
+    return fig
+
+
+def _render_order_charts() -> None:
+    """Gasto por mes, gasto por proveedor y órdenes por estado."""
+    orders = repo.list_orders()
+    if orders.empty:
+        return
+    orders = orders.assign(total=orders["total"].astype(float))
+    billable = orders[orders["status"] != "cancelada"]
+
+    c1, c2, c3 = st.columns([3, 3, 2])
+    with c1:
+        with st.container(border=True):
+            ui.panel_header("Compras", "Gasto por mes")
+            if billable.empty:
+                st.caption("Sin órdenes activas.")
+            else:
+                monthly = billable.assign(mes=billable["created_at"].astype(str).str[:7]).groupby("mes")["total"].sum().reset_index()
+                fig = go.Figure(go.Bar(x=monthly["mes"], y=monthly["total"], marker_color="#6C5CE7", hovertemplate="%{x}: %{y:,.2f}<extra></extra>"))
+                st.plotly_chart(_bar_layout(fig), use_container_width=True, config={"displayModeBar": False})
+    with c2:
+        with st.container(border=True):
+            ui.panel_header("Compras", "Gasto por proveedor")
+            if billable.empty:
+                st.caption("Sin órdenes activas.")
+            else:
+                by_sup = billable.groupby("supplier_name")["total"].sum().sort_values().tail(6).reset_index()
+                fig = go.Figure(go.Bar(x=by_sup["total"], y=by_sup["supplier_name"], orientation="h", marker_color="#8B7CF0", hovertemplate="%{y}: %{x:,.2f}<extra></extra>"))
+                fig = _bar_layout(fig)
+                fig.update_layout(xaxis=dict(gridcolor="rgba(17,24,39,0.08)", type="linear"), yaxis=dict(showgrid=False, type="category"))
+                st.plotly_chart(fig, use_container_width=True, config={"displayModeBar": False})
+    with c3:
+        with st.container(border=True):
+            ui.panel_header("Compras", "Órdenes por estado")
+            counts = orders.groupby("status").size()
+            keys = [k for k in ordenes.STATUSES if k in counts.index]
+            palette = {"pendiente": "#E8A33D", "enviada": "#3B82F6", "parcial": "#8B7CF0", "recibida": "#2DAA6B", "cancelada": "#E05A5A"}
+            fig = go.Figure(
+                go.Pie(
+                    labels=[ordenes.STATUSES[k][0] for k in keys],
+                    values=[int(counts[k]) for k in keys],
+                    hole=0.6,
+                    marker=dict(colors=[palette[k] for k in keys]),
+                    textinfo="value",
+                )
+            )
+            fig.update_layout(margin=dict(t=0, b=0, l=0, r=0), height=240, showlegend=True, legend=dict(orientation="h", y=-0.1, font=dict(size=11)), paper_bgcolor="rgba(0,0,0,0)")
+            st.plotly_chart(fig, use_container_width=True, config={"displayModeBar": False})
 
 
 def _render_sites_map() -> None:

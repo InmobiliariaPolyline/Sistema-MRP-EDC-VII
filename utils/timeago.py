@@ -28,3 +28,15 @@ def time_ago(value: str | None) -> str:
         return f"hace {days} d"
     months = int(days // 30)
     return f"hace {months} mes(es)"
+
+
+def age_days(value: str | None) -> int:
+    """Días enteros transcurridos desde una fecha ISO (0 si no se puede leer)."""
+    if not value:
+        return 0
+    try:
+        dt = datetime.fromisoformat(str(value).replace("Z", "+00:00"))
+        now = datetime.now(dt.tzinfo) if dt.tzinfo else datetime.now()
+        return max((now - dt).days, 0)
+    except (ValueError, TypeError):
+        return 0

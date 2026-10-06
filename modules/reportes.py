@@ -1,12 +1,12 @@
 """Módulo de Reportes: elige qué datos incluir y descárgalos en Excel (una
 hoja por conjunto de datos) o en PDF (una tabla por conjunto de datos)."""
-from datetime import datetime
+from datetime import date, datetime, timedelta
 
 import pandas as pd
 import streamlit as st
 
 from db import repository as repo
-from modules import ui
+from modules import inventario, ui
 from modules.ordenes import STATUSES
 from utils.reports import to_excel, to_pdf
 
@@ -82,9 +82,34 @@ def _order_items() -> pd.DataFrame:
             "material_name": "Material",
             "unit": "Unidad",
             "quantity": "Cantidad",
+            "received_qty": "Recibido",
             "unit_price": "Precio unit.",
             "subtotal": "Subtotal",
         },
+    )
+
+
+def _stock() -> pd.DataFrame:
+    return _pick(
+        inventario.stock_by_material(),
+        {"category": "Categoría", "material_name": "Material", "unit": "Unidad", "entradas": "Entradas", "salidas": "Salidas", "stock": "Stock"},
+    )
+
+
+def _movements() -> pd.DataFrame:
+    df = _pick(
+        repo.list_movements(limit=5000),
+        {"created_at": "Fecha", "material_name": "Material", "kind": "Tipo", "quantity": "Cantidad", "site_name": "Obra", "order_code": "Orden", "actor": "Registró", "note": "Nota"},
+    )
+    df["Fecha"] = df["Fecha"].map(lambda v: str(v)[:16].replace("T", " ") if v is not None and v == v else "")
+    return df
+
+
+def _attendance() -> pd.DataFrame:
+    today = date.today()
+    return _pick(
+        repo.list_attendance((today - timedelta(days=90)).isoformat(), today.isoformat()),
+        {"work_date": "Fecha", "worker_name": "Trabajador", "site_name": "Obra", "status": "Estado", "note": "Nota"},
     )
 
 
@@ -95,6 +120,9 @@ DATASETS = {
     "Trabajadores": _workers,
     "Órdenes de compra": _orders,
     "Detalle de órdenes": _order_items,
+    "Stock actual": _stock,
+    "Movimientos de inventario": _movements,
+    "Asistencia (últimos 90 días)": _attendance,
 }
 
 
