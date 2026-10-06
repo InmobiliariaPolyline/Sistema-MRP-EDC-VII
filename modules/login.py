@@ -51,6 +51,18 @@ div[data-testid="stHorizontalBlock"] > div[data-testid="stColumn"]:nth-of-type(2
     justify-content: center;
     padding: 48px !important;
 }
+@media (max-width: 640px) {
+    div[data-testid="stHorizontalBlock"] { min-height: auto; }
+    div[data-testid="stHorizontalBlock"] > div[data-testid="stColumn"]:nth-of-type(1) {
+        padding: 28px 22px !important;
+        gap: 22px;
+    }
+    div[data-testid="stHorizontalBlock"] > div[data-testid="stColumn"]:nth-of-type(2) {
+        padding: 28px 22px !important;
+    }
+    .mrp-lp-headline { font-size: 26px; }
+    .mrp-rp-status { margin-bottom: 24px; }
+}
 .mrp-lp-brand { display: flex; align-items: center; gap: 12px; }
 .mrp-lp-brand-badge {
     width: 40px; height: 40px; border-radius: 10px;

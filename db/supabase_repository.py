@@ -48,6 +48,7 @@ def _invalidate_materials() -> None:
     dashboard_totals.clear()
     recent_activity.clear()
     get_supplier_catalog.clear()
+    list_offers.clear()
 
 
 # ---------------------------------------------------------------------------
@@ -90,6 +91,8 @@ def _invalidate_suppliers() -> None:
     dashboard_totals.clear()
     recent_activity.clear()
     get_supplier_catalog.clear()
+    list_offers.clear()
+    list_orders.clear()
 
 
 # ---------------------------------------------------------------------------
@@ -134,6 +137,7 @@ def set_supplier_material(supplier_id: str, material_id: str, offered: bool, ava
             on_conflict="supplier_id,material_id",
         ).execute()
     get_supplier_catalog.clear()
+    list_offers.clear()
     dashboard_totals.clear()
 
 
@@ -273,6 +277,28 @@ def create_worker(
     return res.data[0]["id"]
 
 
+def update_worker(
+    worker_id: str,
+    full_name: str,
+    document_id: str | None,
+    phone: str | None,
+    position: str | None,
+    work_group_id: str | None,
+    project_site_id: str | None,
+) -> None:
+    get_client().table("workers").update(
+        {
+            "full_name": full_name,
+            "document_id": document_id,
+            "phone": phone,
+            "position": position,
+            "work_group_id": work_group_id,
+            "project_site_id": project_site_id,
+        }
+    ).eq("id", worker_id).execute()
+    list_workers.clear()
+
+
 def delete_worker(worker_id: str) -> None:
     get_client().table("workers").delete().eq("id", worker_id).execute()
     list_workers.clear()
@@ -296,6 +322,150 @@ def revoke_worker_access(worker_id: str, user_id: str) -> None:
 
 
 # ---------------------------------------------------------------------------
+# Ofertas (qué ofrece cada proveedor y a qué precio) — para comparar precios
+# y para los reportes
+# ---------------------------------------------------------------------------
+
+@st.cache_data(ttl=_CACHE_TTL, show_spinner=False)
+def list_offers() -> pd.DataFrame:
+    res = (
+        get_client()
+        .table("supplier_materials")
+        .select("supplier_id,material_id,available,price,suppliers(name),materials(category,name)")
+        .execute()
+    )
+    rows = []
+    for row in res.data or []:
+        supplier = row.pop("suppliers", None) or {}
+        material = row.pop("materials", None) or {}
+        rows.append(
+            {
+                "supplier_id": row["supplier_id"],
+                "supplier_name": supplier.get("name"),
+                "material_id": row["material_id"],
+                "category": material.get("category"),
+                "material_name": material.get("name"),
+                "available": bool(row.get("available")),
+                "price": row.get("price"),
+            }
+        )
+    columns = ["supplier_id", "supplier_name", "material_id", "category", "material_name", "available", "price"]
+    df = pd.DataFrame(rows, columns=columns)
+    return df.sort_values(["category", "material_name", "supplier_name"]).reset_index(drop=True) if not df.empty else df
+
+
+# ---------------------------------------------------------------------------
+# Órdenes de compra
+# ---------------------------------------------------------------------------
+
+@st.cache_data(ttl=_CACHE_TTL, show_spinner=False)
+def list_orders() -> pd.DataFrame:
+    res = (
+        get_client()
+        .table("purchase_orders")
+        .select("*, project_sites(name), purchase_order_items(quantity,unit_price)")
+        .order("created_at", desc=True)
+        .execute()
+    )
+    rows = []
+    for row in res.data or []:
+        site = row.pop("project_sites", None) or {}
+        items = row.pop("purchase_order_items", None) or []
+        rows.append(
+            {
+                **row,
+                "site_name": site.get("name"),
+                "total": sum(float(i["quantity"]) * float(i["unit_price"]) for i in items),
+                "items_count": len(items),
+            }
+        )
+    columns = [
+        "id", "code", "supplier_id", "supplier_name", "project_site_id", "site_name",
+        "status", "notes", "created_at", "total", "items_count",
+    ]
+    df = pd.DataFrame(rows)
+    return df[columns] if not df.empty else pd.DataFrame(columns=columns)
+
+
+@st.cache_data(ttl=_CACHE_TTL, show_spinner=False)
+def list_order_items(order_id: str | None = None) -> pd.DataFrame:
+    """Líneas de una orden, o de todas (con el código de su orden) si no se pasa id."""
+    query = get_client().table("purchase_order_items").select("*, purchase_orders(code)")
+    if order_id:
+        query = query.eq("order_id", order_id)
+    res = query.execute()
+    rows = []
+    for row in res.data or []:
+        order = row.pop("purchase_orders", None) or {}
+        rows.append(
+            {
+                "id": row["id"],
+                "order_id": row["order_id"],
+                "order_code": order.get("code"),
+                "material_id": row.get("material_id"),
+                "material_name": row["material_name"],
+                "unit": row.get("unit"),
+                "quantity": float(row["quantity"]),
+                "unit_price": float(row["unit_price"]),
+                "subtotal": float(row["quantity"]) * float(row["unit_price"]),
+            }
+        )
+    columns = ["id", "order_id", "order_code", "material_id", "material_name", "unit", "quantity", "unit_price", "subtotal"]
+    df = pd.DataFrame(rows, columns=columns)
+    return df.sort_values(["order_code", "material_name"]).reset_index(drop=True) if not df.empty else df
+
+
+def create_order(supplier_id: str, supplier_name: str, project_site_id: str | None, notes: str | None, items: list[dict]) -> str:
+    """Crea la orden con sus líneas y devuelve su código (OC-0001, OC-0002...)."""
+    client = get_client()
+    existing = client.table("purchase_orders").select("code").execute().data or []
+    numbers = [int(r["code"].split("-")[1]) for r in existing if r["code"].startswith("OC-") and r["code"].split("-")[1].isdigit()]
+    code = f"OC-{(max(numbers) if numbers else 0) + 1:04d}"
+
+    res = client.table("purchase_orders").insert(
+        {
+            "code": code,
+            "supplier_id": supplier_id,
+            "supplier_name": supplier_name,
+            "project_site_id": project_site_id,
+            "notes": notes,
+        }
+    ).execute()
+    order_id = res.data[0]["id"]
+    client.table("purchase_order_items").insert(
+        [
+            {
+                "order_id": order_id,
+                "material_id": item["material_id"],
+                "material_name": item["material_name"],
+                "unit": item.get("unit"),
+                "quantity": item["quantity"],
+                "unit_price": item["unit_price"],
+            }
+            for item in items
+        ]
+    ).execute()
+    _invalidate_orders()
+    return code
+
+
+def set_order_status(order_id: str, status: str) -> None:
+    get_client().table("purchase_orders").update({"status": status}).eq("id", order_id).execute()
+    _invalidate_orders()
+
+
+def delete_order(order_id: str) -> None:
+    get_client().table("purchase_orders").delete().eq("id", order_id).execute()
+    _invalidate_orders()
+
+
+def _invalidate_orders() -> None:
+    list_orders.clear()
+    list_order_items.clear()
+    dashboard_totals.clear()
+
+
+# ---------------------------------------------------------------------------
 # Dashboard
 # ---------------------------------------------------------------------------
 
@@ -310,11 +480,15 @@ def dashboard_totals() -> dict:
     materials_with_supplier = set(links["material_id"]) if not links.empty else set()
     materials_without_supplier = len(materials) - len([m for m in materials["id"] if m in materials_with_supplier])
 
+    orders = list_orders()
+    orders_open = int(orders["status"].isin(["pendiente", "enviada"]).sum()) if not orders.empty else 0
+
     return {
         "materials": len(materials),
         "suppliers": len(suppliers),
         "suppliers_with_available": int(suppliers_with_available),
         "materials_without_supplier": int(materials_without_supplier),
+        "orders_open": orders_open,
     }
 
 

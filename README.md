@@ -5,11 +5,13 @@ Sistema con login propio, dashboard y varios módulos:
 - **Dashboard**: totales generales (materiales, proveedores, proveedores con
   algo disponible, materiales sin proveedor).
 - **Materiales**: catálogo maestro (categoría, nombre, densidad, métrica de
-  cómputo), con alta y baja.
+  cómputo) con búsqueda, filtro por categoría, alta, edición y baja. Cada
+  material muestra el mejor precio disponible entre los proveedores.
 - **Proveedores**: tarjetas de proveedores con su contacto (teléfono, correo,
   notas). Al abrir un proveedor se ve el catálogo completo de materiales
-  agrupado por categoría, marcando cuáles ofrece y si está disponible ahora
-  mismo (se marca a mano, pensado para saber a quién contactar).
+  agrupado por categoría, marcando cuáles ofrece, si está disponible ahora
+  mismo y a qué precio. Cada tarjeta trae contacto rápido (llamar, WhatsApp,
+  correo), búsqueda, edición y baja con confirmación.
 - **Trabajadores** (solo administradores, reemplaza al antiguo módulo
   "Usuarios"): catálogo de personal de obra — nombre, documento, teléfono,
   puesto, a qué **cuadrilla** pertenece y en qué **obra/proyecto** está
@@ -17,9 +19,17 @@ Sistema con login propio, dashboard y varios módulos:
   OpenStreetMap/Nominatim, sin API key). Cuando alguien también necesita
   entrar al sistema, se le puede dar acceso (usuario/contraseña/rol) desde
   la misma ficha; ese acceso vive en la tabla `users` de siempre.
-- **Órdenes de compra** y **Reportes**: todavía sin implementar (pantallas
-  "próximamente"). Reportes exportables (Excel/PDF) del catálogo, proveedores
-  y trabajadores están contemplados a futuro, pero no confirmados todavía.
+- **Órdenes de compra**: pedidos a un proveedor con sus líneas de material
+  (cantidad y precio, que se precarga del catálogo del proveedor), obra
+  destino y un estado que avanza de pendiente a enviada y recibida (o
+  cancelada). Las órdenes conservan el nombre del proveedor y del material
+  aunque después se borren.
+- **Reportes**: descarga en Excel (una hoja por conjunto de datos) o PDF de
+  materiales, proveedores, catálogo y precios por proveedor, trabajadores y
+  órdenes de compra.
+
+En todos los módulos: buscadores y filtros, edición, confirmación antes de
+borrar, avisos (toast) al guardar, y diseño adaptado a móvil.
 
 Todavía no incluye expedientes/tareas del planner original; se evaluará más
 adelante.
@@ -66,7 +76,11 @@ le pertenecen a ningún módulo en particular.
 
 1. Crea un proyecto en Supabase y corre `db/schema.sql` en su SQL Editor
    (crea las tablas `materials`, `suppliers`, `supplier_materials`, `users`,
-   `work_groups`, `project_sites` y `workers`).
+   `work_groups`, `project_sites`, `workers`, `purchase_orders` y
+   `purchase_order_items`). Si actualizas un proyecto existente, corre solo
+   las tablas que falten. Si alguna queda con Row Level Security activado,
+   la app no podrá escribir en ella: el propio `schema.sql` trae los
+   `alter table ... disable row level security`.
 2. Instala las dependencias:
 
    ```bash
@@ -108,10 +122,11 @@ modules/dashboard.py         # Totales generales
 modules/materiales.py        # Módulo de Materiales
 modules/proveedores.py       # Módulo de Proveedores
 modules/trabajadores.py      # Módulo de Trabajadores (cuadrillas, obras, acceso)
-modules/ordenes.py           # Placeholder: Órdenes de compra
-modules/reportes.py          # Placeholder: Reportes
+modules/ordenes.py           # Módulo de Órdenes de compra (alta, estados, detalle)
+modules/reportes.py          # Módulo de Reportes (Excel y PDF)
 modules/ui.py                # CSS y componentes visuales compartidos (tarjetas, pastillas...)
 
 utils/geocode.py              # Geocodificación de direcciones (Nominatim)
+utils/reports.py              # Generación de Excel (openpyxl) y PDF (fpdf2)
 utils/timeago.py              # Fechas relativas ("hace 5 min")
 ```

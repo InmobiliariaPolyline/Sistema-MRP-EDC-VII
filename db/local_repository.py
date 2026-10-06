@@ -92,6 +92,29 @@ def _init_db() -> None:
                 created_at text default (datetime('now')),
                 updated_at text default (datetime('now'))
             );
+
+            create table if not exists purchase_orders (
+                id text primary key,
+                code text not null unique,
+                supplier_id text references suppliers(id) on delete set null,
+                supplier_name text not null,
+                project_site_id text references project_sites(id) on delete set null,
+                status text not null default 'pendiente',
+                notes text,
+                created_at text default (datetime('now')),
+                updated_at text default (datetime('now'))
+            );
+
+            create table if not exists purchase_order_items (
+                id text primary key,
+                order_id text not null references purchase_orders(id) on delete cascade,
+                material_id text references materials(id) on delete set null,
+                material_name text not null,
+                unit text,
+                quantity real not null,
+                unit_price real not null default 0,
+                created_at text default (datetime('now'))
+            );
             """
         )
 
@@ -125,6 +148,12 @@ def list_materials() -> pd.DataFrame:
 
 def upsert_material(category: str, name: str, density: float | None, metric_label: str, material_id: str | None = None) -> None:
     with _connect() as conn:
+        if material_id:
+            conn.execute(
+                "update materials set category = ?, name = ?, density = ?, metric_label = ?, updated_at = datetime('now') where id = ?",
+                (category, name, density, metric_label, material_id),
+            )
+            return
         existing = conn.execute("select id from materials where category = ? and name = ?", (category, name)).fetchone()
         if existing:
             conn.execute(
@@ -356,6 +385,26 @@ def create_worker(
     return worker_id
 
 
+def update_worker(
+    worker_id: str,
+    full_name: str,
+    document_id: str | None,
+    phone: str | None,
+    position: str | None,
+    work_group_id: str | None,
+    project_site_id: str | None,
+) -> None:
+    with _connect() as conn:
+        conn.execute(
+            """
+            update workers set full_name = ?, document_id = ?, phone = ?, position = ?,
+                work_group_id = ?, project_site_id = ?, updated_at = datetime('now')
+            where id = ?
+            """,
+            (full_name, document_id, phone, position, work_group_id, project_site_id, worker_id),
+        )
+
+
 def delete_worker(worker_id: str) -> None:
     with _connect() as conn:
         conn.execute("delete from workers where id = ?", (worker_id,))
@@ -378,11 +427,106 @@ def revoke_worker_access(worker_id: str, user_id: str) -> None:
 
 
 # ---------------------------------------------------------------------------
+# Ofertas (qué ofrece cada proveedor y a qué precio) — para comparar precios
+# y para los reportes
+# ---------------------------------------------------------------------------
+
+def list_offers() -> pd.DataFrame:
+    with _connect() as conn:
+        df = pd.read_sql_query(
+            """
+            select sm.supplier_id, s.name as supplier_name, sm.material_id,
+                   m.category, m.name as material_name, sm.available, sm.price
+            from supplier_materials sm
+            join suppliers s on s.id = sm.supplier_id
+            join materials m on m.id = sm.material_id
+            order by m.category, m.name, s.name
+            """,
+            conn,
+        )
+    df["available"] = df["available"].astype(bool)
+    return df.astype(object).where(pd.notnull(df), None)
+
+
+# ---------------------------------------------------------------------------
+# Órdenes de compra
+# ---------------------------------------------------------------------------
+
+def list_orders() -> pd.DataFrame:
+    with _connect() as conn:
+        df = pd.read_sql_query(
+            """
+            select o.id, o.code, o.supplier_id, o.supplier_name, o.project_site_id,
+                   ps.name as site_name, o.status, o.notes, o.created_at,
+                   coalesce((select sum(i.quantity * i.unit_price) from purchase_order_items i where i.order_id = o.id), 0) as total,
+                   (select count(*) from purchase_order_items i where i.order_id = o.id) as items_count
+            from purchase_orders o
+            left join project_sites ps on ps.id = o.project_site_id
+            order by o.created_at desc, o.code desc
+            """,
+            conn,
+        )
+    return df.astype(object).where(pd.notnull(df), None)
+
+
+def list_order_items(order_id: str | None = None) -> pd.DataFrame:
+    """Líneas de una orden, o de todas (con el código de su orden) si no se pasa id."""
+    query = """
+        select i.id, i.order_id, o.code as order_code, i.material_id, i.material_name,
+               i.unit, i.quantity, i.unit_price, (i.quantity * i.unit_price) as subtotal
+        from purchase_order_items i join purchase_orders o on o.id = i.order_id
+    """
+    params: tuple = ()
+    if order_id:
+        query += " where i.order_id = ?"
+        params = (order_id,)
+    query += " order by o.code, i.created_at, i.material_name"
+    with _connect() as conn:
+        df = pd.read_sql_query(query, conn, params=params)
+    return df.astype(object).where(pd.notnull(df), None)
+
+
+def create_order(supplier_id: str, supplier_name: str, project_site_id: str | None, notes: str | None, items: list[dict]) -> str:
+    """Crea la orden con sus líneas y devuelve su código (OC-0001, OC-0002...)."""
+    order_id = str(uuid.uuid4())
+    with _connect() as conn:
+        codes = [row[0] for row in conn.execute("select code from purchase_orders").fetchall()]
+        number = max([int(c.split("-")[1]) for c in codes if c.startswith("OC-") and c.split("-")[1].isdigit()] or [0]) + 1
+        code = f"OC-{number:04d}"
+        conn.execute(
+            "insert into purchase_orders (id, code, supplier_id, supplier_name, project_site_id, notes) values (?, ?, ?, ?, ?, ?)",
+            (order_id, code, supplier_id, supplier_name, project_site_id, notes),
+        )
+        for item in items:
+            conn.execute(
+                """
+                insert into purchase_order_items (id, order_id, material_id, material_name, unit, quantity, unit_price)
+                values (?, ?, ?, ?, ?, ?, ?)
+                """,
+                (str(uuid.uuid4()), order_id, item["material_id"], item["material_name"], item.get("unit"), item["quantity"], item["unit_price"]),
+            )
+    return code
+
+
+def set_order_status(order_id: str, status: str) -> None:
+    with _connect() as conn:
+        conn.execute("update purchase_orders set status = ?, updated_at = datetime('now') where id = ?", (status, order_id))
+
+
+def delete_order(order_id: str) -> None:
+    with _connect() as conn:
+        conn.execute("delete from purchase_orders where id = ?", (order_id,))
+
+
+# ---------------------------------------------------------------------------
 # Dashboard
 # ---------------------------------------------------------------------------
 
 def dashboard_totals() -> dict:
     with _connect() as conn:
+        orders_open = conn.execute(
+            "select count(*) from purchase_orders where status in ('pendiente', 'enviada')"
+        ).fetchone()[0]
         materials = conn.execute("select count(*) from materials").fetchone()[0]
         suppliers = conn.execute("select count(*) from suppliers").fetchone()[0]
         suppliers_with_available = conn.execute(
@@ -401,6 +545,7 @@ def dashboard_totals() -> dict:
         "suppliers": suppliers,
         "suppliers_with_available": suppliers_with_available,
         "materials_without_supplier": materials_without_supplier,
+        "orders_open": orders_open,
     }
 
 

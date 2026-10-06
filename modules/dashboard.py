@@ -2,6 +2,7 @@
 y una dona de estado general de los proveedores."""
 from datetime import datetime
 
+import pandas as pd
 import plotly.graph_objects as go
 import streamlit as st
 
@@ -46,6 +47,7 @@ def render(user: dict) -> None:
                 "materiales por cotizar",
                 warn=totals["materials_without_supplier"] > 0,
             ),
+            ui.stat_card("🧾", totals.get("orders_open", 0), "Órdenes abiertas", "pendientes o enviadas"),
         ]
     )
 
@@ -56,6 +58,46 @@ def render(user: dict) -> None:
 
     with col_right:
         _render_status_donut(totals)
+
+    st.write("")
+    _render_sites_map()
+
+
+def _render_sites_map() -> None:
+    """Todas las obras con ubicación en un mapa, y cuántos trabajadores tiene cada una."""
+    sites = repo.list_project_sites()
+    workers = repo.list_workers()
+    counts = workers.groupby("project_site_id").size().to_dict() if not workers.empty else {}
+
+    with st.container(border=True):
+        ui.panel_header("Ubicaciones", "Obras en el mapa")
+        if sites.empty:
+            st.markdown('<div class="mrp-activity-sub">Todavía no hay obras registradas (se crean en Trabajadores → Obras / Proyectos).</div>', unsafe_allow_html=True)
+            return
+
+        located = sites[sites["latitude"].notna() & sites["longitude"].notna()]
+        map_col, list_col = st.columns([3, 2])
+        with map_col:
+            if located.empty:
+                st.caption("Ninguna obra tiene ubicación todavía: usa «Buscar dirección» al crearla.")
+            else:
+                st.map(
+                    pd.DataFrame({"lat": located["latitude"].astype(float), "lon": located["longitude"].astype(float)}),
+                    zoom=None if len(located) > 1 else 14,
+                )
+        with list_col:
+            rows = []
+            for site in sites.to_dict("records"):
+                n = int(counts.get(site["id"], 0))
+                rows.append(
+                    ui.activity_item(
+                        site["name"],
+                        site["address"] or "Sin dirección",
+                        f"{n} trabajador{'es' if n != 1 else ''}",
+                        "📍 en el mapa" if site.get("latitude") else "sin ubicación",
+                    )
+                )
+            st.markdown("".join(rows), unsafe_allow_html=True)
 
 
 def _render_activity() -> None:

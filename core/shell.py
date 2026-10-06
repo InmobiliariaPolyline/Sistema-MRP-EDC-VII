@@ -8,7 +8,7 @@ import streamlit as st
 from streamlit_option_menu import option_menu
 
 from db.repository import USING_LOCAL
-from modules import dashboard, login, materiales, ordenes, proveedores, reportes, trabajadores
+from modules import dashboard, login, materiales, ordenes, proveedores, reportes, trabajadores, ui
 
 # (etiqueta en el menú, ícono bootstrap, función que dibuja el módulo, solo-admin)
 _ROUTES = [
@@ -23,6 +23,7 @@ _ROUTES = [
 
 def render(user: dict) -> None:
     """Dibuja el sidebar (marca + menú + cerrar sesión) y el módulo activo."""
+    ui.show_flash()
     if USING_LOCAL:
         st.sidebar.warning(
             "Modo local (sin Supabase): los datos se guardan en db/local.db, "

@@ -1,6 +1,11 @@
 """CSS compartido y componentes visuales reutilizables (encabezado de página,
 tarjetas de stat, lista de actividad, dona de estado) para que todos los
 módulos se vean consistentes."""
+import html
+import re
+from typing import Callable
+
+import pandas as pd
 import streamlit as st
 
 _CSS = """
@@ -304,6 +309,33 @@ section[data-testid="stSidebar"] .block-container {
 .mrp-pill-green { background: #E3F9E9; color: #1F9254; }
 .mrp-pill-red { background: #FCE9E9; color: #D64545; }
 .mrp-pill-gray { background: #EEF0F4; color: #6B7280; }
+.mrp-pill-amber { background: #FDEFD9; color: #B7740A; }
+.mrp-pill-blue { background: #E3EFFD; color: #2563B8; }
+
+/* Enlaces de contacto rápido (llamar / WhatsApp / correo) */
+.mrp-links { display: flex; flex-wrap: wrap; gap: 6px; }
+a.mrp-link {
+    font-size: 12px;
+    font-weight: 600;
+    padding: 4px 10px;
+    border-radius: 999px;
+    background: #F4F3FB;
+    color: #4B2FD1 !important;
+    text-decoration: none !important;
+    white-space: nowrap;
+    transition: background 0.15s ease, transform 0.15s ease;
+}
+a.mrp-link:hover { background: #EFECFD; transform: translateY(-1px); }
+
+/* Móvil: menos relleno, tarjetas de stats en 2 columnas, títulos más chicos */
+@media (max-width: 640px) {
+    div[data-testid="stMainBlockContainer"] { padding: 3.5rem 1rem 4rem 1rem; }
+    .mrp-page-title { font-size: 24px; }
+    .mrp-stat-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; }
+    .mrp-stat-card { padding: 14px; }
+    .mrp-stat-card .mrp-stat-value { font-size: 24px; }
+    .mrp-panel { padding: 16px; }
+}
 </style>
 """
 
@@ -391,3 +423,71 @@ def row_name_sub(avatar_html: str, name: str, sub: str) -> str:
         f'<div><div class="mrp-row-name">{name}</div><div class="mrp-row-sub">{sub}</div></div>'
         f"</div>"
     )
+
+
+# ---------------------------------------------------------------------------
+# Avisos, confirmaciones, búsqueda y contacto
+# ---------------------------------------------------------------------------
+
+def flash(message: str, icon: str = "✅") -> None:
+    """Deja un aviso (toast) para mostrarse en la próxima recarga: sirve para
+    confirmar una acción justo antes de un st.rerun(), que de otro modo se
+    llevaría el mensaje."""
+    st.session_state["_flash"] = (message, icon)
+
+
+def show_flash() -> None:
+    item = st.session_state.pop("_flash", None)
+    if item:
+        st.toast(item[0], icon=item[1])
+
+
+@st.dialog("Confirmar eliminación")
+def _confirm_dialog(message: str, on_confirm: Callable[[], None]) -> None:
+    st.write(message)
+    c1, c2 = st.columns(2)
+    if c1.button("Cancelar", use_container_width=True):
+        st.rerun()
+    if c2.button("Sí, eliminar", type="primary", use_container_width=True):
+        on_confirm()
+        st.rerun()
+
+
+def confirm_delete(message: str, on_confirm: Callable[[], None]) -> None:
+    """Abre un modal de confirmación; `on_confirm` solo corre si el usuario
+    acepta (debería borrar y dejar su propio flash())."""
+    _confirm_dialog(message, on_confirm)
+
+
+def filter_df(df: pd.DataFrame, query: str, columns: list[str]) -> pd.DataFrame:
+    """Filtra filas cuyo texto contenga `query` (sin importar mayúsculas) en
+    alguna de las columnas dadas."""
+    q = (query or "").strip().lower()
+    if not q or df.empty:
+        return df
+
+    def norm(value) -> str:
+        if value is None or (isinstance(value, float) and value != value):
+            return ""
+        return str(value).lower()
+
+    mask = pd.Series(False, index=df.index)
+    for col in columns:
+        mask |= df[col].map(norm).str.contains(q, regex=False)
+    return df[mask]
+
+
+def contact_links(phone: str | None, email: str | None) -> str:
+    """Enlaces de contacto rápido: llamar (tel:), WhatsApp (wa.me) y correo."""
+    parts = []
+    if phone:
+        dial = re.sub(r"[^\d+]", "", phone)
+        wa = re.sub(r"\D", "", phone)
+        parts.append(f'<a class="mrp-link" href="tel:{dial}">📞 Llamar</a>')
+        if wa:
+            parts.append(f'<a class="mrp-link" href="https://wa.me/{wa}" target="_blank" rel="noopener">💬 WhatsApp</a>')
+    if email:
+        parts.append(f'<a class="mrp-link" href="mailto:{html.escape(email, quote=True)}">✉️ Correo</a>')
+    if not parts:
+        return '<div class="mrp-row-sub">Sin datos de contacto</div>'
+    return '<div class="mrp-links">' + "".join(parts) + "</div>"
