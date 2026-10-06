@@ -86,13 +86,6 @@ def _render_sites_panel() -> None:
             search = c1.form_submit_button("🔍 Ubicar en el mapa", use_container_width=True)
             save = c2.form_submit_button("Guardar obra", type="primary", use_container_width=True)
 
-        if address.strip():
-            st.markdown(
-                f'<a class="mrp-link" href="{google_maps_search_url(address.strip())}" target="_blank" rel="noopener">'
-                "🗺️ Abrir esta dirección en Google Maps</a>",
-                unsafe_allow_html=True,
-            )
-
         if search:
             st.session_state.pop("_site_candidates", None)
             exact = parse_coordinates(pin)
@@ -127,6 +120,17 @@ def _render_sites_panel() -> None:
                     "Para el punto exacto pega el enlace de Google Maps arriba."
                 )
             st.map(pd.DataFrame([{"lat": geocode["lat"], "lon": geocode["lon"]}]), zoom=17 if geocode.get("exact") else 15)
+            st.markdown(
+                f'<a class="mrp-link" href="{google_maps_search_url(coords=(geocode["lat"], geocode["lon"]))}" '
+                'target="_blank" rel="noopener">🗺️ Abrir estas coordenadas en Google Maps</a>',
+                unsafe_allow_html=True,
+            )
+        elif address.strip():
+            st.markdown(
+                f'<a class="mrp-link" href="{google_maps_search_url(address.strip())}" target="_blank" rel="noopener">'
+                "🗺️ Buscar esta dirección en Google Maps</a>",
+                unsafe_allow_html=True,
+            )
 
         if save:
             if not name.strip():
@@ -146,7 +150,11 @@ def _render_sites_panel() -> None:
             st.caption("Todavía no hay obras registradas.")
         for row in sites.to_dict("records"):
             c1, c2 = st.columns([4, 1])
-            c1.write(row["name"] + (" 📍" if row.get("latitude") else ""))
+            if row.get("latitude") is not None and row.get("longitude") is not None:
+                url = google_maps_search_url(coords=(float(row["latitude"]), float(row["longitude"])))
+                c1.markdown(f'{row["name"]} <a class="mrp-link" href="{url}" target="_blank" rel="noopener">📍 Ver en Google Maps</a>', unsafe_allow_html=True)
+            else:
+                c1.write(row["name"])
             if c2.button("🗑", key=f"del_site_{row['id']}", help="Eliminar obra"):
                 ui.confirm_delete(
                     f"¿Eliminar la obra «{row['name']}»? Los trabajadores y órdenes asignados quedarán sin obra.",

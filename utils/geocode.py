@@ -90,6 +90,9 @@ def geocode_address(query: str) -> dict | None:
     return found[0] if found else None
 
 
-def google_maps_search_url(address: str) -> str:
-    """Enlace para abrir la dirección en Google Maps y copiar desde ahí el punto exacto."""
+def google_maps_search_url(address: str = "", coords: tuple[float, float] | None = None) -> str:
+    """Enlace a Google Maps. Con coordenadas abre exactamente ese punto; si no,
+    busca la dirección escrita."""
+    if coords:
+        return f"https://www.google.com/maps/search/?api=1&query={coords[0]:.7f},{coords[1]:.7f}"
     return f"https://www.google.com/maps/search/?api=1&query={quote(address)}"
