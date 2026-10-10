@@ -1,15 +1,27 @@
 """Módulo de Obras: presupuesto de materiales por obra frente a lo que ya se
 pidió, recibió y consumió."""
 from datetime import date, timedelta
+import math
 
 import pandas as pd
 import streamlit as st
 
 from db import repository as repo
-from modules import inventario, materiales, ui
+from modules import forms, inventario, materiales, ui
 from utils.geocode import google_maps_search_url
 
 SITE_KEY = "obras_site"
+
+
+def _clear_budget_draft(site_id: str) -> None:
+    for key in list(st.session_state):
+        if key.startswith(f"budget_{site_id}_"):
+            st.session_state.pop(key, None)
+
+
+def _delete_budget(budget_id: str, material_name: str, site_name: str) -> None:
+    repo.delete_budget(budget_id)
+    ui.flash(f"«{material_name}» quitado del presupuesto de {site_name}.", "🗑️")
 
 
 def progress_by_material(site_id: str) -> pd.DataFrame:
@@ -71,36 +83,59 @@ def progress_by_material(site_id: str) -> pd.DataFrame:
 
 @st.dialog("Material del presupuesto")
 def _budget_dialog(site_id: str, site_name: str) -> None:
+    forms.header(f"Presupuesto de {site_name}", "Define la cantidad y el precio estimado de un material para comparar después con las compras.")
     ui.tip("Ejemplo: Concreto, 20 m³ previstos a 120.00 c/u. El precio se propone con el mejor de tus proveedores.")
     materials = repo.list_materials()
     if materials.empty:
-        st.info("Primero carga materiales en el catálogo.")
+        ui.empty_state("Faltan materiales", "Registra un material en el catálogo y vuelve para añadirlo al presupuesto.")
+        if st.button("Cancelar", key="budget_cancel_empty", width="stretch"):
+            _clear_budget_draft(site_id)
+            st.rerun()
         return
     offers = repo.list_offers()
     options = {f"{r['category']} · {r['name']}": r for r in materials.to_dict("records")}
-    choice = st.selectbox("Material", list(options))
+    forms.section("1. Material", "Si ya está presupuestado, guardar actualizará su cantidad y precio.")
+    choice = st.selectbox("Material", list(options), key=f"budget_{site_id}_material")
     material = options[choice]
 
-    current = repo.list_budgets(site_id)
-    current = current[current["material_id"] == material["id"]]
+    budgets = repo.list_budgets(site_id)
+    current = budgets[budgets["material_id"] == material["id"]]
     planned_qty = float(current.iloc[0]["planned_qty"]) if not current.empty else 0.0
     if not current.empty:
         suggested = float(current.iloc[0]["planned_unit_price"])
+        st.caption(f"Actualmente: {planned_qty:g} {material['metric_label'] or 'unid.'} × {suggested:,.2f}. Guardar reemplaza estos valores.")
     else:
         prices = offers[(offers["material_id"] == material["id"]) & offers["price"].notna()]["price"].astype(float)
         prices = prices[prices > 0]
         suggested = float(prices.min()) if not prices.empty else 0.0
 
+    forms.section("2. Cantidad y precio", "Usa la unidad del material. El precio puede quedar en 0 si aún no tienes una estimación.")
     c1, c2 = st.columns(2)
-    qty = c1.number_input(f"Cantidad prevista ({material['metric_label'] or 'unid.'})", min_value=0.0, value=planned_qty, step=1.0, key=f"bq_{material['id']}")
-    price = c2.number_input("Precio unit. estimado", min_value=0.0, value=suggested, step=0.1, format="%.2f", key=f"bp_{material['id']}",
-                            help="Se propone el mejor precio entre tus proveedores.")
-    st.caption(f"Costo previsto: **{qty * price:,.2f}**")
-    if st.button("Guardar en el presupuesto", type="primary", use_container_width=True):
-        if qty <= 0:
-            st.error("La cantidad debe ser mayor que 0.")
+    qty_label = f"Cantidad prevista ({material['metric_label'] or 'unid.'})"
+    qty = c1.number_input(qty_label, min_value=0.0, value=planned_qty, step=1.0, key=f"budget_{site_id}_qty_{material['id']}",
+                          help="Cantidad total que esperas usar en esta obra; debe ser mayor que 0 y puede tener decimales.")
+    price = c2.number_input("Precio unit. estimado", min_value=0.0, value=suggested, step=0.1, format="%.2f", key=f"budget_{site_id}_price_{material['id']}",
+                            help="Se propone el mejor precio entre tus proveedores para materiales nuevos. Puedes ajustarlo; 0 = sin precio estimado.")
+    forms.section("3. Revisa el presupuesto", "Comprueba el costo previsto antes de guardar.")
+    total = sum(float(r["planned_qty"]) * float(r["planned_unit_price"]) for r in budgets.to_dict("records"))
+    previous_cost = planned_qty * suggested if not current.empty else 0.0
+    material_cost, site_cost = st.columns(2)
+    material_cost.metric("Costo del material", f"{qty * price:,.2f}")
+    site_cost.metric("Presupuesto después", f"{total - previous_cost + qty * price:,.2f}")
+    if price == 0:
+        st.caption("Con precio 0, este material queda presupuestado en cantidad y no suma costo al total.")
+    cancel, save = st.columns([1, 2])
+    if cancel.button("Cancelar", key="budget_cancel", width="stretch"):
+        _clear_budget_draft(site_id)
+        st.rerun()
+    if save.button("Guardar en el presupuesto", type="primary", width="stretch"):
+        issues = forms.validate({qty_label: qty, "Precio unit. estimado": price})
+        if not math.isfinite(qty * price):
+            issues.append("Costo previsto: revisa la cantidad y el precio para obtener un total finito.")
+        if forms.errors(issues):
             return
         repo.set_budget(site_id, material["id"], qty, price)
+        _clear_budget_draft(site_id)
         ui.flash(f"Presupuesto de «{site_name}»: {material['name']} × {qty:g}.", "🧮")
         st.rerun()
 
@@ -130,7 +165,7 @@ def render() -> None:
         "La ficha completa de cada obra: ubicación, materiales, trabajadores y progreso.",
     )
     if sites.empty:
-        st.info("Todavía no hay obras. Se crean en Trabajadores → Obras / Proyectos.")
+        ui.empty_state("Aún no hay obras", "Crea una obra en Trabajadores → Obras / Proyectos para definir su presupuesto y seguir el avance.", icon="🏗️")
         return
 
     site_name = st.selectbox("Obra", sites["name"].tolist(), key=SITE_KEY)
@@ -172,10 +207,17 @@ def _tab_info(site: dict) -> None:
     st.write(f"**Registrada el:** {str(site['created_at'])[:10]}  ·  **Trabajadores:** {n_workers}  ·  **Órdenes de compra:** {n_orders}")
 
     lat_raw, lon_raw = site.get("latitude"), site.get("longitude")
-    if lat_raw is None or lon_raw is None or lat_raw != lat_raw:
-        st.info("Esta obra no tiene ubicación en el mapa. Elimínala y vuelve a crearla en Trabajadores → Obras / Proyectos pegando el enlace de Google Maps.")
+    if pd.isna(lat_raw) or pd.isna(lon_raw):
+        ui.empty_state("Ubicación sin registrar", "Esta obra tiene información disponible, pero aún no tiene coordenadas para mostrar el mapa.", icon="📍")
         return
-    lat, lon = float(lat_raw), float(lon_raw)
+    try:
+        lat, lon = float(lat_raw), float(lon_raw)
+    except (TypeError, ValueError):
+        st.warning("Revisa las coordenadas registradas: no se puede mostrar esta ubicación.")
+        return
+    if not math.isfinite(lat) or not math.isfinite(lon) or not (-90 <= lat <= 90 and -180 <= lon <= 180):
+        st.warning("Las coordenadas registradas están fuera del rango válido del mapa.")
+        return
     st.map(pd.DataFrame([{"lat": lat, "lon": lon}]), zoom=16)
     st.caption(f"Coordenadas: {lat:.6f}, {lon:.6f}")
     url = google_maps_search_url(coords=(lat, lon))
@@ -186,22 +228,24 @@ def _tab_materials(site: dict, df: pd.DataFrame) -> None:
     site_id, site_name = site["id"], site["name"]
     ui.tip("Primero define lo que esperas usar con «＋ Material al presupuesto». Luego verás cuánto llevas pedido, recibido y consumido.")
     b1, b2, _ = st.columns([2, 2, 4])
-    if b1.button("＋ Material al presupuesto", type="primary", use_container_width=True):
+    if b1.button("＋ Material al presupuesto", type="primary", width="stretch"):
+        _clear_budget_draft(site_id)
         _budget_dialog(site_id, site_name)
-    if b2.button("📤 Registrar consumo", use_container_width=True):
+    if b2.button("📤 Registrar consumo", width="stretch"):
         inventario.movement_dialog(default_site_id=site_id)
 
     if df.empty:
-        st.info("Esta obra todavía no tiene presupuesto ni pedidos.")
+        ui.empty_state("Aún no hay materiales en esta obra", "Añade un material al presupuesto o crea una orden con esta obra como destino.")
         return
 
+    ui.result_count(len(df), len(df), noun="materiales")
     view = df.copy()
     view["Estado"] = view.apply(_state, axis=1)
     view["Consumido %"] = view.apply(lambda r: min(r["Consumido"] / r["Presupuesto"] * 100, 100) if r["Presupuesto"] else 0, axis=1)
     st.dataframe(
         view[["Material", "Unidad", "Presupuesto", "Pedido", "Recibido", "Consumido", "Consumido %", "Presupuesto $", "Gasto pedido $", "Estado"]],
         hide_index=True,
-        use_container_width=True,
+        width="stretch",
         column_config={
             "Presupuesto": st.column_config.NumberColumn(format="%.2f"),
             "Pedido": st.column_config.NumberColumn(format="%.2f"),
@@ -213,11 +257,11 @@ def _tab_materials(site: dict, df: pd.DataFrame) -> None:
         },
     )
 
-    st.markdown("**Informarse de un material**")
+    st.markdown("**Consulta la ficha de un material**")
     names = {r["Material"]: r["material_id"] for r in df.to_dict("records")}
     i1, i2 = st.columns([4, 2])
-    chosen = i1.selectbox("Material", list(names), label_visibility="collapsed", key=f"obra_mat_info_{site_id}")
-    if i2.button("ℹ️ Ver ficha", use_container_width=True, key=f"obra_mat_btn_{site_id}"):
+    chosen = i1.selectbox("Material", list(names), key=f"obra_mat_info_{site_id}", help="Abre su ficha para consultar especificaciones y proveedores.")
+    if i2.button("ℹ️ Ver ficha", width="stretch", key=f"obra_mat_btn_{site_id}"):
         materiales.info_dialog(names[chosen])
 
     budgeted = df[df["budget_id"].notna()]
@@ -227,16 +271,17 @@ def _tab_materials(site: dict, df: pd.DataFrame) -> None:
                 c1, c2 = st.columns([6, 1])
                 c1.write(f"{row['Material']} · {row['Presupuesto']:g} {row['Unidad'] or ''}")
                 if c2.button("🗑", key=f"del_budget_{row['budget_id']}", help="Quitar del presupuesto"):
-                    repo.delete_budget(row["budget_id"])
-                    ui.flash(f"«{row['Material']}» quitado del presupuesto de {site_name}.", "🗑️")
-                    st.rerun()
+                    ui.confirm_delete(
+                        f"¿Quitar «{row['Material']}» del presupuesto de «{site_name}»? Se eliminará su cantidad y costo previstos. Sus pedidos y consumos se conservan.",
+                        lambda bid=row["budget_id"], name=row["Material"], sn=site_name: _delete_budget(bid, name, sn),
+                    )
 
 
 def _tab_workers(site: dict) -> None:
     workers = repo.list_workers()
     workers = workers[workers["project_site_id"] == site["id"]] if not workers.empty else workers
     if workers.empty:
-        st.info("Nadie está asignado a esta obra. Asigna trabajadores en el módulo Trabajadores.")
+        ui.empty_state("Esta obra no tiene trabajadores asignados", "Asigna trabajadores desde el módulo Trabajadores para ver aquí sus jornadas.", icon="👷")
         return
     today = date.today()
     attendance = repo.list_attendance((today - timedelta(days=29)).isoformat(), today.isoformat())
@@ -260,7 +305,7 @@ def _tab_workers(site: dict) -> None:
 
 def _tab_progress(site: dict, df: pd.DataFrame, prog: dict) -> None:
     if df.empty or not prog["planned"]:
-        st.info("Define el presupuesto de la obra (pestaña Materiales) para ver su progreso.")
+        ui.empty_state("Falta un presupuesto con costo", "En Materiales, define cantidades y precios estimados para calcular el progreso de la obra.", icon="📈")
         return
     overall = prog["pct_consumed"] or 0.0
     st.markdown(f'<div class="mrp-eyebrow">Avance de materiales</div><div class="mrp-page-title">{overall * 100:.0f}%</div>', unsafe_allow_html=True)

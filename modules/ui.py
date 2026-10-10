@@ -2,6 +2,7 @@
 tarjetas de stat, lista de actividad, dona de estado) para que todos los
 módulos se vean consistentes."""
 import html
+import math
 import re
 from typing import Callable
 
@@ -11,431 +12,72 @@ import streamlit as st
 from db import repository as repo
 from modules.guides import guide_for
 
-# Modo oscuro: se invierte toda la página (luminosidad) conservando el tono, y
-# se vuelve a invertir lo que no debe cambiar (imágenes). Los fondos se aclaran
-# un poco antes de invertir para que el resultado sea gris oscuro y no negro.
-_DARK_CSS = """
-<style>
-/* Se invierte la luminosidad de toda la página conservando el tono; los
-   valores de abajo son los colores CLAROS previos a invertir (el resultado es
-   un gris azulado oscuro con buen contraste). */
-html { filter: invert(1) hue-rotate(180deg); }
-img, video { filter: invert(1) hue-rotate(180deg); }
-.stApp { background: #D9DBE6 !important; }
-section[data-testid="stSidebar"] { background: #E6E8F1 !important; }
-.mrp-stat-card, .mrp-panel, .mrp-card { background: #C9CCDB !important; border-color: rgba(0,0,0,.18) !important; }
-/* contenedores con borde (filas de lista): más claros que el fondo y con borde visible */
-div[data-testid="stVerticalBlock"] { border-color: rgba(0,0,0,.28) !important; }
-div[data-testid="stLayoutWrapper"] > div[data-testid="stVerticalBlock"]:has(.mrp-row) { background: #D0D3E1; }
-div[data-testid="stLayoutWrapper"] > div[data-testid="stVerticalBlock"]:has(.mrp-row):hover { background: #C4C8DA; }
-/* campos: algo más claros que el fondo para distinguirlos */
-div[data-baseweb="input"], div[data-baseweb="select"] > div, div[data-baseweb="textarea"] { background: #C2C6D8 !important; }
-div[data-testid="stExpander"] { background: #D0D3E1; border-color: rgba(0,0,0,.25) !important; }
-button[kind="secondary"], button[kind="secondaryFormSubmit"] { background: #CDD0DF !important; }
-/* textos secundarios: más oscuros antes de invertir = más claros al verlos */
-.mrp-row-sub, .mrp-activity-sub, .mrp-stat-caption, .mrp-stat-label, .mrp-page-subtitle,
-.mrp-sidebar-section, .mrp-brand-sub, div[data-testid="stCaptionContainer"] { color: #3A3F52 !important; }
-.mrp-row-name, .mrp-activity-name, .mrp-stat-value, .mrp-page-title, .mrp-panel-title { color: #0B0D16 !important; }
-/* el menú del sidebar vive en un iframe con fondo blanco: que adopte el del sidebar */
-section[data-testid="stSidebar"] iframe { mix-blend-mode: multiply; }
-</style>
-"""
-
-_CSS = """
-<style>
-/* ---------------------------------------------------------------------
-   Pulido global: tipografía, botones, inputs, alertas, expander, modal.
-   Se aplica a TODA la app (login incluido) porque ui.inject() corre antes
-   de la pantalla de login en app.py.
-   ------------------------------------------------------------------- */
-@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap');
-
-html, body, .stApp {
-    font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
-}
-
-/* Bordes de cualquier st.container(border=True): esquinas más suaves y
-   un tono de borde más discreto que el gris default. border-radius y
-   border-color no hacen nada visible si el bloque no tiene borde, así que
-   es seguro aplicarlo a todos los stVerticalBlock sin distinguirlos. */
-div[data-testid="stVerticalBlock"] {
-    border-radius: 12px;
-    border-color: rgba(17, 24, 39, 0.08) !important;
-}
-
-/* Filas de lista (st.container(border=True) que contienen un .mrp-row):
-   se resaltan al pasar el mouse. No hay selector propio para los
-   contenedores con borde, pero este es el único que cubre solo esos. */
-div[data-testid="stLayoutWrapper"] > div[data-testid="stVerticalBlock"]:has(.mrp-row) {
-    transition: box-shadow 0.15s ease, border-color 0.15s ease, background 0.15s ease;
-}
-div[data-testid="stLayoutWrapper"] > div[data-testid="stVerticalBlock"]:has(.mrp-row):hover {
-    border-color: rgba(108, 92, 231, 0.45) !important;
-    background: #FBFAFF;
-    box-shadow: 0 6px 18px rgba(108, 92, 231, 0.10);
-}
-
-/* Validación en vivo (live_validation.py) y consejos de formulario */
-.mrp-live {
-    display: flex;
-    flex-wrap: wrap;
-    gap: 6px;
-    max-width: 78%;
-    font-size: 12px;
-    font-weight: 600;
-    margin-top: 4px;
-    line-height: 1.3;
-}
-.mrp-live-count { font-variant-numeric: tabular-nums; white-space: nowrap; opacity: 0.85; }
-.mrp-tip {
-    background: #F4F3FB;
-    border: 1px dashed rgba(108, 92, 231, 0.35);
-    border-radius: 10px;
-    padding: 8px 12px;
-    font-size: 12.5px;
-    color: #4B2FD1;
-    margin-bottom: 8px;
-}
-
-/* Botones */
-button[kind="primary"], button[kind="primaryFormSubmit"] {
-    background: linear-gradient(135deg, #6C5CE7, #4B2FD1) !important;
-    border: none !important;
-    border-radius: 10px !important;
-    font-weight: 600 !important;
-    transition: transform 0.15s ease, box-shadow 0.15s ease, filter 0.15s ease;
-}
-button[kind="primary"]:hover, button[kind="primaryFormSubmit"]:hover {
-    filter: brightness(1.08);
-    box-shadow: 0 6px 16px rgba(108, 92, 231, 0.28);
-    transform: translateY(-1px);
-}
-button[kind="secondary"], button[kind="secondaryFormSubmit"] {
-    border-radius: 10px !important;
-    border: 1px solid rgba(17, 24, 39, 0.14) !important;
-    font-weight: 600 !important;
-    transition: border-color 0.15s ease, color 0.15s ease, background 0.15s ease;
-}
-button[kind="secondary"]:hover, button[kind="secondaryFormSubmit"]:hover {
-    border-color: #6C5CE7 !important;
-    color: #6C5CE7 !important;
-}
-
-/* Inputs, selects y textareas (BaseWeb, atributos estables entre versiones) */
-div[data-baseweb="input"], div[data-baseweb="select"] > div, div[data-baseweb="textarea"] {
-    border-radius: 10px !important;
-    transition: border-color 0.15s ease, box-shadow 0.15s ease;
-}
-div[data-baseweb="input"]:focus-within,
-div[data-baseweb="select"] > div:focus-within,
-div[data-baseweb="textarea"]:focus-within {
-    border-color: #6C5CE7 !important;
-    box-shadow: 0 0 0 3px rgba(108, 92, 231, 0.14) !important;
-}
-
-/* Checkbox: el cuadrito toma el morado de marca al marcarse */
-label[data-baseweb="checkbox"] span:first-child {
-    transition: all 0.15s ease;
-    border-radius: 6px !important;
-}
-
-/* Alertas (st.info / st.success / st.warning / st.error) */
-div[data-testid="stAlertContainer"] {
-    border-radius: 12px !important;
-    border: 1px solid transparent !important;
-}
-div[data-testid="stAlertContainer"]:has(div[data-testid="stAlertContentInfo"]) {
-    background: #EFECFD !important;
-    border-color: rgba(108, 92, 231, 0.18) !important;
-}
-div[data-testid="stAlertContainer"]:has(div[data-testid="stAlertContentSuccess"]) {
-    background: #E3F9E9 !important;
-    border-color: rgba(31, 146, 84, 0.2) !important;
-}
-div[data-testid="stAlertContainer"]:has(div[data-testid="stAlertContentWarning"]) {
-    background: #FDEFD9 !important;
-    border-color: rgba(214, 138, 12, 0.22) !important;
-}
-div[data-testid="stAlertContainer"]:has(div[data-testid="stAlertContentError"]) {
-    background: #FCE9E9 !important;
-    border-color: rgba(214, 69, 69, 0.2) !important;
-}
-
-/* Expander */
-div[data-testid="stExpander"] {
-    border-radius: 12px !important;
-    border: 1px solid rgba(17, 24, 39, 0.08) !important;
-    overflow: hidden;
-}
-
-/* Modal (st.dialog) */
-div[data-testid="stDialog"] div[role="dialog"] {
-    border-radius: 18px !important;
-}
-
-/* Scrollbar discreto */
-::-webkit-scrollbar { width: 10px; height: 10px; }
-::-webkit-scrollbar-track { background: transparent; }
-::-webkit-scrollbar-thumb { background: rgba(17, 24, 39, 0.16); border-radius: 999px; }
-::-webkit-scrollbar-thumb:hover { background: rgba(108, 92, 231, 0.4); }
-
-/* Encabezado de página: eyebrow + título grande */
-.mrp-eyebrow {
-    font-size: 12px;
-    font-weight: 600;
-    letter-spacing: 0.08em;
-    text-transform: uppercase;
-    color: #6C5CE7;
-    margin-bottom: 4px;
-}
-.mrp-page-title {
-    font-size: 30px;
-    font-weight: 800;
-    margin: 0 0 4px 0;
-    line-height: 1.2;
-}
-.mrp-page-subtitle {
-    color: #6B7280;
-    font-size: 14px;
-    margin-bottom: 8px;
-}
-
-/* Tarjetas de estadística */
-.mrp-stat-grid {
-    display: grid;
-    grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
-    gap: 16px;
-    margin: 18px 0 8px 0;
-}
-.mrp-stat-card {
-    background: #FFFFFF;
-    border: 1px solid rgba(17,24,39,0.06);
-    border-radius: 16px;
-    padding: 18px 20px;
-    box-shadow: 0 1px 3px rgba(17,24,39,0.04);
-}
-.mrp-stat-card .mrp-stat-top {
-    display: flex;
-    align-items: flex-start;
-    justify-content: space-between;
-    margin-bottom: 14px;
-}
-.mrp-stat-card .mrp-stat-label {
-    font-size: 11px;
-    font-weight: 700;
-    letter-spacing: 0.06em;
-    text-transform: uppercase;
-    color: #9095A6;
-}
-.mrp-stat-card .mrp-icon-badge {
-    width: 34px;
-    height: 34px;
-    border-radius: 10px;
-    background: #EFECFD;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    font-size: 16px;
-    flex-shrink: 0;
-}
-.mrp-stat-card.mrp-warn .mrp-icon-badge {
-    background: #FDEFD9;
-}
-.mrp-stat-card .mrp-stat-value {
-    font-size: 30px;
-    font-weight: 800;
-    line-height: 1.1;
-    color: #1F2333;
-}
-.mrp-stat-card .mrp-stat-caption {
-    font-size: 12.5px;
-    color: #9095A6;
-    margin-top: 6px;
-}
-
-/* Paneles (contenedores generales tipo "card" para secciones) */
-.mrp-panel {
-    background: #FFFFFF;
-    border: 1px solid rgba(17,24,39,0.06);
-    border-radius: 16px;
-    padding: 20px 22px;
-    box-shadow: 0 1px 3px rgba(17,24,39,0.04);
-    height: 100%;
-}
-.mrp-panel-title {
-    font-size: 18px;
-    font-weight: 800;
-    margin: 2px 0 14px 0;
-}
-
-/* Lista de actividad reciente */
-.mrp-activity-item {
-    display: flex;
-    justify-content: space-between;
-    align-items: center;
-    padding: 10px 0;
-    border-bottom: 1px solid rgba(17,24,39,0.06);
-}
-.mrp-activity-item:last-child { border-bottom: none; }
-.mrp-activity-name { font-weight: 700; font-size: 14px; color: #1F2333; }
-.mrp-activity-sub { font-size: 12.5px; color: #9095A6; }
-.mrp-activity-badge {
-    font-size: 11px;
-    font-weight: 700;
-    padding: 3px 10px;
-    border-radius: 999px;
-    background: #EFECFD;
-    color: #6C5CE7;
-    white-space: nowrap;
-}
-.mrp-activity-when {
-    font-size: 11px;
-    color: #B4B8C4;
-    margin-top: 4px;
-    white-space: nowrap;
-}
-
-/* Rótulo de sección arriba del menú lateral */
-.mrp-sidebar-section {
-    font-size: 11px;
-    font-weight: 700;
-    letter-spacing: 0.08em;
-    text-transform: uppercase;
-    color: #B4B8C4;
-    margin: 4px 0 8px 4px;
-}
-
-/* Tarjetas de lista genéricas (proveedores, usuarios, materiales) */
-.mrp-card {
-    background: #FFFFFF;
-    border: 1px solid rgba(17,24,39,0.06);
-    border-radius: 12px;
-    padding: 14px 16px;
-    margin-bottom: 10px;
-    box-shadow: 0 1px 3px rgba(17,24,39,0.04);
-}
-
-/* Sidebar */
-section[data-testid="stSidebar"] {
-    border-right: 1px solid rgba(17,24,39,0.06);
-}
-section[data-testid="stSidebar"] .block-container {
-    padding-top: 1.2rem;
-}
-.mrp-brand {
-    display: flex;
-    align-items: center;
-    gap: 10px;
-    margin-bottom: 4px;
-}
-.mrp-brand-badge {
-    width: 38px;
-    height: 38px;
-    border-radius: 10px;
-    background: #6C5CE7;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    font-size: 18px;
-}
-.mrp-brand-name { font-weight: 800; font-size: 16px; line-height: 1.1; color: #1F2333; }
-.mrp-brand-sub { font-size: 12px; color: #9095A6; }
-
-/* Avatar circular con inicial (proveedores, usuarios) */
-.mrp-avatar {
-    width: 38px;
-    height: 38px;
-    min-width: 38px;
-    border-radius: 50%;
-    background: #EFECFD;
-    color: #6C5CE7;
-    font-weight: 800;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    font-size: 15px;
-}
-.mrp-row {
-    display: flex;
-    align-items: center;
-    gap: 12px;
-}
-.mrp-row-name { font-weight: 700; font-size: 15px; color: #1F2333; }
-.mrp-row-sub { font-size: 12.5px; color: #9095A6; }
-
-/* Pastillas de estado / rol */
-.mrp-pill {
-    display: inline-block;
-    font-size: 11px;
-    font-weight: 700;
-    padding: 3px 10px;
-    border-radius: 999px;
-    white-space: nowrap;
-}
-.mrp-pill-purple { background: #EFECFD; color: #6C5CE7; }
-.mrp-pill-green { background: #E3F9E9; color: #1F9254; }
-.mrp-pill-red { background: #FCE9E9; color: #D64545; }
-.mrp-pill-gray { background: #EEF0F4; color: #6B7280; }
-.mrp-pill-amber { background: #FDEFD9; color: #B7740A; }
-.mrp-pill-blue { background: #E3EFFD; color: #2563B8; }
-
-/* Enlaces de contacto rápido (llamar / WhatsApp / correo) */
-.mrp-links { display: flex; flex-wrap: wrap; gap: 6px; }
-a.mrp-link {
-    font-size: 12px;
-    font-weight: 600;
-    padding: 4px 10px;
-    border-radius: 999px;
-    background: #F4F3FB;
-    color: #4B2FD1 !important;
-    text-decoration: none !important;
-    white-space: nowrap;
-    transition: background 0.15s ease, transform 0.15s ease;
-}
-a.mrp-link:hover { background: #EFECFD; transform: translateY(-1px); }
-
-/* Móvil: menos relleno, tarjetas de stats en 2 columnas, títulos más chicos */
-@media (max-width: 640px) {
-    div[data-testid="stMainBlockContainer"] { padding: 3.5rem 1rem 4rem 1rem; }
-    .mrp-page-title { font-size: 24px; }
-    .mrp-stat-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; }
-    .mrp-stat-card { padding: 14px; }
-    .mrp-stat-card .mrp-stat-value { font-size: 24px; }
-    .mrp-panel { padding: 16px; }
-}
-</style>
-"""
+from modules.ui_styles import CSS, DARK, LIGHT
 
 
 def inject() -> None:
-    st.markdown(_CSS, unsafe_allow_html=True)
-    if st.session_state.get("dark_mode"):
-        st.markdown(_DARK_CSS, unsafe_allow_html=True)
+    palette = DARK if st.session_state.get("dark_mode") else LIGHT
+    st.markdown("<style>:root {" + palette + "}" + CSS + "</style>", unsafe_allow_html=True)
 
 
 def page_header(eyebrow: str, title: str, subtitle: str = "", action_label: str | None = None, action_key: str | None = None) -> bool:
-    """Encabezado de página. Si se pasa `action_label`, dibuja un botón
-    primario a la derecha (tipo "+ Crear...") y devuelve True si se clickeó."""
-    html = f'<div class="mrp-eyebrow">{eyebrow}</div><div class="mrp-page-title">{title}</div>'
+    """Título, contexto, ayuda y acción principal con la misma jerarquía."""
+    content = f'<div class="mrp-eyebrow">{html.escape(eyebrow)}</div><div class="mrp-page-title">{html.escape(title)}</div>'
     if subtitle:
-        html += f'<div class="mrp-page-subtitle">{subtitle}</div>'
-
+        content += f'<div class="mrp-page-subtitle">{html.escape(subtitle)}</div>'
     guide = guide_for(eyebrow, title)
-
     if not action_label:
-        st.markdown(html, unsafe_allow_html=True)
+        st.markdown(content, unsafe_allow_html=True)
         _guide_popover(guide)
         return False
-
-    col1, col2 = st.columns([4, 1.3])
-    with col1:
-        st.markdown(html, unsafe_allow_html=True)
-        _guide_popover(guide)
-    with col2:
-        st.write("")
-        st.write("")
-        clicked = st.button(action_label, key=action_key, type="primary", use_container_width=True)
+    left, right = st.columns([3.5, 1.5], vertical_alignment="center")
+    with left:
+        st.markdown(content, unsafe_allow_html=True)
+    with right:
+        clicked = st.button(action_label, key=action_key, type="primary", width="stretch")
+    _guide_popover(guide)
     return clicked
+
+
+def empty_state(title: str, description: str, icon: str = "📦") -> None:
+    st.markdown(
+        f'<div class="mrp-empty"><div class="mrp-empty-icon">{html.escape(icon)}</div>'
+        f'<div class="mrp-empty-title">{html.escape(title)}</div>'
+        f'<div class="mrp-empty-copy">{html.escape(description)}</div></div>',
+        unsafe_allow_html=True,
+    )
+
+
+def result_count(shown: int, total: int, noun: str = "registros") -> None:
+    text = f"{shown} de {total} {noun}" if shown != total else f"{total} {noun}"
+    st.markdown(f'<div class="mrp-result-count">{html.escape(text)}</div>', unsafe_allow_html=True)
+
+
+def paginate(df: pd.DataFrame, key: str) -> pd.DataFrame:
+    """Dibuja solo una página; conserva siempre una página válida al filtrar."""
+    if len(df) <= 20:
+        return df
+    size_col, page_col = st.columns([1, 2])
+    size = size_col.selectbox("Por página", [20, 50, 100], key=f"{key}_size")
+    pages = max(1, math.ceil(len(df) / size))
+    page_key = f"{key}_page"
+    if st.session_state.get(page_key, 1) > pages:
+        st.session_state[page_key] = 1
+    page = page_col.selectbox("Página", list(range(1, pages + 1)), format_func=lambda n: f"{n} de {pages}", key=page_key)
+    start = (page - 1) * size
+    st.caption(f"Mostrando {start + 1}–{min(start + size, len(df))} de {len(df)}. Usa el buscador para localizar un registro.")
+    return df.iloc[start:start + size]
+
+
+def chart_theme(fig):
+    """Mantiene legibles también los gráficos, sin invertir el mapa."""
+    dark = st.session_state.get("dark_mode", False)
+    fig.update_layout(
+        template="plotly_dark" if dark else "plotly_white",
+        font=dict(family="Inter, sans-serif", color="#F1F4FC" if dark else "#20263B", size=12),
+        paper_bgcolor="rgba(0,0,0,0)", plot_bgcolor="rgba(0,0,0,0)",
+    )
+    return fig
 
 
 def _guide_popover(guide: str | None) -> None:
@@ -446,7 +88,7 @@ def _guide_popover(guide: str | None) -> None:
 
 def tip(text: str) -> None:
     """Consejo breve con ejemplo, para el inicio de un formulario."""
-    st.markdown(f'<div class="mrp-tip">💡 {text}</div>', unsafe_allow_html=True)
+    st.markdown(f'<div class="mrp-tip">💡 {html.escape(text)}</div>', unsafe_allow_html=True)
 
 
 def stat_card(icon: str, value, label: str, caption: str = "", warn: bool = False) -> str:
@@ -542,9 +184,9 @@ def show_flash() -> None:
 def _confirm_dialog(message: str, on_confirm: Callable[[], None]) -> None:
     st.write(message)
     c1, c2 = st.columns(2)
-    if c1.button("Cancelar", use_container_width=True):
+    if c1.button("Cancelar", width="stretch"):
         st.rerun()
-    if c2.button("Sí, eliminar", type="primary", use_container_width=True):
+    if c2.button("Sí, eliminar", type="primary", width="stretch"):
         on_confirm()
         st.rerun()
 

@@ -37,10 +37,8 @@ except st.errors.StreamlitAPIException:
 except Exception as exc:  # fallo de red/base de datos: mensaje claro en vez del traceback
     if type(exc).__name__ in ("StopException", "RerunException"):
         raise
-    st.error(
-        "No se pudo completar la operación (¿sin conexión con la base de datos?). "
-        "Espera unos segundos y reintenta."
-    )
-    st.caption(f"Detalle técnico: {type(exc).__name__}: {exc}")
-    if st.button("Reintentar"):
+    st.error("No se pudo completar esta operación. Revisa la conexión y vuelve a intentarlo.")
+    with st.expander("Detalle del error para solicitar ayuda"):
+        st.caption(f"{type(exc).__name__}: {exc}")
+    if st.button("Reintentar", type="primary"):
         st.rerun()

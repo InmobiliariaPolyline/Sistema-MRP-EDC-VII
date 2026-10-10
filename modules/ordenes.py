@@ -5,6 +5,7 @@ pendiente a enviada, recibida (o parcial si llegó solo una parte) o cancelada.
 Incluye comparador de cotizaciones al armar el pedido, recepción parcial por
 línea (que alimenta el inventario), duplicar una orden, PDF de la orden y
 mensaje listo para WhatsApp."""
+import math
 import re
 from urllib.parse import quote
 
@@ -12,7 +13,7 @@ import pandas as pd
 import streamlit as st
 
 from db import repository as repo
-from modules import ui
+from modules import forms, ui
 from utils.reports import order_pdf, order_whatsapp_text
 from utils.timeago import age_days
 
@@ -54,6 +55,16 @@ def stale_orders(orders: pd.DataFrame) -> pd.DataFrame:
     return open_orders[ages > alert_days()].assign(age=ages[ages > alert_days()])
 
 
+def _clear_order_draft() -> None:
+    for key in (LINES_KEY, SUPPLIER_KEY, PRESET_KEY, "new_order_supplier", "new_order_site", "new_order_notes"):
+        st.session_state.pop(key, None)
+
+
+def _clear_filters() -> None:
+    st.session_state["ord_q"] = ""
+    st.session_state["ord_status"] = ALL_STATUSES
+
+
 def render() -> None:
     if st.session_state.get(SELECTED_KEY):
         _render_detail(st.session_state[SELECTED_KEY])
@@ -67,8 +78,7 @@ def render() -> None:
         action_key="new_order_open",
     )
     if clicked:
-        st.session_state.pop(LINES_KEY, None)
-        st.session_state.pop(SUPPLIER_KEY, None)
+        _clear_order_draft()
         _new_order_dialog()
     elif st.session_state.get(PRESET_KEY):
         _new_order_dialog()
@@ -115,7 +125,7 @@ def _material_quotes(material_id: str, current_supplier_id: str, offers: pd.Data
         }
     )
     with st.expander(f"💡 Comparar cotizaciones ({len(rows)} proveedores)", expanded=best["supplier_id"] != current_supplier_id):
-        st.dataframe(table, hide_index=True, use_container_width=True, column_config={"Precio": st.column_config.NumberColumn(format="%.2f")})
+        st.dataframe(table, hide_index=True, width="stretch", column_config={"Precio": st.column_config.NumberColumn(format="%.2f")})
         mine = rows[rows["supplier_id"] == current_supplier_id]
         if best["supplier_id"] != current_supplier_id and not mine.empty:
             mine_price = float(mine.iloc[0]["price"])
@@ -125,9 +135,13 @@ def _material_quotes(material_id: str, current_supplier_id: str, offers: pd.Data
 
 @st.dialog("Nueva orden de compra", width="large")
 def _new_order_dialog() -> None:
+    forms.header("Prepara tu pedido", "Elige el destino, agrega los materiales y revisa el total antes de crear la orden.")
     suppliers = repo.list_suppliers()
     if suppliers.empty:
-        st.info("Primero registra un proveedor en el módulo Proveedores.")
+        ui.empty_state("Falta un proveedor", "Registra uno en Proveedores para preparar tu primera orden.", icon="🏭")
+        if st.button("Cancelar", key="order_cancel_empty", width="stretch"):
+            _clear_order_draft()
+            st.rerun()
         return
     ui.tip("Ejemplo: elige el proveedor, la obra destino, luego un material con cantidad 12 y pulsa «Agregar al pedido». Repite por cada material y al final «Crear orden».")
     sites = repo.list_project_sites()
@@ -136,22 +150,28 @@ def _new_order_dialog() -> None:
     preset = st.session_state.pop(PRESET_KEY, None)
     if preset:  # viene de «Duplicar»: precarga proveedor, obra, notas y líneas
         st.session_state["new_order_supplier"] = preset["supplier_name"]
-        st.session_state["new_order_site"] = preset["site_name"] or NO_SITE
+        st.session_state["new_order_site"] = preset["site_name"] if preset["site_name"] in sites["name"].tolist() else NO_SITE
         st.session_state["new_order_notes"] = preset["notes"] or ""
         st.session_state[SUPPLIER_KEY] = preset["supplier_id"]
         st.session_state[LINES_KEY] = preset["lines"]
 
-    supplier_name = st.selectbox("Proveedor", suppliers["name"].tolist(), key="new_order_supplier")
+    forms.section("1. Proveedor y destino", "Toda la orden corresponde a un proveedor. La obra destino es opcional.")
+    supplier_name = st.selectbox("Proveedor", suppliers["name"].tolist(), key="new_order_supplier",
+                                 help="Al cambiar de proveedor se vacían los materiales del borrador para revisar sus precios.")
     supplier_id = suppliers.loc[suppliers["name"] == supplier_name, "id"].iloc[0]
     if st.session_state.get(SUPPLIER_KEY) != supplier_id:
+        if st.session_state.get(LINES_KEY):
+            st.warning("Cambiaste de proveedor: vuelve a agregar los materiales con sus nuevas cotizaciones.")
         st.session_state[SUPPLIER_KEY] = supplier_id
         st.session_state[LINES_KEY] = []
     lines: list[dict] = st.session_state.setdefault(LINES_KEY, [])
 
-    site_choice = st.selectbox("Obra destino (opcional)", [NO_SITE] + sites["name"].tolist(), key="new_order_site")
-    notes = st.text_input("Notas (opcional)", placeholder="Ej. Entregar antes del viernes", key="new_order_notes")
+    site_choice = st.selectbox("Obra destino (opcional)", [NO_SITE] + sites["name"].tolist(), key="new_order_site",
+                               help="Asigna una obra para incluir esta compra en su control de presupuesto.")
+    notes = st.text_input("Notas (opcional)", placeholder="Ej. Entregar antes del viernes", key="new_order_notes", max_chars=500,
+                          help="Condiciones de entrega o indicaciones para el proveedor. Hasta 500 caracteres.")
 
-    st.markdown("**Materiales del pedido**")
+    forms.section("2. Agrega materiales", "Cantidad en la unidad del material y precio por unidad. Agregar de nuevo suma cantidades y actualiza el precio de toda esa línea.")
     catalog = repo.get_supplier_catalog(supplier_id)
     offered = catalog[catalog["offered"]] if not catalog.empty else catalog
     if offered.empty:
@@ -161,17 +181,26 @@ def _new_order_dialog() -> None:
         c1, c2, c3 = st.columns([4, 2, 2])
         choice = c1.selectbox("Material", list(options))
         record = options[choice]
-        qty = c2.number_input("Cantidad", min_value=0.0, value=1.0, step=1.0, key=f"oqty_{record['id']}")
+        qty = c2.number_input("Cantidad", min_value=0.0, value=1.0, step=1.0, key=f"oqty_{record['id']}",
+                               help=f"Unidad: {record['metric_label'] or 'unid.'}. Admite decimales; debe ser mayor que 0.")
         catalog_price = float(record["price"]) if pd.notna(record["price"]) else 0.0
         price = c3.number_input(
-            "Precio unit.", min_value=0.0, value=catalog_price, step=0.1, format="%.2f", key=f"oprice_{supplier_id}_{record['id']}"
+            "Precio unit.", min_value=0.0, value=catalog_price, step=0.1, format="%.2f", key=f"oprice_{supplier_id}_{record['id']}",
+            help="Precio por unidad. Se propone la cotización del proveedor; 0 significa precio sin registrar."
         )
+        st.caption(f"Esta selección: {qty:g} {record['metric_label'] or 'unid.'} × {price:,.2f} = **{qty * price:,.2f}**")
+        if not record.get("available", True):
+            st.caption("El catálogo indica que este material no está disponible. Confirma la entrega con el proveedor.")
         _material_quotes(record["id"], supplier_id, offers)
-        if st.button("＋ Agregar al pedido", use_container_width=True):
-            if qty <= 0:
-                st.error("La cantidad debe ser mayor que 0.")
-            else:
-                existing = next((ln for ln in lines if ln["material_id"] == record["id"]), None)
+        if st.button("＋ Agregar al pedido", width="stretch"):
+            existing = next((ln for ln in lines if ln["material_id"] == record["id"]), None)
+            issues = forms.validate({"Cantidad": qty, "Precio unit.": price})
+            if existing:
+                issues.extend(forms.validate({"Cantidad": existing["quantity"] + qty}))
+            line_qty = qty + (existing["quantity"] if existing else 0)
+            if not math.isfinite(line_qty * price):
+                issues.append("Subtotal: revisa la cantidad y el precio para obtener un total finito.")
+            if not forms.errors(issues):
                 if existing:
                     existing["quantity"] += qty
                     existing["unit_price"] = price
@@ -187,6 +216,7 @@ def _new_order_dialog() -> None:
                     )
                 st.rerun(scope="fragment")
 
+    forms.section("3. Revisa y crea", "Comprueba las cantidades, el destino y el total del pedido.")
     total = 0.0
     for index, line in enumerate(lines):
         subtotal = line["quantity"] * line["unit_price"]
@@ -198,7 +228,10 @@ def _new_order_dialog() -> None:
             lines.pop(index)
             st.rerun(scope="fragment")
     if lines:
-        st.markdown(f"**Total: {total:,.2f}**")
+        st.metric("Total del pedido", f"{total:,.2f}")
+        st.caption(f"{len(lines)} material(es) · Proveedor: {supplier_name} · Destino: {site_choice}")
+        if any(line["unit_price"] == 0 for line in lines):
+            st.warning("Hay materiales con precio 0. El total solo incluye los precios registrados.")
         totals = _supplier_totals(lines, offers)
         if len(totals) > 1:
             cheapest_name, cheapest_total = totals[0]
@@ -207,17 +240,32 @@ def _new_order_dialog() -> None:
                 st.dataframe(
                     pd.DataFrame({"Proveedor": [("⭐ " if i == 0 else "") + n for i, (n, _) in enumerate(totals)], "Total del pedido": [t for _, t in totals]}),
                     hide_index=True,
-                    use_container_width=True,
+                    width="stretch",
                     column_config={"Total del pedido": st.column_config.NumberColumn(format="%.2f")},
                 )
                 if mine is not None and cheapest_name != supplier_name:
                     st.caption(f"Con {cheapest_name} ahorrarías {mine - cheapest_total:,.2f} en todo el pedido.")
 
-    if st.button("Crear orden", type="primary", use_container_width=True, disabled=not lines):
+    else:
+        ui.empty_state("Tu pedido está vacío", "Selecciona un material y pulsa «Agregar al pedido». Después podrás crear la orden.", icon="🧾")
+
+    cancel, save = st.columns([1, 2])
+    if cancel.button("Cancelar", key="order_cancel", width="stretch"):
+        _clear_order_draft()
+        st.rerun()
+    if save.button("Crear orden", type="primary", width="stretch", disabled=not lines):
+        issues = forms.validate({"Notas (opcional)": notes})
+        if not lines:
+            issues.append("Materiales del pedido: agrega al menos un material.")
+        for line in lines:
+            issues.extend(f"{line['material_name']}: {issue}" for issue in forms.validate({"Cantidad": line["quantity"], "Precio unit.": line["unit_price"]}))
+        if not math.isfinite(total):
+            issues.append("Total del pedido: revisa las cantidades y precios para obtener un total finito.")
+        if forms.errors(issues):
+            return
         site_id = None if site_choice == NO_SITE else sites.loc[sites["name"] == site_choice, "id"].iloc[0]
         code = repo.create_order(supplier_id, supplier_name, site_id, notes.strip() or None, lines)
-        for key in (LINES_KEY, SUPPLIER_KEY, "new_order_supplier", "new_order_site", "new_order_notes"):
-            st.session_state.pop(key, None)
+        _clear_order_draft()
         ui.flash(f"Orden {code} creada.", "🧾")
         st.rerun()
 
@@ -267,13 +315,14 @@ def _render_list() -> None:
 
     df = repo.list_orders()
     if df.empty:
-        st.info("Todavía no hay órdenes. Usa «＋ Nueva orden» arriba para crear la primera.")
+        ui.empty_state("Aún no tienes órdenes", "Usa «Nueva orden» para preparar un pedido y seguir su recepción.", icon="🧾")
         return
 
+    total = len(df)
     f1, f2, f3 = st.columns([3, 2, 1.6])
-    query = f1.text_input("Buscar", placeholder="🔍 Buscar por código, proveedor u obra…", label_visibility="collapsed", key="ord_q")
+    query = f1.text_input("Buscar", placeholder="Código, proveedor u obra…", key="ord_q")
     labels = {value[0]: key for key, value in STATUSES.items()}
-    status_label = f2.selectbox("Estado", [ALL_STATUSES] + list(labels), label_visibility="collapsed", key="ord_status")
+    status_label = f2.selectbox("Estado", [ALL_STATUSES] + list(labels), key="ord_status")
     st.session_state[ALERT_DAYS_KEY] = f3.number_input(
         "Avisar tras (días)",
         min_value=1,
@@ -290,8 +339,11 @@ def _render_list() -> None:
     if status_label != ALL_STATUSES:
         df = df[df["status"] == labels[status_label]]
     df = ui.filter_df(df, query, ["code", "supplier_name", "site_name"])
+    ui.result_count(len(df), total, noun="órdenes")
+    if query or status_label != ALL_STATUSES:
+        st.button("Limpiar filtros", key="ord_clear", on_click=_clear_filters)
     if df.empty:
-        st.info("Ninguna orden coincide con los filtros.")
+        ui.empty_state("Sin coincidencias", "Prueba otro código o proveedor, o limpia los filtros para ver todas las órdenes.", icon="🔎")
         return
 
     stale_ids = set(stale["id"]) if not stale.empty else set()
@@ -316,7 +368,7 @@ def _render_list() -> None:
                     unsafe_allow_html=True,
                 )
             with c4:
-                if st.button("Ver", key=f"open_order_{row['id']}", use_container_width=True):
+                if st.button("Ver", key=f"open_order_{row['id']}", width="stretch"):
                     st.session_state[SELECTED_KEY] = row["id"]
                     st.rerun()
             with c5:
@@ -338,10 +390,41 @@ def _change_status(order_id: str, code: str, status: str) -> None:
 
 
 def _receive(order_id: str, code: str, receipts: dict[str, float]) -> None:
-    if not any(q > 0 for q in receipts.values()):
-        st.toast("Indica al menos una cantidad recibida.", icon="⚠️")
+    # Las listas de Supabase usan caché: volver a leer antes de validar el saldo.
+    for reader in (repo.list_orders, repo.list_order_items):
+        clear = getattr(reader, "clear", None)
+        if callable(clear):
+            clear()
+    orders = repo.list_orders()
+    match = orders[orders["id"] == order_id]
+    current = {r["id"]: r for r in repo.list_order_items(order_id).to_dict("records")}
+    issues = []
+    if match.empty or match.iloc[0]["status"] not in OPEN_STATUSES:
+        issues.append("La orden ya no está abierta para recepción. Actualiza su detalle.")
+    valid_receipts = {}
+    for item_id, qty in receipts.items():
+        row = current.get(item_id)
+        label = row["material_name"] if row else "Línea del pedido"
+        quantity_issues = forms.validate({"Recibido ahora": qty})
+        issues.extend(f"{label}: {issue}" for issue in quantity_issues)
+        if quantity_issues:
+            continue
+        qty = float(qty)
+        if qty == 0:
+            continue
+        if row is None:
+            issues.append(f"{label}: ya no pertenece a esta orden. Actualiza el detalle.")
+            continue
+        remaining = max(float(row["quantity"]) - float(row["received_qty"]), 0.0)
+        if qty > remaining:
+            issues.append(f"{label}: quedan {remaining:g} {row.get('unit') or 'unid.'}; no puedes recibir {qty:g}.")
+        else:
+            valid_receipts[item_id] = qty
+    if not valid_receipts and not issues:
+        issues.append("Recibido ahora: indica al menos una cantidad mayor que 0.")
+    if forms.errors(issues):
         return
-    status = repo.receive_order_items(order_id, receipts, ui.current_actor())
+    status = repo.receive_order_items(order_id, valid_receipts, ui.current_actor())
     ui.flash(f"Orden {code}: recepción registrada ({STATUSES[status][0].lower()}). El stock se actualizó.", "📦")
     st.rerun()
 
@@ -352,9 +435,15 @@ def _render_reception(order: dict, items: pd.DataFrame) -> None:
     if pending.empty:
         return
     with st.expander("📦 Registrar recepción", expanded=order["status"] in ("enviada", "parcial")):
-        st.caption("Escribe lo que llegó ahora de cada línea (puede ser solo una parte). Se suma al inventario.")
+        forms.section("1. Indica lo que llegó", "Registra solo esta entrega. Las cantidades se sumarán al inventario al guardar.")
+        records = pending.to_dict("records")
+        keys = {r["id"]: f"recv_{r['id']}_{float(r['received_qty']):g}" for r in records}
+        if st.button("Recibir todo lo pendiente", key=f"recv_all_{order['id']}",
+                     help="Completa las cantidades del borrador. Revisa y pulsa «Registrar lo indicado» para guardar."):
+            for r in records:
+                st.session_state[keys[r["id"]]] = float(r["quantity"]) - float(r["received_qty"])
         receipts: dict[str, float] = {}
-        for r in pending.to_dict("records"):
+        for r in records:
             remaining = float(r["quantity"]) - float(r["received_qty"])
             c1, c2 = st.columns([4, 2])
             c1.markdown(
@@ -368,18 +457,26 @@ def _render_reception(order: dict, items: pd.DataFrame) -> None:
                 max_value=remaining,
                 value=0.0,
                 step=1.0,
-                key=f"recv_{r['id']}_{float(r['received_qty']):g}",
-                label_visibility="collapsed",
+                key=keys[r["id"]],
+                help=f"Máximo pendiente: {remaining:g} {r.get('unit') or 'unid.'}. Usa 0 si este material no llegó.",
             )
+        forms.section("2. Revisa la entrega", "Confirma estas cantidades antes de actualizar el stock.")
+        arriving = [r for r in records if receipts[r["id"]] > 0]
+        if arriving:
+            st.dataframe(pd.DataFrame([{"Material": r["material_name"], "Unidad": r.get("unit") or "unid.",
+                                       "Recibido ahora": receipts[r["id"]],
+                                       "Pendiente después": max(float(r["quantity"]) - float(r["received_qty"]) - receipts[r["id"]], 0.0)}
+                                      for r in arriving]), hide_index=True, width="stretch")
+            st.caption(f"Se registrará la recepción de {len(arriving)} material(es).")
+        else:
+            st.caption("Indica las cantidades de esta entrega; 0 deja el material pendiente.")
         b1, b2 = st.columns(2)
-        if b1.button("Registrar lo indicado", use_container_width=True, key=f"recv_go_{order['id']}"):
+        if b1.button("Cancelar", width="stretch", key=f"recv_cancel_{order['id']}"):
+            for key in keys.values():
+                st.session_state.pop(key, None)
+            st.rerun()
+        if b2.button("Registrar lo indicado", type="primary", width="stretch", key=f"recv_go_{order['id']}"):
             _receive(order["id"], order["code"], receipts)
-        if b2.button("Recibir todo lo pendiente", type="primary", use_container_width=True, key=f"recv_all_{order['id']}"):
-            _receive(
-                order["id"],
-                order["code"],
-                {r["id"]: float(r["quantity"]) - float(r["received_qty"]) for r in pending.to_dict("records")},
-            )
 
 
 def _render_detail(order_id: str) -> None:
@@ -438,7 +535,7 @@ def _render_detail(order_id: str) -> None:
         st.dataframe(
             table,
             hide_index=True,
-            use_container_width=True,
+            width="stretch",
             column_config={
                 "Pedido": st.column_config.NumberColumn(format="%.2f"),
                 "Recibido": st.column_config.NumberColumn(format="%.2f"),
@@ -451,11 +548,11 @@ def _render_detail(order_id: str) -> None:
 
     st.write("")
     b1, b2, b3, _ = st.columns([3, 2.2, 2, 1])
-    if status == "pendiente" and b1.button("📤 Marcar como enviada", use_container_width=True):
+    if status == "pendiente" and b1.button("📤 Marcar como enviada", width="stretch"):
         _change_status(order_id, order["code"], "enviada")
-    if status in ("pendiente", "enviada", "parcial") and b2.button("Cancelar orden", use_container_width=True):
+    if status in ("pendiente", "enviada", "parcial") and b2.button("Cancelar orden", width="stretch"):
         _change_status(order_id, order["code"], "cancelada")
-    if b3.button("🗑 Eliminar", use_container_width=True):
+    if b3.button("🗑 Eliminar", width="stretch"):
         ui.confirm_delete(
             f"¿Eliminar la orden {order['code']}? Se borran también sus líneas.",
             lambda oid=order_id, code=order["code"]: _delete_order(oid, code),
@@ -468,13 +565,13 @@ def _render_detail(order_id: str) -> None:
             data=order_pdf(order, items, supplier),
             file_name=f"{order['code']}.pdf",
             mime="application/pdf",
-            use_container_width=True,
+            width="stretch",
         )
         phone = re.sub(r"\D", "", (supplier or {}).get("phone") or "")
         d2.link_button(
             "💬 Enviar por WhatsApp",
             f"https://wa.me/{phone}?text={quote(order_whatsapp_text(order, items))}",
-            use_container_width=True,
+            width="stretch",
         )
-        if d3.button("⧉ Duplicar", use_container_width=True, help="Crea una orden nueva con estos mismos materiales"):
+        if d3.button("⧉ Duplicar", width="stretch", help="Crea una orden nueva con estos mismos materiales"):
             _duplicate(order, items)

@@ -9,7 +9,7 @@ import streamlit as st
 from db import repository as repo
 from db.auth import hash_password, verify_password
 from db.repository import USING_LOCAL
-from modules import session
+from modules import forms, session, ui
 
 SESSION_KEY = "auth_user"
 BOOTED_KEY = "_mrp_booted"
@@ -29,15 +29,15 @@ div[data-testid="stMainBlockContainer"] {
 }
 div[data-testid="stVerticalBlock"] { gap: 0 !important; }
 div[data-testid="stElementContainer"] { margin: 0 !important; }
-div[data-testid="stHorizontalBlock"] {
-    min-height: 100vh;
+div[data-testid="stHorizontalBlock"]:has(.mrp-lp-brand) {
+    min-height: 100dvh;
     align-items: stretch;
     gap: 0 !important;
 }
-div[data-testid="stHorizontalBlock"] > div[data-testid="stColumn"] {
+div[data-testid="stHorizontalBlock"]:has(.mrp-lp-brand) > div[data-testid="stColumn"] {
     padding: 0 !important;
 }
-div[data-testid="stHorizontalBlock"] > div[data-testid="stColumn"]:nth-of-type(1) {
+div[data-testid="stHorizontalBlock"]:has(.mrp-lp-brand) > div[data-testid="stColumn"]:nth-of-type(1) {
     background: linear-gradient(160deg, #241457 0%, #4B2FD1 60%, #6C5CE7 100%);
     color: #EDEBFB;
     padding: 56px 48px !important;
@@ -45,8 +45,8 @@ div[data-testid="stHorizontalBlock"] > div[data-testid="stColumn"]:nth-of-type(1
     flex-direction: column;
     justify-content: space-between;
 }
-div[data-testid="stHorizontalBlock"] > div[data-testid="stColumn"]:nth-of-type(2) {
-    background: #FFFFFF;
+div[data-testid="stHorizontalBlock"]:has(.mrp-lp-brand) > div[data-testid="stColumn"]:nth-of-type(2) {
+    background: var(--mrp-surface);
     display: flex;
     align-items: center;
     justify-content: center;
@@ -89,8 +89,13 @@ div[data-testid="stHorizontalBlock"] > div[data-testid="stColumn"]:nth-of-type(2
     font-size: 12px; font-weight: 700; letter-spacing: 0.1em; text-transform: uppercase;
     color: #6C5CE7; margin-bottom: 8px;
 }
-.mrp-rp-headline { font-size: 26px; font-weight: 800; color: #1F2333; margin-bottom: 8px; }
-.mrp-rp-copy { font-size: 13.5px; color: #6B7280; margin-bottom: 28px; line-height: 1.5; }
+.mrp-rp-headline { font-size: 28px; font-weight: 800; color: var(--mrp-text); margin-bottom: 8px; }
+.mrp-rp-copy { font-size: 14px; color: var(--mrp-muted); margin-bottom: 22px; line-height: 1.6; }
+.mrp-rp-status-label { color: var(--mrp-muted); }
+.mrp-rp-eyebrow { color: var(--mrp-accent); }
+div[data-testid="stHorizontalBlock"]:has(.mrp-lp-brand) > div[data-testid="stColumn"]:nth-of-type(2) > div { width: 100%; max-width: 430px; }
+div[data-testid="stHorizontalBlock"]:has(.mrp-lp-brand) > div[data-testid="stColumn"]:nth-of-type(2) div[data-testid="stVerticalBlock"] { gap: .9rem !important; }
+div[data-testid="stHorizontalBlock"]:has(.mrp-lp-brand) > div[data-testid="stColumn"]:nth-of-type(2) input { border: none !important; }
 
 div[data-testid="stHorizontalBlock"] > div[data-testid="stColumn"]:nth-of-type(2) .stTextInput input {
     border-radius: 10px;
@@ -178,13 +183,12 @@ def render() -> None:
         _render_brand_panel()
 
     with right:
-        st.markdown('<div class="mrp-rp-inner">', unsafe_allow_html=True)
+        ui.show_flash()
         _render_status_line()
         if repo.count_users() == 0:
             _render_bootstrap()
         else:
             _render_login()
-        st.markdown("</div>", unsafe_allow_html=True)
 
 
 def _render_boot() -> None:
@@ -197,7 +201,7 @@ def _render_boot() -> None:
     )
     progress = st.progress(0)
     status = st.empty()
-    steps = ["Conectando con la base de datos...", "Cargando catálogo...", "Verificando sesión...", "Todo listo."]
+    steps = ["Preparando tu espacio de trabajo…", "Organizando la interfaz…", "Preparando el acceso…", "Todo listo."]
     for i in range(100):
         time.sleep(0.009)
         progress.progress(i + 1)
@@ -264,11 +268,21 @@ def _render_login() -> None:
         unsafe_allow_html=True,
     )
     with st.form("login_form"):
-        username = st.text_input("Usuario")
-        password = st.text_input("Contraseña", type="password")
-        submitted = st.form_submit_button("Entrar  →", use_container_width=True)
+        username = st.text_input("Usuario", placeholder="Escribe tu usuario", help="Usa el usuario que te asignó el administrador.")
+        password = st.text_input("Contraseña", type="password", placeholder="Escribe tu contraseña", help="Puedes mostrarla con el icono del ojo.")
+        submitted = st.form_submit_button("Iniciar sesión  →", type="primary", width="stretch")
+    with st.popover("¿Necesitas ayuda para ingresar?"):
+        st.write("Escribe tu usuario y contraseña y pulsa «Iniciar sesión». Si no tienes acceso, solicita una cuenta al administrador de tu obra.")
 
     if not submitted:
+        return
+
+    issues = []
+    if not username.strip():
+        issues.append("Usuario: escribe tu usuario de acceso.")
+    if not password:
+        issues.append("Contraseña: escribe tu contraseña.")
+    if forms.errors(issues):
         return
 
     user = repo.get_user_by_username(username.strip())
@@ -295,25 +309,25 @@ def _render_bootstrap() -> None:
         unsafe_allow_html=True,
     )
     with st.form("bootstrap_form"):
-        name = st.text_input("Nombre completo")
-        username = st.text_input("Usuario")
-        password = st.text_input("Contraseña", type="password")
-        password2 = st.text_input("Repetir contraseña", type="password")
-        submitted = st.form_submit_button("Crear administrador  →", use_container_width=True)
+        name = st.text_input("Nombre completo", placeholder="Ej. Ana Pérez", max_chars=forms.RULES["Nombre completo"]["max"])
+        username = st.text_input("Usuario", placeholder="Ej. aperez", max_chars=forms.RULES["Usuario"]["max"], help="Letras sin tildes, números, punto, guion y guion bajo.")
+        password = st.text_input("Contraseña", type="password", help="Al menos 6 caracteres.")
+        password2 = st.text_input("Repetir contraseña", type="password", help="Escribe la misma contraseña para confirmar.")
+        submitted = st.form_submit_button("Crear administrador  →", type="primary", width="stretch")
 
     if not submitted:
         return
 
-    if not name.strip() or not username.strip() or not password:
-        st.error("Completa todos los campos.")
-        return
+    issues = forms.validate({"Nombre completo": name, "Usuario": username})
     if password != password2:
-        st.error("Las contraseñas no coinciden.")
-        return
+        issues.append("Repetir contraseña: ambas contraseñas deben coincidir.")
     if len(password) < 6:
-        st.error("La contraseña debe tener al menos 6 caracteres.")
+        issues.append("Contraseña: escribe al menos 6 caracteres.")
+    if len(password.encode("utf-8")) > 72:
+        issues.append("Contraseña: es demasiado larga. Utiliza como máximo 72 bytes (las tildes pueden ocupar más de uno).")
+    if forms.errors(issues):
         return
 
     repo.create_user(username.strip(), hash_password(password), name.strip(), "admin")
-    st.success("Administrador creado. Ya puedes iniciar sesión.")
+    ui.flash("Administrador creado. Ya puedes iniciar sesión.", log=False)
     st.rerun()

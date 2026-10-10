@@ -16,20 +16,28 @@ def render() -> None:
     )
     log = repo.list_audit(limit=500)
     if log.empty:
-        st.info("Todavía no hay cambios registrados.")
+        ui.empty_state("El historial está listo", "Los registros, cambios y movimientos que realices aparecerán aquí con su responsable y fecha.", "🕘")
         return
 
-    c1, c2 = st.columns([3, 2])
-    query = c1.text_input("Buscar", placeholder="🔍 Buscar en el historial…", label_visibility="collapsed", key="audit_q")
+    total = len(log)
+    c1, c2, c3 = st.columns([3, 2, 1], vertical_alignment="bottom")
+    query = c1.text_input("Buscar", placeholder="Buscar un cambio o una persona…", key="audit_q")
     actors = ["Todas las personas"] + sorted(log["actor"].dropna().unique().tolist())
-    actor = c2.selectbox("Persona", actors, label_visibility="collapsed", key="audit_actor")
+    actor = c2.selectbox("Persona", actors, key="audit_actor")
+    def reset():
+        st.session_state["audit_q"] = ""
+        st.session_state["audit_actor"] = actors[0]
+        st.session_state["audit_list_page"] = 1
+    c3.button("Limpiar", on_click=reset, width="stretch")
 
     if actor != actors[0]:
         log = log[log["actor"] == actor]
     log = ui.filter_df(log, query, ["summary", "actor"])
+    ui.result_count(len(log), total, "cambios recientes")
     if log.empty:
-        st.info("Nada coincide con los filtros.")
+        ui.empty_state("Sin coincidencias", "Prueba otra búsqueda o pulsa «Limpiar» para ver los cambios recientes.", "🔎")
         return
+    log = ui.paginate(log, "audit_list")
 
     rows = []
     for entry in log.to_dict("records"):

@@ -9,13 +9,14 @@ desactualizados sin ninguna ganancia real de velocidad."""
 from __future__ import annotations
 
 import sqlite3
+import os
 import uuid
 from contextlib import contextmanager
 from pathlib import Path
 
 import pandas as pd
 
-DB_PATH = Path(__file__).resolve().parent / "local.db"
+DB_PATH = Path(os.environ.get("MRP_LOCAL_DB") or Path(__file__).resolve().parent / "local.db")
 
 
 def _init_db() -> None:

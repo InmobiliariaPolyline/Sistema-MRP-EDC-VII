@@ -17,7 +17,6 @@ import os
 import time
 
 import streamlit as st
-import streamlit.components.v1 as components
 
 from db import repository as repo
 
@@ -102,4 +101,4 @@ def flush_cookie() -> None:
     else:
         token = action.split(":", 1)[1]
         script = f"window.parent.document.cookie = '{COOKIE}={token}; max-age={TTL_SECONDS}; path=/; SameSite=Lax';"
-    components.html(f"<script>{script}</script>", height=0)
+    st.iframe(f"<script>{script}</script>", height=1, tab_index=-1)

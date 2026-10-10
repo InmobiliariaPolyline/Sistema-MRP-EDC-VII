@@ -61,7 +61,8 @@ Primero define el presupuesto con **＋ Material al presupuesto** (cantidad prev
 
 1. Elige la **fecha** (y, si quieres, filtra por obra).
 2. En la tabla cambia *Estado* (presente, tardanza, permiso, ausente) y la *Obra* de cada trabajador. «—» = sin registrar.
-3. **Guardar asistencia**, o **✅ Marcar todos presentes** para ir rápido.
+3. **✅ Marcar pendientes presentes** completa las filas visibles sin estado. Todavía es un borrador.
+4. Revisa la lista y pulsa **Guardar asistencia** para confirmar. Los borradores se conservan durante la sesión al cambiar de fecha o filtro; **Descartar cambios visibles** restaura lo guardado.
 
 La pestaña *Resumen* cuenta asistencias y faltas de los últimos días.
 """,

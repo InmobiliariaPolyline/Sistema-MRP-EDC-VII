@@ -1,156 +1,83 @@
-"""Validación en vivo de formularios.
-
-Streamlit solo manda el valor de un campo al servidor al salir de él (o con
-Enter), así que no puede avisar mientras se teclea. Por eso se inyecta un
-script en la página que escucha lo que se escribe y, por cada campo con regla
-(se identifica por su etiqueta), muestra debajo:
-
-- cuántos caracteres lleva / el máximo, y cuántos faltan para el mínimo,
-- qué caracteres no se permiten (si se usó alguno) y por qué el formato es malo,
-- borde rojo si está mal, verde si está bien, y un ejemplo mientras está vacío.
-
-Es solo ayuda visual: las reglas definitivas se siguen aplicando al guardar."""
-from __future__ import annotations
-
+"""Ayuda inmediata al escribir, usando las mismas reglas que al guardar."""
 import json
-
-import streamlit.components.v1 as components
-
-_PERSON = r"[\p{L} .'\-]"
-_TEXT = r"""[\p{L}\p{N} .,;:'"&()/#%+\-_=°²³¼½¾]"""
-
-# etiqueta del campo -> regla. Claves: required, min, max (largo), allowed (clase
-# de caracteres permitida, regex JS con flag u), allowed_desc, pattern + pattern_msg
-# (formato del valor completo), digits [min, max] (cantidad de dígitos),
-# num {min, max, gt0} (campos numéricos), hint (ejemplo).
-RULES: dict[str, dict] = {
-    # proveedores
-    "Nombre del proveedor": {"required": True, "min": 2, "max": 80, "allowed": _TEXT, "allowed_desc": "letras, números y . , & ( ) / -", "hint": "Ej. Ferretería Norte"},
-    "Persona de contacto (opcional)": {"max": 60, "allowed": _PERSON, "allowed_desc": "solo letras, espacios, punto, apóstrofo y guion", "hint": "Ej. Ana Ruiz"},
-    "Teléfono": {"max": 20, "allowed": r"[0-9+()\-\s]", "allowed_desc": "dígitos, +, espacios, guion y paréntesis", "digits": [7, 15], "hint": "Con código de país, ej. 51987654321"},
-    "Correo (opcional)": {"max": 80, "pattern": r"^[^\s@]+@[^\s@]+\.[^\s@]{2,}$", "pattern_msg": "Formato de correo: nombre@dominio.com", "hint": "Ej. ventas@empresa.com"},
-    "Notas (opcional)": {"max": 200, "hint": "Ej. Entrega antes del viernes"},
-    # materiales
-    "Categoría": {"required": True, "min": 2, "max": 60, "allowed": _TEXT, "allowed_desc": "letras, números y . , & ( ) / -", "hint": "Ej. Concreto"},
-    "Nombre": {"required": True, "min": 2, "max": 100, "allowed": _TEXT, "allowed_desc": "letras, números y . , & ( ) / -", "hint": "Ej. Concreto f'c=210"},
-    "Métrica de cómputo": {"max": 60, "allowed": _TEXT, "allowed_desc": "letras, números y . , ( ) / -", "hint": "Ej. Volumen (m³)"},
-    "Densidad (kg/m³, opcional)": {"num": {"min": 0, "max": 25000}, "hint": "Ej. 2400 (concreto)"},
-    # trabajadores
-    "Nombre completo": {"required": True, "min": 3, "max": 80, "allowed": _PERSON, "allowed_desc": "solo letras, espacios, punto, apóstrofo y guion", "hint": "Ej. Juan Pérez"},
-    "Documento (opcional)": {"max": 15, "allowed": r"[A-Za-z0-9\-]", "allowed_desc": "letras, números y guion", "hint": "Ej. 45879632"},
-    "Puesto (opcional)": {"max": 60, "allowed": _TEXT, "allowed_desc": "letras y números", "hint": "Ej. Capataz"},
-    "Nombre de la cuadrilla": {"required": True, "min": 2, "max": 50, "allowed": _TEXT, "allowed_desc": "letras y números", "hint": "Ej. Electricistas"},
-    "Nombre de la obra": {"required": True, "min": 2, "max": 80, "allowed": _TEXT, "allowed_desc": "letras, números y . , & ( ) / -", "hint": "Ej. Torre Central"},
-    "Dirección": {"max": 150, "allowed": _TEXT, "allowed_desc": "letras, números y . , # -", "hint": "Calle y número, distrito, ciudad"},
-    "Usuario": {"required": True, "min": 3, "max": 30, "allowed": r"[A-Za-z0-9._\-]", "allowed_desc": "letras sin tilde, números, punto, guion y _", "hint": "Ej. jperez"},
-    # números
-    "Cantidad": {"num": {"gt0": True, "max": 1000000}, "hint": "Mayor que 0"},
-    "Precio unit.": {"num": {"min": 0, "max": 10000000}, "hint": "0 = sin precio"},
-    "Precio unit. estimado": {"num": {"min": 0, "max": 10000000}},
-}
-
+import streamlit as st
+from modules.forms import RULES
 
 def inject() -> None:
-    """Instala (una sola vez por pestaña) el validador y le pasa las reglas.
-
-    El componente vive en un iframe que Streamlit destruye y recrea en cada
-    recarga, y los observadores creados dentro de él mueren con él; por eso
-    el iframe solo carga el script como <script> en la página principal, donde
-    sobrevive, y en las siguientes recargas únicamente actualiza las reglas."""
-    loader = (
-        "const P = window.parent;"
-        f"P.__mrpRules = {json.dumps(RULES, ensure_ascii=False)};"
-        "if (P.__mrpLiveInstalled) { if (P.__mrpScan) P.__mrpScan(); }"
-        f"else {{ const s = P.document.createElement('script'); s.textContent = {json.dumps(_SCRIPT)}; P.document.head.appendChild(s); }}"
-    )
-    components.html(f"<script>{loader}</script>", height=0)
-
+    rules = json.dumps(RULES, ensure_ascii=False).replace("<", "\\u003c")
+    script = json.dumps(_SCRIPT).replace("<", "\\u003c")
+    loader = ("const P=window.parent;" + f"P.__mrpRules={rules};" +
+        "if(P.__mrpLiveVersion===2){P.__mrpScan();}else{" +
+        f"const s=P.document.createElement('script');s.textContent={script};P.document.head.appendChild(s);}}")
+    st.iframe(f"<script>{loader}</script>", height=1, tab_index=-1)
 
 _SCRIPT = r"""
-(function () {
-  const P = window, D = document;
-  P.__mrpLiveInstalled = true;
-
-  const COLORS = { ok: '#1F9254', bad: '#D64545', idle: '#9095A6' };
-
-  function ruleFor(el) {
-    const label = el.getAttribute('aria-label');
-    if (!label || el.closest('[data-baseweb="select"]')) return null;
-    const r = P.__mrpRules[label];
-    if (r) return r;
-    if (el.type === 'number' || el.getAttribute('inputmode') === 'decimal') {
-      const min = el.getAttribute('min'), max = el.getAttribute('max');
-      if (min !== null || max !== null) return { num: { min: min !== null ? parseFloat(min) : undefined, max: max !== null ? parseFloat(max) : undefined } };
+(function(){
+  const P=window,D=document;P.__mrpLiveVersion=2;let noteId=0;
+  function ruleFor(el){
+    const label=el.getAttribute('aria-label');
+    if(!label||el.closest('[data-baseweb="select"]')||el.type==='password'||el.disabled)return null;
+    let r=P.__mrpRules[label];
+    if(label==='Usuario'){
+      const form=el.closest('[data-testid="stForm"]');
+      const access=form?[...form.querySelectorAll('[data-testid="stCheckbox"]')].find(w=>w.textContent.includes('Dar acceso al sistema')):null;
+      if(access&&!access.querySelector('input')?.checked)r={hint:'Opcional · se utilizará solo si marcas «Dar acceso al sistema»'};
     }
-    return null;
+    if(label==='Usuario'&&el.closest('[data-testid="stForm"]')?.getAttribute('data-testid')==='stForm'&&el.closest('[data-testid="stHorizontalBlock"]')?.querySelector('.mrp-lp-brand')){
+      const bootstrap=[...D.querySelectorAll('button')].some(b=>b.textContent.includes('Crear administrador'));
+      if(!bootstrap)r={required:true,hint:'Usa el usuario que te asignó el administrador'};
+    }
+    if(!r)for(const prefix of ['Cantidad prevista','Recibido ahora'])if(label.startsWith(prefix))r=P.__mrpRules[prefix];
+    if(el.type==='number'||el.getAttribute('inputmode')==='decimal'){
+      const limits=Object.assign({},r?r.num:{});
+      for(const attr of ['min','max']){const raw=el.getAttribute(attr);if(raw!==null&&raw!==''&&Number.isFinite(Number(raw)))limits[attr]=Number(raw);}
+      return {num:limits,hint:r?r.hint:'',optional_number:r?r.optional_number:false};
+    }
+    return r;
   }
-
-  function evaluate(value, r, touched) {
-    // numérico
-    if (r.num) {
-      const n = parseFloat(String(value).replace(',', '.'));
-      const lim = r.num;
-      const range = lim.gt0 ? 'mayor que 0' : (lim.min !== undefined && lim.max !== undefined ? `entre ${lim.min} y ${lim.max}` : lim.min !== undefined ? `mínimo ${lim.min}` : `máximo ${lim.max}`);
-      if (value === '' || isNaN(n)) return { s: 'idle', m: `Número ${range}` + (r.hint ? ` · ${r.hint}` : '') };
-      if (lim.gt0 && n <= 0) return { s: 'bad', m: '✗ Debe ser mayor que 0' };
-      if (lim.min !== undefined && n < lim.min) return { s: 'bad', m: `✗ Muy bajo: el mínimo es ${lim.min}` };
-      if (lim.max !== undefined && n > lim.max) return { s: 'bad', m: `✗ Muy alto: el máximo es ${lim.max}` };
-      return { s: 'ok', m: `✓ Valor válido (${range})` };
+  function evaluate(value,r,touched){
+    if(r.num){
+      const lim=r.num,raw=String(value).trim(),n=Number(raw.replace(',','.'));
+      const range=lim.gt0?'mayor que 0':lim.min!==undefined&&lim.max!==undefined?`entre ${lim.min} y ${lim.max}`:lim.min!==undefined?`mínimo ${lim.min}`:lim.max!==undefined?`máximo ${lim.max}`:'finito';
+      if(!raw)return r.optional_number?{s:'idle',m:r.hint||'Opcional'}:{s:touched?'bad':'idle',m:touched?'Escribe una cantidad':`Número ${range}`};
+      if(!Number.isFinite(n))return {s:'bad',m:'Escribe un número válido'};
+      if(lim.gt0&&n<=0)return {s:'bad',m:'La cantidad debe ser mayor que 0'};
+      if(lim.min!==undefined&&n<lim.min)return {s:'bad',m:`El mínimo permitido es ${lim.min}`};
+      if(lim.max!==undefined&&n>lim.max)return {s:'bad',m:`El máximo permitido es ${lim.max}`};
+      return {s:touched?'ok':'idle',m:touched?'Valor válido':(r.hint||`Número ${range}`)};
     }
-    const len = value.trim().length, errs = [];
-    const counter = r.max ? `${value.length}/${r.max}` : `${value.length}`;
-    if (value === '') {
-      if (r.required && touched) return { s: 'bad', m: '✗ Campo obligatorio', c: counter };
-      return { s: 'idle', m: (r.required ? 'Obligatorio' : 'Opcional') + (r.hint ? ` · ${r.hint}` : ''), c: counter };
+    const text=value.trim(),len=[...text].length,count=[...value].length;
+    const c=r.max?`${count}/${r.max} · quedan ${Math.max(0,r.max-count)}`:'';
+    if(!text)return {s:r.required&&touched?'bad':'idle',m:r.required&&touched?'Completa este campo obligatorio':`${r.required?'Obligatorio':'Opcional'}${r.hint?' · '+r.hint:''}`,c};
+    if(r.allowed){
+      let re;try{re=new RegExp('^'+r.allowed+'$','u');}catch(err){return {s:'idle',m:r.hint||'Revisa este dato al guardar',c};}
+      const bad=[...new Set([...text].filter(ch=>!re.test(ch)))];if(bad.length)return {s:'bad',m:`Caracteres no permitidos: ${bad.join(' ')}`,c};
     }
-    if (r.allowed) {
-      let re; try { re = new RegExp('^' + r.allowed + '$', 'u'); } catch (err) { re = /^[\s\S]$/; }
-      const bad = [...new Set([...value].filter(ch => !re.test(ch)))];
-      if (bad.length) errs.push(`Caracteres no permitidos: ${bad.map(b => b === ' ' ? '(espacio)' : b).join(' ')} · solo ${r.allowed_desc}`);
-    }
-    if (r.min && len < r.min) errs.push(`Faltan ${r.min - len} carácter(es) para el mínimo de ${r.min}`);
-    if (r.max && value.length > r.max) errs.push(`Te pasaste por ${value.length - r.max} (máximo ${r.max})`);
-    if (r.digits) {
-      const d = value.replace(/\D/g, '').length;
-      if (d < r.digits[0]) errs.push(`Faltan ${r.digits[0] - d} dígito(s) (mínimo ${r.digits[0]})`);
-      else if (d > r.digits[1]) errs.push(`Sobran ${d - r.digits[1]} dígito(s) (máximo ${r.digits[1]})`);
-    }
-    if (r.pattern && !new RegExp(r.pattern).test(value)) errs.push(r.pattern_msg || 'Formato no válido');
-    if (errs.length) return { s: 'bad', m: '✗ ' + errs[0], c: counter };
-    return { s: 'ok', m: '✓ Correcto', c: counter };
+    if(r.min&&len<r.min)return {s:'bad',m:`Faltan ${r.min-len} caracteres; mínimo ${r.min}`,c};
+    if(r.max&&len>r.max)return {s:'bad',m:`Superas el máximo de ${r.max} caracteres`,c};
+    if(r.digits){const n=text.replace(/[^0-9]/g,'').length;if(n<r.digits[0]||n>r.digits[1])return {s:'bad',m:`Usa ${r.digits[0]}–${r.digits[1]} dígitos con código de país; tienes ${n}`,c};}
+    if(r.pattern&&!new RegExp(r.pattern).test(text))return {s:'bad',m:r.pattern_msg,c};
+    return {s:touched?'ok':'idle',m:touched?'Correcto':(r.hint||'Revisa el dato antes de guardar'),c};
   }
-
-  function paint(el, touched) {
-    const r = ruleFor(el);
-    if (!r) return;
-    const box = el.closest('[data-baseweb="input"]') || el.closest('[data-baseweb="textarea"]') || el.parentElement;
-    const host = el.closest('[data-testid="stTextInput"],[data-testid="stNumberInput"],[data-testid="stTextArea"]');
-    if (!host) return;
-    let note = host.querySelector(':scope > .mrp-live');
-    if (!note) { note = D.createElement('div'); note.className = 'mrp-live'; host.appendChild(note); }
-    const res = evaluate(el.value, r, touched);
-    const color = COLORS[res.s];
-    note.style.color = color;
-    const html = `<span>${res.m.replace(/</g, '&lt;')}</span>` + (res.c ? `<span class="mrp-live-count">· ${res.c}</span>` : '');
-    if (note.__html !== html) { note.innerHTML = html; note.__html = html; }
-    if (box) {
-      if (res.s === 'idle') { box.style.removeProperty('border-color'); box.style.removeProperty('box-shadow'); }
-      else {
-        box.style.setProperty('border-color', color, 'important');
-        box.style.setProperty('box-shadow', `0 0 0 2px ${res.s === 'bad' ? 'rgba(214,69,69,.18)' : 'rgba(31,146,84,.16)'}`, 'important');
-      }
+  function paint(el){
+    const r=ruleFor(el);if(!r)return;
+    const host=el.closest('[data-testid="stTextInput"],[data-testid="stNumberInput"],[data-testid="stTextArea"]');if(!host)return;
+    let note=host.querySelector(':scope > .mrp-live');if(!note){note=D.createElement('div');note.className='mrp-live';note.id='mrp-live-'+(++noteId);host.appendChild(note);}
+    const res=evaluate(el.value,r,!!el.__mrpTouched);if(note.dataset.state!==res.s)note.dataset.state=res.s;
+    const msg=(res.s==='ok'?'✓ ':res.s==='bad'?'✕ ':'')+res.m;
+    if(note.__message!==msg||note.__counter!==res.c){
+      note.replaceChildren();const span=D.createElement('span');span.textContent=msg;note.appendChild(span);
+      if(res.c){const count=D.createElement('span');count.className='mrp-live-count';count.textContent=res.c;note.appendChild(count);}note.__message=msg;note.__counter=res.c;
     }
+    const described=(el.getAttribute('aria-describedby')||'').split(' ').filter(x=>x&&!x.startsWith('mrp-live-'));described.push(note.id);el.setAttribute('aria-describedby',described.join(' '));
+    if(res.s==='bad')el.setAttribute('aria-invalid','true');else el.removeAttribute('aria-invalid');
+    const box=el.closest('[data-baseweb="input"]')||el.closest('[data-baseweb="textarea"]');
+    if(box){if(res.s==='idle'){box.style.removeProperty('border-color');box.style.removeProperty('box-shadow');}else{const color=`var(--mrp-${res.s==='ok'?'good':'bad'})`;box.style.setProperty('border-color',color,'important');box.style.setProperty('box-shadow',`0 0 0 1px ${color}`,'important');}}
   }
-
-  D.addEventListener('input', e => { if (e.target.matches && e.target.matches('input,textarea')) { e.target.__touched = true; paint(e.target, true); } }, true);
-  D.addEventListener('focusout', e => { if (e.target.matches && e.target.matches('input,textarea')) { e.target.__touched = true; paint(e.target, true); } }, true);
-
-  P.__mrpPaint = paint;
-  let timer = null;
-  P.__mrpScan = function () {
-    D.querySelectorAll('input[aria-label],textarea[aria-label]').forEach(el => { if (ruleFor(el)) paint(el, !!el.__touched); });
-  };
-  new MutationObserver(() => { clearTimeout(timer); timer = setTimeout(P.__mrpScan, 150); }).observe(D.body, { childList: true, subtree: true });
-  P.__mrpScan();
+  function onEdit(e){if(e.target.matches&&e.target.matches('input,textarea')){e.target.__mrpTouched=true;paint(e.target);}}
+  D.addEventListener('input',onEdit,true);D.addEventListener('focusout',onEdit,true);
+  D.addEventListener('change',e=>{if(e.target.type==='checkbox')P.__mrpScan();},true);
+  P.__mrpScan=()=>D.querySelectorAll('input[aria-label],textarea[aria-label]').forEach(paint);
+  let timer;new MutationObserver(()=>{clearTimeout(timer);timer=setTimeout(P.__mrpScan,100);}).observe(D.body,{childList:true,subtree:true});P.__mrpScan();
 })();
 """

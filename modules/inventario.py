@@ -5,12 +5,21 @@ import pandas as pd
 import streamlit as st
 
 from db import repository as repo
-from modules import ui
+from modules import forms, ui
 from utils.timeago import time_ago
 
 ENTRY = "Entrada (ajuste / compra directa)"
 CONSUMPTION = "Consumo en una obra"
 LOSS = "Salida sin obra (merma, préstamo…)"
+
+
+def _clear_movement_draft(context: str) -> None:
+    for field in ("kind", "material", "site", "qty", "note"):
+        st.session_state.pop(f"move_{field}_{context}", None)
+
+
+def _clear_stock_search() -> None:
+    st.session_state["stock_q"] = ""
 
 
 def stock_by_material() -> pd.DataFrame:
@@ -42,47 +51,81 @@ def stock_by_material() -> pd.DataFrame:
 @st.dialog("Registrar movimiento de inventario")
 def movement_dialog(default_site_id: str | None = None) -> None:
     """Entrada manual, consumo en obra o salida sin obra. También lo usa el módulo Obras."""
+    context = default_site_id or "warehouse"
+    forms.header("Registra una entrada o salida", "Revisa el material, la cantidad y el efecto sobre el stock antes de guardar.")
     materials = repo.list_materials()
     if materials.empty:
-        st.info("Primero carga materiales en el catálogo.")
+        ui.empty_state("Faltan materiales", "Registra un material en el catálogo para comenzar a controlar el stock.")
+        if st.button("Cancelar", key="move_cancel_empty", width="stretch"):
+            _clear_movement_draft(context)
+            st.rerun()
         return
     ui.tip("Ejemplo: «Consumo en una obra», Concreto, 2, obra Torre Central. Las entradas de órdenes se registran solas al recibirlas.")
     sites = repo.list_project_sites()
     stock = stock_by_material().set_index("material_id")["stock"].to_dict()
 
     kinds = [CONSUMPTION, ENTRY, LOSS] if default_site_id else [ENTRY, CONSUMPTION, LOSS]
-    kind = st.radio("Tipo de movimiento", kinds, horizontal=False)
+    forms.section("1. Tipo y material", "Las recepciones de órdenes ya generan entradas; usa este formulario para otros movimientos.")
+    kind = st.radio("Tipo de movimiento", kinds, horizontal=False, key=f"move_kind_{context}",
+                    help="Entrada suma stock. Consumo y salida sin obra lo descuentan.")
 
     options = {f"{r['category']} · {r['name']}": r for r in materials.to_dict("records")}
-    choice = st.selectbox("Material", list(options))
+    choice = st.selectbox("Material", list(options), key=f"move_material_{context}", help="Verifica la unidad antes de indicar la cantidad.")
     material = options[choice]
     available = float(stock.get(material["id"], 0.0))
     st.caption(f"Stock actual: **{available:g}** {material['metric_label'] or ''}")
 
     site_id = None
+    site_name = None
     if kind == CONSUMPTION:
         if sites.empty:
             st.warning("Primero registra una obra (Trabajadores → Obras / Proyectos).")
+            if st.button("Cancelar", key="move_cancel_no_site", width="stretch"):
+                _clear_movement_draft(context)
+                st.rerun()
             return
         names = sites["name"].tolist()
-        index = int(sites.index[sites["id"] == default_site_id][0]) if default_site_id and (sites["id"] == default_site_id).any() else 0
-        site_name = st.selectbox("Obra", names, index=index)
+        matched = sites[sites["id"] == default_site_id] if default_site_id else sites.iloc[0:0]
+        index = names.index(matched.iloc[0]["name"]) if not matched.empty else 0
+        site_name = st.selectbox("Obra", names, index=index, key=f"move_site_{context}",
+                               help="El consumo aparecerá en el seguimiento de materiales de esta obra.")
         site_id = sites.loc[sites["name"] == site_name, "id"].iloc[0]
 
-    qty = st.number_input("Cantidad", min_value=0.0, value=1.0, step=1.0)
-    note = st.text_input("Nota (opcional)")
+    forms.section("2. Cantidad y motivo", "Puedes usar decimales. Las salidas deben estar cubiertas por el stock actual.")
+    qty = st.number_input("Cantidad", min_value=0.0, value=1.0, step=1.0, key=f"move_qty_{context}",
+                          help=f"Unidad: {material['metric_label'] or 'unid.'}. Debe ser mayor que 0.")
+    note = st.text_input("Nota (opcional)", placeholder="Ej. Consumo para vaciado de losa / ajuste por conteo",
+                         max_chars=500, key=f"move_note_{context}", help="Describe el motivo para reconocerlo después en el historial. Hasta 500 caracteres.")
 
-    if st.button("Guardar movimiento", type="primary", use_container_width=True):
-        if qty <= 0:
-            st.error("La cantidad debe ser mayor que 0.")
-            return
-        if kind != ENTRY and qty > available:
-            st.error(f"No hay stock suficiente: solo hay {available:g}.")
+    forms.section("3. Revisa el movimiento", "El inventario se actualiza al guardar.")
+    after = available + qty if kind == ENTRY else available - qty
+    before_col, after_col = st.columns(2)
+    before_col.metric("Stock actual", f"{available:g} {material['metric_label'] or 'unid.'}")
+    after_col.metric("Stock después", f"{after:g} {material['metric_label'] or 'unid.'}")
+    st.caption(f"{kind} · {material['name']}" + (f" · {site_name}" if site_name else ""))
+    if kind != ENTRY and qty > available:
+        st.warning(f"Reduce la cantidad: solo hay {available:g} {material['metric_label'] or 'unid.'} disponibles.")
+    cancel, save = st.columns([1, 2])
+    if cancel.button("Cancelar", key="move_cancel", width="stretch"):
+        _clear_movement_draft(context)
+        st.rerun()
+    if save.button("Guardar movimiento", type="primary", width="stretch"):
+        issues = forms.validate({"Cantidad": qty, "Nota (opcional)": note})
+        if kind != ENTRY:
+            clear = getattr(repo.list_movements, "clear", None)
+            if callable(clear):
+                clear()
+            current = stock_by_material().set_index("material_id")["stock"].to_dict()
+            available = float(current.get(material["id"], 0.0))
+            if qty > available:
+                issues.append(f"Cantidad: stock insuficiente; quedan {available:g} {material['metric_label'] or 'unid.'}.")
+        if forms.errors(issues):
             return
         repo.add_movement(
             material["id"], "entrada" if kind == ENTRY else "salida", qty, site_id, note.strip() or None, ui.current_actor()
         )
         verb = {ENTRY: "Entrada", CONSUMPTION: "Consumo", LOSS: "Salida"}[kind]
+        _clear_movement_draft(context)
         ui.flash(f"{verb} de {qty:g} × {material['name']} registrada.", "📦")
         st.rerun()
 
@@ -119,12 +162,16 @@ def render() -> None:
 
 def _render_stock(stock: pd.DataFrame) -> None:
     if stock.empty:
-        st.info("Todavía no hay stock. Se llena al registrar recepciones en las órdenes de compra, o con «＋ Movimiento».")
+        ui.empty_state("Aún no hay movimientos de stock", "Registra una recepción en Órdenes de compra o una entrada con «Movimiento».")
         return
-    query = st.text_input("Buscar", placeholder="🔍 Buscar material o categoría…", label_visibility="collapsed", key="stock_q")
+    total = len(stock)
+    query = st.text_input("Buscar", placeholder="Material o categoría…", key="stock_q")
     stock = ui.filter_df(stock, query, ["material_name", "category"])
+    ui.result_count(len(stock), total, noun="materiales")
+    if query:
+        st.button("Limpiar búsqueda", key="stock_clear", on_click=_clear_stock_search)
     if stock.empty:
-        st.info("Ningún material coincide con la búsqueda.")
+        ui.empty_state("Sin coincidencias", "Prueba otro nombre o limpia la búsqueda para ver todo el inventario.", icon="🔎")
         return
     for row in stock.to_dict("records"):
         with st.container(border=True):
@@ -147,8 +194,9 @@ def _render_stock(stock: pd.DataFrame) -> None:
 def _render_movements() -> None:
     moves = repo.list_movements(limit=300)
     if moves.empty:
-        st.info("Sin movimientos todavía.")
+        ui.empty_state("Aún no hay movimientos", "Las recepciones, entradas y consumos aparecerán aquí con su fecha y responsable.")
         return
+    st.caption(f"{len(moves)} movimiento(s) reciente(s). Se muestran hasta los últimos 300.")
     rows = []
     for m in moves.to_dict("records"):
         sign = "+" if m["kind"] == "entrada" else "−"

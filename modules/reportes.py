@@ -6,7 +6,7 @@ import pandas as pd
 import streamlit as st
 
 from db import repository as repo
-from modules import inventario, ui
+from modules import forms, inventario, ui
 from modules.ordenes import STATUSES
 from utils.reports import to_excel, to_pdf
 
@@ -126,6 +126,24 @@ DATASETS = {
 }
 
 
+@st.cache_data(ttl=300, max_entries=8, show_spinner=False)
+def _excel_file(frames: dict) -> bytes:
+    return to_excel(frames)
+
+
+@st.cache_data(ttl=300, max_entries=8, show_spinner=False)
+def _pdf_file(frames: dict) -> bytes:
+    return to_pdf("Reporte Sistema MRP", frames)
+
+
+def _choose_all() -> None:
+    st.session_state["report_datasets"] = list(DATASETS)
+
+
+def _choose_none() -> None:
+    st.session_state["report_datasets"] = []
+
+
 def render() -> None:
     ui.page_header(
         "Análisis",
@@ -134,47 +152,60 @@ def render() -> None:
     )
 
     with st.container(border=True):
-        ui.panel_header("Contenido", "¿Qué quieres incluir?")
+        forms.section("1. Elige el contenido", "Excel crea una hoja por conjunto. PDF reúne los conjuntos en un documento.")
         selected = st.multiselect(
             "Datos a incluir",
             list(DATASETS),
             default=list(DATASETS),
-            label_visibility="collapsed",
+            key="report_datasets",
+            help="Puedes quitar conjuntos con la × y añadirlos desde el desplegable.",
         )
+        all_col, none_col = st.columns(2)
+        all_col.button("Seleccionar todo", on_click=_choose_all, width="stretch")
+        none_col.button("Limpiar selección", on_click=_choose_none, width="stretch")
 
     if not selected:
-        st.info("Elige al menos un conjunto de datos para generar el reporte.")
+        ui.empty_state("Elige qué quieres consultar", "Selecciona uno o varios conjuntos para ver la información y descargar tu reporte.", "📄")
         return
 
     frames = {name: DATASETS[name]() for name in selected}
 
-    ui.stat_grid([ui.stat_card("📄", len(df), name, "registros") for name, df in frames.items()])
+    total = sum(len(df) for df in frames.values())
+    ui.stat_grid([
+        ui.stat_card("📄", len(frames), "Conjuntos", "incluidos en el reporte"),
+        ui.stat_card("📋", total, "Registros", "total de filas incluidas"),
+        ui.stat_card("🗂️", sum(not df.empty for df in frames.values()), "Con información", "conjuntos con registros"),
+    ])
+    forms.section("2. Descarga tu reporte", "Los archivos incluyen todos los registros; la vista previa muestra como máximo 50.")
+    with st.spinner("Preparando los archivos…"):
+        excel = _excel_file(frames)
+        pdf = _pdf_file(frames)
 
     stamp = f"{datetime.now():%Y%m%d_%H%M}"
     c1, c2, _ = st.columns([2, 2, 3])
     c1.download_button(
         "⬇ Descargar Excel",
-        data=to_excel(frames),
+        data=excel,
         file_name=f"reporte_mrp_{stamp}.xlsx",
         mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
         type="primary",
-        use_container_width=True,
+        width="stretch",
     )
     c2.download_button(
         "⬇ Descargar PDF",
-        data=to_pdf("Reporte Sistema MRP", frames),
+        data=pdf,
         file_name=f"reporte_mrp_{stamp}.pdf",
         mime="application/pdf",
-        use_container_width=True,
+        width="stretch",
     )
 
     st.write("")
-    st.markdown('<div class="mrp-eyebrow">Vista previa</div>', unsafe_allow_html=True)
+    forms.section("3. Revisa la vista previa", "Abre cada conjunto para comprobar sus datos antes de compartir el archivo.")
     for name, df in frames.items():
         with st.expander(f"{name} ({len(df)})"):
             if df.empty:
                 st.caption("Sin registros.")
             else:
-                st.dataframe(df.head(50), hide_index=True, use_container_width=True)
+                st.dataframe(df.head(50), hide_index=True, width="stretch")
                 if len(df) > 50:
                     st.caption(f"Mostrando 50 de {len(df)}; el archivo descargado incluye todos.")

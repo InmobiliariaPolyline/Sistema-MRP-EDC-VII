@@ -53,6 +53,19 @@ adelante.
 
 ## Arquitectura
 
+### Formularios e interfaz (parche 030)
+
+- Campos agrupados por propósito, con etiquetas, ejemplos, ayuda y acciones de guardar, cancelar y revisar datos cuando corresponde. Los formularios de registro conservan lo escrito si falla la validación.
+- `modules/forms.py` centraliza las reglas aplicadas antes de guardar; `modules/live_validation.py` utiliza esas reglas para mostrar errores, contadores y bordes al escribir. Los campos opcionales vacíos son válidos y se conserva la notación técnica del catálogo.
+- `modules/ui_styles.py` contiene las paletas clara y oscura, tamaños y estados de los componentes. El modo oscuro conserva los colores de mapas e imágenes.
+- El menú lateral usa botones nativos con estado activo y navegación por teclado, conservando todos los módulos y sus permisos anteriores.
+- Materiales, catálogos y directorios usan páginas de 20, 50 o 100 filas cuando hay muchos registros. Las búsquedas incluyen contadores, estados vacíos y controles para limpiar filtros.
+- Asistencia mantiene borradores durante la sesión al cambiar de fecha o filtro; marcar presentes prepara la lista y solo «Guardar asistencia» confirma los datos. Recibir todo lo pendiente también prepara un borrador de recepción que se confirma después.
+- Se requiere Streamlit 1.56 o superior (antes de la versión 2). Las tablas conservan los controles nativos de Streamlit y los reportes siguen incluyendo todas las filas, aunque la pantalla se pagine.
+- Pruebas de reglas: `python -m unittest discover -s tests -v`. Para pruebas aisladas del repositorio local se puede indicar una ruta SQLite mediante `MRP_LOCAL_DB`; por defecto continúa usando `db/local.db`.
+
+Esta actualización conserva las tablas y los datos existentes; no necesita ejecutar SQL adicional ni cambiar las credenciales.
+
 Streamlit **no separa frontend y backend** como el planner original
 (Next.js + Express): es un solo proceso Python que arma la página completa
 en cada interacción. `app.py` no es "el frontend" — es apenas el arranque

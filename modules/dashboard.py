@@ -1,6 +1,6 @@
 """Panel principal: eyebrow + saludo, tarjetas de stats, actividad reciente
 y una dona de estado general de los proveedores."""
-from datetime import datetime
+from datetime import datetime, timedelta, timezone
 
 import pandas as pd
 import plotly.graph_objects as go
@@ -17,7 +17,7 @@ MESES = [
 
 
 def _saludo() -> str:
-    hora = datetime.now().hour
+    hora = datetime.now(timezone(timedelta(hours=-5))).hour
     if hora < 12:
         return "Buenos días"
     if hora < 19:
@@ -26,11 +26,11 @@ def _saludo() -> str:
 
 
 def render(user: dict) -> None:
-    now = datetime.now()
+    now = datetime.now(timezone(timedelta(hours=-5)))
     ui.page_header(
         f"Centro de control · {MESES[now.month - 1].upper()} DE {now.year}",
         f"{_saludo()}, {user['name']}",
-        "Una lectura rápida de tus materiales y proveedores.",
+        "Materiales, compras y obras: identifica qué necesita atención y consulta tus últimos movimientos.",
     )
 
     totals = repo.dashboard_totals()
@@ -107,7 +107,7 @@ def _render_order_charts() -> None:
             else:
                 monthly = billable.assign(mes=billable["created_at"].astype(str).str[:7]).groupby("mes")["total"].sum().reset_index()
                 fig = go.Figure(go.Bar(x=monthly["mes"], y=monthly["total"], marker_color="#6C5CE7", hovertemplate="%{x}: %{y:,.2f}<extra></extra>"))
-                st.plotly_chart(_bar_layout(fig), use_container_width=True, config={"displayModeBar": False})
+                st.plotly_chart(ui.chart_theme(_bar_layout(fig)), width="stretch", config={"displayModeBar": False})
     with c2:
         with st.container(border=True):
             ui.panel_header("Compras", "Gasto por proveedor")
@@ -118,7 +118,7 @@ def _render_order_charts() -> None:
                 fig = go.Figure(go.Bar(x=by_sup["total"], y=by_sup["supplier_name"], orientation="h", marker_color="#8B7CF0", hovertemplate="%{y}: %{x:,.2f}<extra></extra>"))
                 fig = _bar_layout(fig)
                 fig.update_layout(xaxis=dict(gridcolor="rgba(17,24,39,0.08)", type="linear"), yaxis=dict(showgrid=False, type="category"))
-                st.plotly_chart(fig, use_container_width=True, config={"displayModeBar": False})
+                st.plotly_chart(ui.chart_theme(fig), width="stretch", config={"displayModeBar": False})
     with c3:
         with st.container(border=True):
             ui.panel_header("Compras", "Órdenes por estado")
@@ -135,7 +135,7 @@ def _render_order_charts() -> None:
                 )
             )
             fig.update_layout(margin=dict(t=0, b=0, l=0, r=0), height=240, showlegend=True, legend=dict(orientation="h", y=-0.1, font=dict(size=11)), paper_bgcolor="rgba(0,0,0,0)")
-            st.plotly_chart(fig, use_container_width=True, config={"displayModeBar": False})
+            st.plotly_chart(ui.chart_theme(fig), width="stretch", config={"displayModeBar": False})
 
 
 def _render_sites_map() -> None:
@@ -222,7 +222,7 @@ def _render_status_donut(totals: dict) -> None:
             height=200,
             annotations=[dict(text=f"<b>{pct}%</b><br><span style='font-size:11px'>con stock</span>", showarrow=False, font=dict(size=20))],
         )
-        st.plotly_chart(fig, use_container_width=True, config={"displayModeBar": False})
+        st.plotly_chart(ui.chart_theme(fig), width="stretch", config={"displayModeBar": False})
 
         st.markdown(
             f'<div class="mrp-activity-item"><div>🟣 Con disponibilidad</div><b>{con_disponible}</b></div>'
