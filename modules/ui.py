@@ -12,12 +12,13 @@ import streamlit as st
 from db import repository as repo
 from modules.guides import guide_for
 
-from modules.ui_styles import CSS, DARK, FONT_IMPORT, LIGHT
+from modules import ui_styles
 
 
 def inject() -> None:
-    palette = DARK if st.session_state.get("dark_mode") else LIGHT
-    st.markdown("<style>" + FONT_IMPORT + "</style><style>:root {" + palette + "}" + CSS + "</style>", unsafe_allow_html=True)
+    sheets = ui_styles.bundle()  # se relee solo si cambió algún .css (ver ui_styles)
+    palette = sheets["dark"] if st.session_state.get("dark_mode") else sheets["light"]
+    st.markdown("<style>" + sheets["font"] + "</style><style>:root {" + palette + "}" + sheets["css"] + "</style>", unsafe_allow_html=True)
 
 
 def page_header(eyebrow: str, title: str, subtitle: str = "", action_label: str | None = None, action_key: str | None = None) -> bool:

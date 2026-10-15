@@ -6,6 +6,17 @@ Formato de cada parche: **Agregado** · **Corregido** · **Problemas y causa** �
 
 ---
 
+## Parche 035 — Los cambios de CSS no se veían en Streamlit Cloud · 2026-10-15
+**Corregido**
+- Los parches 033 y 034 (espaciado, textos pegados) estaban en GitHub pero la app desplegada seguía mostrando el diseño anterior hasta reiniciarla.
+
+**Problemas y causa**
+- `modules/ui_styles.py` leía los `.css` una sola vez al importarse. Streamlit solo recarga los módulos `.py` que cambian y Streamlit Cloud actualiza los archivos sin reiniciar el proceso, así que un parche que solo tocaba CSS no tenía efecto. Ahora `ui_styles.bundle()` compara la fecha y el tamaño de los `.css` en cada recarga y los vuelve a leer solo si cambiaron. Se comprobó cambiando un `.css` con el servidor encendido: se aplicó sin reiniciar.
+- Se comprobó también con Streamlit 1.66 (la versión que instala Cloud con `streamlit>=1.56,<2`), además de la 1.56 con la que se desarrolla: el espaciado y el menú quedan correctos en ambas.
+
+**Hay que hacer**
+- Una sola vez, en Streamlit Cloud: *Manage app → Reboot app* para que cargue este parche. Después, los cambios solo de CSS se aplican solos.
+
 ## Parche 034 — Textos pegados en todo el UI · 2026-10-15
 **Corregido**
 - Textos que quedaban pegados o tapados por el módulo siguiente (ej. «RESUMEN» sobre «Dashboard»), en todas las pantallas, el menú y los diálogos.
@@ -117,5 +128,5 @@ Formato de cada parche: **Agregado** · **Corregido** · **Problemas y causa** �
 - La barra de Guardar/Cancelar de los diálogos es fija: con contenido largo flota sobre los campos que quedan debajo (comportamiento esperado).
 
 **Técnicos**
-- Tras editar un `.css` de `modules/styles/` hay que reiniciar Streamlit.
+- Hasta el parche 034, tras editar un `.css` había que reiniciar Streamlit; desde el 035 se recargan solos.
 - Los gráficos Plotly usan píxeles; su altura se ajusta con un script (`form_assist.py`) al cargar y al redimensionar.
