@@ -11,7 +11,7 @@ import { pgcrypto } from "@electric-sql/pglite/contrib/pgcrypto";
 const DB_DIR = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../../db");
 const read = (f) => fs.readFileSync(path.join(DB_DIR, f), "utf8");
 const BASE = ["schema.sql", "migrations/036_despacho_mrp.sql"];
-const PHASES = ["migrations/041_fase_b.sql", "migrations/042_fase_c.sql", "migrations/043_fase_e.sql", "migrations/044_fase_f.sql"];
+const PHASES = ["migrations/041_fase_b.sql", "migrations/042_fase_c.sql", "migrations/043_fase_e.sql", "migrations/044_fase_f.sql", "migrations/045_empresa_igv.sql"];
 const CLOSE = "migrations/040_cerrar_base.sql";
 
 /** Base nueva con los roles de Supabase y los scripts indicados (en ese orden). */
@@ -271,4 +271,30 @@ test("audit_log guarda el detalle de los cambios (antes → después) como jsonb
   const rows = (await db.query("select summary, entity_type, changes from audit_log order by summary")).rows;
   assert.deepEqual(rows.find((r) => r.summary === "x").changes, changes);
   assert.equal(rows.find((r) => r.summary === "sin detalle").changes, null);
+});
+
+test("empresa, RUC e IGV: una sola fila de empresa, RUC de 11 dígitos y columnas de la orden", async () => {
+  const db = await build();
+  await db.query("insert into company_profile (legal_name, ruc) values ('Constructora SAC', '20131312955')");
+  await assert.rejects(db.query("insert into company_profile (legal_name) values ('Otra')"), /duplicate key|singleton/);   // una sola fila
+  await assert.rejects(db.query("update company_profile set ruc = '123'"), /ruc/);
+  await assert.rejects(db.query("update company_profile set ruc = '2013131295A'"), /ruc/);
+  await db.query("update company_profile set ruc = null");
+  const ids = await seed(db);
+  await db.query("update suppliers set ruc = '20100070970' where id = $1", [ids.supplier]);
+  await assert.rejects(db.query("update suppliers set ruc = '2010007097' where id = $1", [ids.supplier]), /ruc_chk/);
+  const order = await one(db, "select prices_include_tax, payment_terms from purchase_orders where id = $1", [ids.order]);
+  assert.equal(order.prices_include_tax, false);
+  assert.equal(order.payment_terms, null);
+  await db.query("update purchase_orders set prices_include_tax = true, payment_terms = 'Crédito 30 días', tax_rate = 0.18 where id = $1", [ids.order]);
+});
+
+test("045 en una base cerrada: company_profile nace cerrada", async () => {
+  const db = await build([...BASE, ...PHASES.slice(0, -1), CLOSE, "migrations/045_empresa_igv.sql"]);
+  await db.exec("set role anon");
+  await assert.rejects(db.query("select * from company_profile"), /permission denied/);
+  await db.exec("reset role");
+  await db.exec("set role service_role");
+  assert.equal(await val(db, "select count(*) from company_profile"), 0);
+  await db.exec("reset role");
 });

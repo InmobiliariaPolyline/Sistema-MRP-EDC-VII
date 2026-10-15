@@ -27,7 +27,7 @@ def _materials() -> pd.DataFrame:
 def _suppliers() -> pd.DataFrame:
     return _pick(
         repo.list_suppliers(),
-        {"name": "Proveedor", "contact_name": "Contacto", "phone": "Teléfono", "email": "Correo", "notes": "Notas"},
+        {"name": "Proveedor", "ruc": "RUC", "contact_name": "Contacto", "phone": "Teléfono", "email": "Correo", "notes": "Notas"},
     )
 
 
@@ -69,14 +69,16 @@ def _orders() -> pd.DataFrame:
             "expected_date": "Entrega prometida",
             "currency": "Moneda",
             "items_count": "Líneas",
-            "subtotal": "Subtotal",
+            "payment_terms": "Condición de pago",
+            "net": "Valor de venta",
             "tax": "IGV",
-            "total": "Total",
+            "total": "Importe total",
         },
     )
     df["Fecha"] = df["Fecha"].map(lambda v: str(v)[:10] if v is not None and v == v else "")
     df["Entrega prometida"] = df["Entrega prometida"].map(lambda v: str(v)[:10] if v is not None and v == v else "")
     df["Estado"] = df["Estado"].map(lambda v: STATUSES.get(v, (v,))[0] if v is not None else "")
+    df["Condición de pago"] = df["Condición de pago"].map(lambda v: v if isinstance(v, str) else "")
     return df
 
 

@@ -113,10 +113,10 @@ _SCRIPT = r"""
     if(label==='Contraseña'&&(!repeat&&isLogin(el)))return;
     if(label==='Contraseña'){
       let box=host.querySelector(':scope > .mrp-pwd');if(!box){box=D.createElement('div');box.className='mrp-pwd';box.innerHTML='<div class="mrp-pwd-bar"><span></span></div><em></em>';host.appendChild(box);}
-      const v=el.value;let score=0;if(v.length>=6)score++;if(v.length>=10)score++;if(/[a-z]/.test(v)&&/[A-Z]/.test(v))score++;if(/\d/.test(v))score++;if(/[^A-Za-z0-9]/.test(v))score++;
-      const level=!v?0:score<=2?1:score<=3?2:3;box.dataset.level=level;
+      const v=el.value;let score=0;if(v.length>=8)score++;if(v.length>=12)score++;if(/[a-z]/.test(v)&&/[A-Z]/.test(v))score++;if(/\d/.test(v))score++;if(/[^A-Za-z0-9]/.test(v))score++;
+      const valid=v.length>=8&&/[A-Za-z]/.test(v)&&/\d/.test(v);const level=!v?0:(!valid||score<=2)?1:score<=3?2:3;box.dataset.level=level;
       box.querySelector('span').style.width=[0,28,62,100][level]+'%';
-      const text=['Escribe una contraseña de al menos 6 caracteres','Débil: añade más caracteres, mayúsculas o números','Media: puedes reforzarla con símbolos o más largo','Fuerte'][level];
+      const text=['Escribe una contraseña de al menos 8 caracteres, con letras y números','Débil: usa al menos 8 caracteres con letras y números, y añade mayúsculas o símbolos','Media: puedes reforzarla con símbolos o más largo','Fuerte'][level];
       const em=box.querySelector('em');if(em.textContent!==text)em.textContent=text;
     }else{
       const first=[...form.querySelectorAll('input[type=password]')].find(i=>i.getAttribute('aria-label')==='Contraseña');

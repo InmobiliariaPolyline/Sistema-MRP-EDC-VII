@@ -245,8 +245,14 @@ def _category_treemap() -> None:
         _empty_chart("Sin líneas de órdenes activas.")
         return
     categories = repo.list_materials().set_index("id")["category"].to_dict()
+    # cada línea vale lo que su orden: en soles y con IGV (el mismo criterio que «Compras por mes»)
+    ratio = (orders["total_base"].astype(float) / orders["subtotal"].astype(float).where(orders["subtotal"].astype(float) > 0)).fillna(1.0)
+    factor = dict(zip(orders["id"], ratio))
     spend = (
-        items.assign(category=items["material_id"].map(categories).fillna("Sin categoría"), amount=items["subtotal"].astype(float))
+        items.assign(
+            category=items["material_id"].map(categories).fillna("Sin categoría"),
+            amount=items["subtotal"].astype(float) * items["order_id"].map(factor).fillna(1.0),
+        )
         .groupby("category")["amount"].sum().sort_values(ascending=False)
     )
     spend = spend[spend > 0]

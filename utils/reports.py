@@ -84,13 +84,15 @@ def to_pdf(title: str, sections: dict[str, pd.DataFrame]) -> bytes:
     return bytes(pdf.output())
 
 
-def order_pdf(order: dict, items: pd.DataFrame, supplier: dict | None = None) -> bytes:
-    """Orden de compra lista para imprimir o mandar al proveedor: portada con estado, tarjetas de proveedor y entrega,
-    tabla de materiales (con lo recibido), totales con IGV, notas y firmas."""
-    supplier = supplier or {}
+def order_pdf(order: dict, items: pd.DataFrame, supplier: dict | None = None, company: dict | None = None) -> bytes:
+    """Orden de compra lista para imprimir o mandar al proveedor: portada con estado, tarjetas del proveedor y de «facturar a»
+    (razón social y RUC de la empresa), entrega y pago, tabla de materiales (con lo recibido), importes como en una factura
+    (valor de venta, IGV 18 % e importe total), notas y firmas. El pago se hace fuera del sistema: la condición de pago es informativa."""
+    supplier, company = supplier or {}, company or {}
     status_text, status_tone = ORDER_STATUS.get(order.get("status"), (str(order.get("status") or ""), "gray"))
     currency = order.get("currency") or money.BASE
     tax_rate = float(order.get("tax_rate") or 0)
+    include = bool(order.get("prices_include_tax")) and tax_rate > 0
     pdf = BrandPDF("Orden de compra", order["code"])
     pdf.add_page()
     meta = [("Fecha de emisión", _date(order["created_at"]))]
@@ -99,21 +101,31 @@ def order_pdf(order: dict, items: pd.DataFrame, supplier: dict | None = None) ->
     meta.append(("Moneda", money.CURRENCY_NAMES.get(currency, currency)))
     pdf.cover("Orden de compra", order["code"], meta, (status_text, status_tone), icon="order")
 
-    # proveedor y entrega, lado a lado
+    # proveedor y comprador (a quién facturar), lado a lado
     gap, half = 4.0, (pdf.usable - 4.0) / 2
     y0 = pdf.get_y()
     h1 = pdf.info_card(
-        [("Razón social", order["supplier_name"], "building"), ("Contacto", supplier.get("contact_name"), "user"),
+        [("Razón social", order["supplier_name"], "building"), ("RUC", supplier.get("ruc"), "list"), ("Contacto", supplier.get("contact_name"), "user"),
          ("Teléfono", supplier.get("phone"), "phone"), ("Correo", supplier.get("email"), "mail")],
         columns=1, title="Proveedor", w=half,
     )
     pdf.set_y(y0)
+    buyer = company.get("trade_name") or company.get("legal_name")
     h2 = pdf.info_card(
-        [("Obra destino", order.get("site_name") or "Sin obra destino", "pin"), ("Entrega prometida", _date(order.get("expected_date")), "calendar"),
-         ("Enviada el", _date(order.get("sent_at"), True), "truck"), ("Moneda", money.CURRENCY_NAMES.get(currency, currency), "coin")],
-        columns=1, title="Entrega", x=pdf.l_margin + half + gap, w=half,
-    )
+        [("Razón social", company.get("legal_name"), "building"), ("Nombre comercial", company.get("trade_name") if company.get("legal_name") != company.get("trade_name") else None, "layers"),
+         ("RUC", company.get("ruc"), "list"), ("Dirección fiscal", company.get("fiscal_address"), "pin")]
+        or [("Facturar a", buyer, "building")],
+        columns=1, title="Facturar a", x=pdf.l_margin + half + gap, w=half,
+    ) if buyer else 0.0
     pdf.set_y(y0 + max(h1, h2) + 5)
+
+    due = money.due_date(order["created_at"], order.get("payment_terms"))
+    pdf.info_card(
+        [("Obra destino", order.get("site_name") or "Sin obra destino", "pin"), ("Entrega prometida", _date(order.get("expected_date")), "calendar"),
+         ("Condición de pago", order.get("payment_terms"), "coin"), ("Pagar a más tardar", f"{due:%d/%m/%Y}" if due else None, "clock"),
+         ("Enviada el", _date(order.get("sent_at"), True), "truck"), ("Tratamiento del IGV", money.TAX_MODES[money.tax_mode(tax_rate, include)][0].replace(" (18 %)", ""), "scale")],
+        columns=3, title="Entrega y pago",
+    )
 
     pdf.section("Materiales del pedido", "box", len(items))
     rows, tones, subtotal = [], {}, 0.0
@@ -127,45 +139,57 @@ def order_pdf(order: dict, items: pd.DataFrame, supplier: dict | None = None) ->
         elif received > 0:
             tones[index] = {4: "warn"}
         rows.append([str(index + 1), row["material_name"], row.get("unit") or "", f"{qty:,.2f}", f"{received:,.2f}" if received else "—", f"{price:,.2f}", f"{line_total:,.2f}"])
-    pdf.table(["N.º", "Material", "Unidad", "Cantidad", "Recibido", "Precio unit.", "Subtotal"], rows, [0.7, 5.2, 1.3, 1.5, 1.5, 1.7, 1.9], ["L", "L", "L", "R", "R", "R", "R"], tones=tones)
+    price_label = "Precio c/IGV" if include else "Precio unit."
+    pdf.table(["N.º", "Material", "Unidad", "Cantidad", "Recibido", price_label, "Subtotal"], rows, [0.7, 5.0, 1.3, 1.5, 1.5, 2.0, 1.9], ["L", "L", "L", "R", "R", "R", "R"], tones=tones)
 
+    amounts = money.amounts(subtotal, tax_rate, order.get("exchange_rate") or 1, include)
     sym = money.symbol(currency)
-    detail = [("Subtotal", f"{sym} {subtotal:,.2f}")]
+    detail = [("Valor de venta", f"{sym} {amounts['net']:,.2f}")]
     if tax_rate:
-        detail.append((f"IGV ({tax_rate:.0%})", f"{sym} {subtotal * tax_rate:,.2f}"))
-    total = subtotal * (1 + tax_rate)
-    pdf.totals(detail, ("Total", f"{sym} {total:,.2f}"))
+        detail.append((f"IGV ({tax_rate:.0%})", f"{sym} {amounts['tax']:,.2f}"))
+    else:
+        detail.append(("IGV", "Exonerado / inafecto"))
+    pdf.totals(detail, ("Importe total", f"{sym} {amounts['total']:,.2f}"))
     if currency != money.BASE and float(order.get("exchange_rate") or 0) > 0:
         pdf.font(8, color=MUTED_TEXT)
         pdf.set_x(pdf.l_margin)
-        pdf.cell(0, 5, f"Equivale a {money.symbol(money.BASE)} {total * float(order['exchange_rate']):,.2f} al tipo de cambio {float(order['exchange_rate']):g}.", align="R", new_x="LMARGIN", new_y="NEXT")
+        pdf.cell(0, 5, f"Equivale a {money.symbol(money.BASE)} {amounts['total_base']:,.2f} al tipo de cambio {float(order['exchange_rate']):g}.", align="R", new_x="LMARGIN", new_y="NEXT")
         pdf.ln(2)
     pdf.note_box("Notas del pedido", order.get("notes"))
-    pdf.signatures([("Autoriza", None), ("Recibe proveedor", order["supplier_name"])])
+    pdf.signatures([("Autoriza", company.get("legal_name")), ("Recibe proveedor", order["supplier_name"])])
     return bytes(pdf.output())
 
 
-def order_whatsapp_text(order: dict, items: pd.DataFrame) -> str:
-    """Texto del pedido para abrir en WhatsApp."""
+def order_whatsapp_text(order: dict, items: pd.DataFrame, company: dict | None = None) -> str:
+    """Texto del pedido para WhatsApp o correo: líneas, valor de venta, IGV e importe total, entrega, condición de pago y a quién facturar."""
+    company = company or {}
     lines = [f"Hola {order['supplier_name']}, quisiera hacer el siguiente pedido ({order['code']}):", ""]
-    total = 0.0
+    subtotal = 0.0
     for row in items.to_dict("records"):
-        subtotal = float(row["quantity"]) * float(row["unit_price"])
-        total += subtotal
+        line_total = float(row["quantity"]) * float(row["unit_price"])
+        subtotal += line_total
         unit = f" {row['unit']}" if row.get("unit") else ""
-        lines.append(f"- {row['material_name']}: {float(row['quantity']):g}{unit} x {float(row['unit_price']):,.2f} = {subtotal:,.2f}")
+        lines.append(f"- {row['material_name']}: {float(row['quantity']):g}{unit} x {float(row['unit_price']):,.2f} = {line_total:,.2f}")
     tax_rate = float(order.get("tax_rate") or 0)
     cur = order.get("currency") or money.BASE
+    amounts = money.amounts(subtotal, tax_rate, order.get("exchange_rate") or 1, bool(order.get("prices_include_tax")))
+    lines.append("")
     if tax_rate:
-        lines += ["", f"Subtotal: {money.fmt(total, cur)}", f"IGV ({tax_rate:.0%}): {money.fmt(total * tax_rate, cur)}"]
-    lines += ["", f"Total: {money.fmt(total * (1 + tax_rate), cur)}"]
+        lines += [f"Valor de venta: {money.fmt(amounts['net'], cur)}", f"IGV ({tax_rate:.0%}): {money.fmt(amounts['tax'], cur)}"]
+        if order.get("prices_include_tax"):
+            lines.append("(Los precios indicados ya incluyen IGV.)")
+    lines.append(f"Importe total: {money.fmt(amounts['total'], cur)}")
     expected = str(order.get("expected_date") or "")
     if expected and expected not in ("None", "nan", "NaT"):
         lines.append(f"Fecha de entrega solicitada: {expected[8:10]}/{expected[5:7]}/{expected[:4]}")
+    if order.get("payment_terms"):
+        lines.append(f"Condición de pago: {order['payment_terms']}")
     if order.get("site_name"):
         lines.append(f"Entrega en: {order['site_name']}")
     if order.get("notes"):
         lines.append(f"Notas: {order['notes']}")
+    if company.get("legal_name") and company.get("ruc"):
+        lines.append(f"Facturar a: {company['legal_name']} · RUC {company['ruc']}")
     lines.append("¿Me confirman disponibilidad y fecha de entrega? Gracias.")
     return "\n".join(lines)
 

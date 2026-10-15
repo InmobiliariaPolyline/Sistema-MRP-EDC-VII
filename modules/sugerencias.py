@@ -19,7 +19,7 @@ import streamlit as st
 
 from db import repository as repo
 from modules import forms, ui
-from utils import pricing
+from utils import money, pricing
 
 OPEN_STATUSES = ("pendiente", "enviada", "parcial")
 COLUMNS = [
@@ -344,7 +344,7 @@ def suggestion_dialog() -> None:
                 ]
                 lines += extra_lines.get(supplier_id, [])
                 arrival = lead_by_supplier.get(supplier_id)
-                terms = {"expected_date": arrival} if arrival else None
+                terms = {**money.default_terms(), **({"expected_date": arrival} if arrival else {})}
                 created.append(repo.create_order(supplier_id, supplier_name, None, "Sugerencia de compra", lines, terms))
             ui.flash(f"Órdenes creadas por sugerencia de compra: {', '.join(created)}.", "🧾")
             st.rerun()

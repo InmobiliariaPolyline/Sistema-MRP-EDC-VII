@@ -18,6 +18,7 @@ import streamlit as st
 from db.client import get_client, using_service_key
 from utils import attachments as attach_rules
 from utils import audit
+from utils import ruc as ruc_rules
 from utils import consumption, money
 
 _CACHE_TTL = int(os.environ.get("MRP_CACHE_TTL") or 30)  # segundos: solo evita relecturas repetidas al navegar, no es "tiempo real"
@@ -73,6 +74,11 @@ PHASE_B_MESSAGE = "Falta correr el SQL de la Fase B en Supabase (db/migrations/0
 def _phase_b(exc: Exception) -> ValueError:
     """Error legible cuando una función de la Fase B se usa antes de correr su SQL."""
     return ValueError(PHASE_B_MESSAGE)
+
+
+def _need_sql(file: str) -> ValueError:
+    """Error legible cuando algo necesita el SQL de un parche que todavía no se corrió."""
+    return ValueError(f"Falta correr el SQL de esta función en Supabase (db/migrations/{file}).")
 
 
 def _is_missing(exc: Exception) -> bool:
@@ -151,9 +157,9 @@ def list_suppliers() -> pd.DataFrame:
     res = get_client().table("suppliers").select("*").order("name").execute()
     df = _df(
         res.data or [],
-        columns=["id", "name", "contact_name", "phone", "email", "notes", "created_at", "updated_at", "lead_time_days", "min_order_amount"],
+        columns=["id", "name", "contact_name", "phone", "email", "notes", "created_at", "updated_at", "lead_time_days", "min_order_amount", "ruc"],
     )
-    for col in ("lead_time_days", "min_order_amount"):  # sin dato = None (nunca NaN), igual que en la base local
+    for col in ("lead_time_days", "min_order_amount", "ruc"):  # sin dato = None (nunca NaN), igual que en la base local
         df[col] = df[col].astype(object).where(df[col].notna(), None)
     return df
 
@@ -167,9 +173,11 @@ def upsert_supplier(
     supplier_id: str | None = None,
     lead_time_days: int | None = None,
     min_order_amount: float | None = None,
+    ruc: str | None = None,
 ) -> None:
-    """`lead_time_days`: plazo de entrega habitual; `min_order_amount`: monto mínimo de compra (None = sin dato).
-    Estos dos necesitan el SQL de la Fase C; si aún no se corrió y no se indican, se guarda lo demás igual."""
+    """`lead_time_days`: plazo de entrega habitual; `min_order_amount`: monto mínimo de compra; `ruc`: RUC del proveedor (None = sin dato).
+    Necesitan el SQL de las Fases C y del parche 056; si aún no se corrió y no se indican, se guarda lo demás igual."""
+    ruc = _valid_ruc(ruc, "RUC del proveedor")
     payload = {"name": name, "contact_name": contact_name, "phone": phone, "email": email, "notes": notes}
     client = get_client()
 
@@ -180,14 +188,62 @@ def upsert_supplier(
             client.table("suppliers").insert(data).execute()
 
     try:
-        write({**payload, "lead_time_days": lead_time_days, "min_order_amount": min_order_amount})
+        write({**payload, "lead_time_days": lead_time_days, "min_order_amount": min_order_amount, "ruc": ruc})
     except Exception as exc:
         if not _is_missing(exc):
             raise
-        if lead_time_days is not None or min_order_amount is not None:
-            raise ValueError("Falta correr el SQL de la Fase C en Supabase (db/migrations/042_fase_c.sql).") from exc
-        write(payload)
+        if ruc is not None:
+            raise _need_sql("045_empresa_igv.sql") from exc
+        try:
+            write({**payload, "lead_time_days": lead_time_days, "min_order_amount": min_order_amount})
+        except Exception as inner:
+            if not _is_missing(inner):
+                raise
+            if lead_time_days is not None or min_order_amount is not None:
+                raise _need_sql("042_fase_c.sql") from inner
+            write(payload)
     _invalidate_suppliers()
+
+
+def _valid_ruc(value: str | None, label: str = "RUC") -> str | None:
+    """RUC limpio (11 dígitos) o None si está vacío; lanza ValueError si no es válido."""
+    cleaned = ruc_rules.clean(value)
+    problems = ruc_rules.issues(cleaned, label)
+    if problems:
+        raise ValueError(problems[0])
+    return cleaned or None
+
+
+@st.cache_data(ttl=_CACHE_TTL, show_spinner=False)
+def get_company() -> dict:
+    """Datos de facturación de la empresa (razón social, nombre comercial, RUC, dirección fiscal). Vacíos si aún no se cargaron."""
+    keys = ["legal_name", "trade_name", "ruc", "fiscal_address", "updated_by", "updated_at"]
+    try:
+        rows = get_client().table("company_profile").select(",".join(keys)).limit(1).execute().data
+    except Exception as exc:
+        if _is_missing(exc):
+            return dict.fromkeys(keys)
+        raise
+    return {k: rows[0].get(k) for k in keys} if rows else dict.fromkeys(keys)
+
+
+def set_company(legal_name: str | None, trade_name: str | None, ruc: str | None, fiscal_address: str | None, actor: str | None = None) -> None:
+    """Guarda los datos de facturación de la empresa (una sola ficha). El RUC debe ser válido."""
+    ruc = _valid_ruc(ruc, "RUC de la empresa")
+    row = {
+        "singleton": True, "legal_name": (legal_name or "").strip() or None, "trade_name": (trade_name or "").strip() or None, "ruc": ruc,
+        "fiscal_address": (fiscal_address or "").strip() or None, "updated_by": actor, "updated_at": "now()",
+    }
+    from datetime import datetime, timezone
+
+    row["updated_at"] = datetime.now(timezone.utc).isoformat()
+    try:
+        get_client().table("company_profile").upsert(row, on_conflict="singleton").execute()
+    except Exception as exc:
+        if _is_missing(exc):
+            raise _need_sql("045_empresa_igv.sql") from exc
+        raise _friendly(exc) from exc
+    get_company.clear()
 
 
 def delete_supplier(supplier_id: str) -> None:
@@ -532,10 +588,10 @@ def list_orders() -> pd.DataFrame:
         )
     columns = [
         "id", "code", "supplier_id", "supplier_name", "project_site_id", "site_name",
-        "status", "notes", "created_at", "expected_date", "sent_at", "currency", "exchange_rate", "tax_rate",
-        "subtotal", "tax", "total", "subtotal_base", "total_base", "items_count",
+        "status", "notes", "created_at", "expected_date", "sent_at", "currency", "exchange_rate", "tax_rate", "prices_include_tax", "payment_terms",
+        "subtotal", "net", "tax", "total", "subtotal_base", "total_base", "items_count",
     ]
-    df = _df(rows, columns=[c for c in columns if c not in ("tax", "total", "subtotal_base", "total_base")]) if rows else _df(columns=columns)
+    df = _df(rows, columns=[c for c in columns if c not in ("net", "tax", "total", "subtotal_base", "total_base")]) if rows else _df(columns=columns)
     if df.empty:
         return _df(columns=columns)
     df["currency"] = df["currency"].fillna(money.BASE)  # antes del SQL de la Fase B no existen estas columnas
@@ -572,6 +628,17 @@ def list_order_items(order_id: str | None = None) -> pd.DataFrame:
     return df.sort_values(["order_code", "material_name"]).reset_index(drop=True) if not df.empty else df
 
 
+def _terms_payload(terms: dict) -> dict:
+    """Condiciones de la orden listas para guardar. «Precios con IGV incluido» y la condición de pago solo se envían
+    cuando tienen valor, para que una orden común se guarde igual antes de correr el SQL del parche 056."""
+    payload = dict(terms)
+    if not payload.get("prices_include_tax"):
+        payload.pop("prices_include_tax", None)
+    if not payload.get("payment_terms"):
+        payload.pop("payment_terms", None)
+    return payload
+
+
 def create_order(
     supplier_id: str, supplier_name: str, project_site_id: str | None, notes: str | None, items: list[dict], terms: dict | None = None,
 ) -> str:
@@ -585,7 +652,7 @@ def create_order(
 
     payload = {"code": code, "supplier_id": supplier_id, "supplier_name": supplier_name, "project_site_id": project_site_id, "notes": notes}
     if not money.is_default(terms):  # solo se envían las columnas nuevas si hacen falta (así funciona antes del SQL)
-        payload.update(terms)
+        payload.update(_terms_payload(terms))
     try:
         res = client.table("purchase_orders").insert(payload).execute()
     except Exception as exc:
@@ -676,9 +743,17 @@ def update_order(order_id: str, project_site_id: str | None, notes: str | None, 
     try:
         client.table("purchase_orders").update(changes).eq("id", order_id).execute()
     except Exception as exc:
-        if _is_missing(exc):
-            raise _phase_b(exc) from exc
-        raise
+        if not _is_missing(exc):
+            raise
+        legacy = {k: v for k, v in changes.items() if k not in ("prices_include_tax", "payment_terms")}
+        if legacy == changes or changes.get("prices_include_tax") or changes.get("payment_terms"):
+            raise _phase_b(exc) from exc  # hay datos nuevos que no se pueden guardar sin el SQL
+        try:  # solo traía los valores por omisión de las columnas nuevas: se guarda lo demás
+            client.table("purchase_orders").update(legacy).eq("id", order_id).execute()
+        except Exception as inner:
+            if _is_missing(inner):
+                raise _phase_b(inner) from inner
+            raise
     _invalidate_orders()
 
 
@@ -1489,7 +1564,7 @@ def recent_activity(limit: int = 6) -> list[dict]:
     return items[:limit]
 # Tablas de la app, en orden de dependencia (para respaldos y restauración).
 BACKUP_TABLES = [
-    "materials", "suppliers", "supplier_materials", "users", "work_groups", "project_sites", "workers",
+    "materials", "suppliers", "supplier_materials", "users", "company_profile", "work_groups", "project_sites", "workers",
     "purchase_orders", "purchase_order_items", "order_receipts", "dispatch_vouchers", "inventory_counts", "inventory_count_lines", "stock_movements",
     "site_budgets", "attendance", "audit_log", "price_history", "attachments",
 ]

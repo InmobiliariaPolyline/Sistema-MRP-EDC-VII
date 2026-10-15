@@ -428,9 +428,9 @@ class BrandPDF(FPDF):
 
     def signatures(self, labels: list[tuple[str, str | None]]) -> None:
         """Líneas de firma: cada una con su rol y, opcionalmente, el nombre de quien firma."""
-        if self.get_y() > self.h - 50:
+        if self.get_y() + 33 > self.h - 18:   # el bloque (7 de aire + 26 de firmas) tiene que caber entero
             self.add_page()
-        self.ln(12)
+        self.ln(7)
         y = self.get_y()
         n = len(labels)
         gap = 10.0

@@ -18,6 +18,7 @@ import pandas as pd
 
 from utils import attachments as attach_rules
 from utils import audit
+from utils import ruc as ruc_rules
 from utils import consumption, money
 
 DB_PATH = Path(os.environ.get("MRP_LOCAL_DB") or Path(__file__).resolve().parent / "local.db")
@@ -179,6 +180,17 @@ def _init_db() -> None:
                 created_at text default (datetime('now'))
             );
 
+            create table if not exists company_profile (
+                id text primary key,
+                singleton integer not null default 1 unique,
+                legal_name text,
+                trade_name text,
+                ruc text,
+                fiscal_address text,
+                updated_by text,
+                updated_at text default (datetime('now'))
+            );
+
             create table if not exists order_receipts (
                 id text primary key,
                 order_id text not null references purchase_orders(id) on delete cascade,
@@ -240,6 +252,9 @@ def _init_db() -> None:
             ("audit_log", "entity_type", "text"),
             ("audit_log", "entity_id", "text"),
             ("audit_log", "changes", "text"),
+            ("suppliers", "ruc", "text"),
+            ("purchase_orders", "prices_include_tax", "integer not null default 0"),
+            ("purchase_orders", "payment_terms", "text"),
             ("suppliers", "lead_time_days", "integer"),
             ("suppliers", "min_order_amount", "real"),
             ("purchase_orders", "sent_at", "text"),
@@ -336,10 +351,44 @@ def delete_material(material_id: str) -> None:
 def list_suppliers() -> pd.DataFrame:
     with _connect() as conn:
         df = pd.read_sql_query("select * from suppliers order by name", conn)
-    for col in ["id", "name", "contact_name", "phone", "email", "notes", "created_at", "updated_at", "lead_time_days", "min_order_amount"]:
+    for col in ["id", "name", "contact_name", "phone", "email", "notes", "created_at", "updated_at", "lead_time_days", "min_order_amount", "ruc"]:
         if col not in df.columns:
             df[col] = None
     return df.astype(object).where(pd.notnull(df), None)
+
+
+def _valid_ruc(value: str | None, label: str = "RUC") -> str | None:
+    """RUC limpio (11 dígitos) o None si está vacío; lanza ValueError si no es válido."""
+    cleaned = ruc_rules.clean(value)
+    problems = ruc_rules.issues(cleaned, label)
+    if problems:
+        raise ValueError(problems[0])
+    return cleaned or None
+
+
+def get_company() -> dict:
+    """Datos de facturación de la empresa (razón social, nombre comercial, RUC, dirección fiscal). Vacíos si aún no se cargaron."""
+    with _connect() as conn:
+        row = conn.execute("select legal_name, trade_name, ruc, fiscal_address, updated_by, updated_at from company_profile limit 1").fetchone()
+    keys = ["legal_name", "trade_name", "ruc", "fiscal_address", "updated_by", "updated_at"]
+    return dict(zip(keys, row)) if row else dict.fromkeys(keys)
+
+
+def set_company(legal_name: str | None, trade_name: str | None, ruc: str | None, fiscal_address: str | None, actor: str | None = None) -> None:
+    """Guarda los datos de facturación de la empresa (una sola ficha). El RUC debe ser válido."""
+    ruc = _valid_ruc(ruc, "RUC de la empresa")
+    values = ((legal_name or "").strip() or None, (trade_name or "").strip() or None, ruc, (fiscal_address or "").strip() or None, actor)
+    with _connect() as conn:
+        if conn.execute("select 1 from company_profile").fetchone():
+            conn.execute(
+                "update company_profile set legal_name = ?, trade_name = ?, ruc = ?, fiscal_address = ?, updated_by = ?, updated_at = datetime('now')",
+                values,
+            )
+        else:
+            conn.execute(
+                "insert into company_profile (id, legal_name, trade_name, ruc, fiscal_address, updated_by) values (?, ?, ?, ?, ?, ?)",
+                (str(uuid.uuid4()), *values),
+            )
 
 
 def upsert_supplier(
@@ -351,18 +400,20 @@ def upsert_supplier(
     supplier_id: str | None = None,
     lead_time_days: int | None = None,
     min_order_amount: float | None = None,
+    ruc: str | None = None,
 ) -> None:
-    """`lead_time_days`: plazo de entrega habitual; `min_order_amount`: monto mínimo de compra (None = sin dato)."""
+    """`lead_time_days`: plazo de entrega habitual; `min_order_amount`: monto mínimo de compra; `ruc`: RUC del proveedor (None = sin dato)."""
+    ruc = _valid_ruc(ruc, "RUC del proveedor")
     with _connect() as conn:
         if supplier_id:
             conn.execute(
-                "update suppliers set name = ?, contact_name = ?, phone = ?, email = ?, notes = ?, lead_time_days = ?, min_order_amount = ?, updated_at = datetime('now') where id = ?",
-                (name, contact_name, phone, email, notes, lead_time_days, min_order_amount, supplier_id),
+                "update suppliers set name = ?, contact_name = ?, phone = ?, email = ?, notes = ?, lead_time_days = ?, min_order_amount = ?, ruc = ?, updated_at = datetime('now') where id = ?",
+                (name, contact_name, phone, email, notes, lead_time_days, min_order_amount, ruc, supplier_id),
             )
         else:
             conn.execute(
-                "insert into suppliers (id, name, contact_name, phone, email, notes, lead_time_days, min_order_amount) values (?, ?, ?, ?, ?, ?, ?, ?)",
-                (str(uuid.uuid4()), name, contact_name, phone, email, notes, lead_time_days, min_order_amount),
+                "insert into suppliers (id, name, contact_name, phone, email, notes, lead_time_days, min_order_amount, ruc) values (?, ?, ?, ?, ?, ?, ?, ?, ?)",
+                (str(uuid.uuid4()), name, contact_name, phone, email, notes, lead_time_days, min_order_amount, ruc),
             )
 
 
@@ -675,7 +726,7 @@ def list_orders() -> pd.DataFrame:
             """
             select o.id, o.code, o.supplier_id, o.supplier_name, o.project_site_id,
                    ps.name as site_name, o.status, o.notes, o.created_at,
-                   o.expected_date, o.sent_at, o.currency, o.exchange_rate, o.tax_rate,
+                   o.expected_date, o.sent_at, o.currency, o.exchange_rate, o.tax_rate, o.prices_include_tax, o.payment_terms,
                    coalesce((select sum(i.quantity * i.unit_price) from purchase_order_items i where i.order_id = o.id), 0) as subtotal,
                    (select count(*) from purchase_order_items i where i.order_id = o.id) as items_count
             from purchase_orders o
@@ -716,10 +767,10 @@ def create_order(
         number = max([int(c.split("-")[1]) for c in codes if c.startswith("OC-") and c.split("-")[1].isdigit()] or [0]) + 1
         code = f"OC-{number:04d}"
         conn.execute(
-            "insert into purchase_orders (id, code, supplier_id, supplier_name, project_site_id, notes, expected_date, currency, exchange_rate, tax_rate) "
-            "values (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+            "insert into purchase_orders (id, code, supplier_id, supplier_name, project_site_id, notes, expected_date, currency, exchange_rate, tax_rate, prices_include_tax, payment_terms) "
+            "values (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
             (order_id, code, supplier_id, supplier_name, project_site_id, notes,
-             terms["expected_date"], terms["currency"], terms["exchange_rate"], terms["tax_rate"]),
+             terms["expected_date"], terms["currency"], terms["exchange_rate"], terms["tax_rate"], int(terms["prices_include_tax"]), terms["payment_terms"]),
         )
         for item in items:
             conn.execute(
@@ -782,8 +833,8 @@ def update_order(order_id: str, project_site_id: str | None, notes: str | None, 
         if terms is not None:
             t = money.normalize_terms(terms)
             conn.execute(
-                "update purchase_orders set expected_date = ?, currency = ?, exchange_rate = ?, tax_rate = ? where id = ?",
-                (t["expected_date"], t["currency"], t["exchange_rate"], t["tax_rate"], order_id),
+                "update purchase_orders set expected_date = ?, currency = ?, exchange_rate = ?, tax_rate = ?, prices_include_tax = ?, payment_terms = ? where id = ?",
+                (t["expected_date"], t["currency"], t["exchange_rate"], t["tax_rate"], int(t["prices_include_tax"]), t["payment_terms"], order_id),
             )
 
 
@@ -1351,7 +1402,7 @@ def recent_activity(limit: int = 6) -> list[dict]:
     return items[:limit]
 # Tablas de la app, en orden de dependencia (para respaldos y restauración).
 BACKUP_TABLES = [
-    "materials", "suppliers", "supplier_materials", "users", "work_groups", "project_sites", "workers",
+    "materials", "suppliers", "supplier_materials", "users", "company_profile", "work_groups", "project_sites", "workers",
     "purchase_orders", "purchase_order_items", "order_receipts", "dispatch_vouchers", "inventory_counts", "inventory_count_lines", "stock_movements",
     "site_budgets", "attendance", "audit_log", "price_history", "attachments",
 ]

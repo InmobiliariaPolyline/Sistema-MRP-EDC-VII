@@ -17,6 +17,7 @@ GUIDES: dict[str, str] = {
 **Para qué sirve:** tener a quién llamar y qué vende cada uno.
 
 1. **＋ Nuevo proveedor:** escribe nombre y teléfono *con código de país* (ej. `51987654321`) para que WhatsApp funcione.
+1b. **RUC del proveedor** (11 dígitos, se valida con su dígito verificador): sale en la orden de compra y sirve a tesorería para cuadrar las facturas.
 2. **Catálogo:** marca *Lo ofrece*, si está *Disponible* y su *precio*. Esos precios alimentan el comparador y la sugerencia de compra.
 3. **📥 Importar precios:** sube el Excel o CSV que te mandó el proveedor. Se enlaza cada fila con tu catálogo y ves qué cambia antes de aplicar. Si no tiene formato, descarga la plantilla.
 4. Cada cambio de precio queda en el historial automáticamente.
@@ -40,7 +41,9 @@ GUIDES: dict[str, str] = {
 3. **📦 Registrar recepción:** anota lo que llegó; entra al stock del almacén. No se puede recibir más de lo pedido.
 3a0. **✉️ Correo:** abre tu programa de correo con el pedido escrito y el correo del proveedor; adjunta el PDF descargado y envía (no se manda nada desde el servidor). Igual que WhatsApp, marca la orden como enviada.
 3a. **Envío al proveedor:** al abrir **💬 Enviar por WhatsApp** una orden pendiente pasa sola a «enviada» y queda anotada la fecha y hora (también con «Marcar como enviada»).
-3b. **Entrega, moneda e IGV (opcionales):** al crear o editar una orden puedes indicar la **fecha prometida de entrega** (si pasa y la orden sigue abierta, se marca como atrasada en la lista, en el detalle y en el dashboard), la **moneda** (soles o dólares, con su tipo de cambio) y si se **suma el IGV (18 %)** al total.
+3b0. **IGV real (18 %):** en el Perú el IGV es 18 % (16 % de IGV + 2 % del Impuesto de Promoción Municipal). Al crear la orden eliges cómo cotiza el proveedor: **sin IGV** (se suma 18 % al valor de venta, lo más común), **con IGV incluido** (el sistema separa el IGV del total) o **sin IGV** por ser exonerada o inafecta. Los importes salen como en una factura: **valor de venta, IGV e importe total**, redondeados a céntimos.
+3b1. **Condición de pago (informativa):** Contado, contra entrega o crédito de 7 a 60 días; con crédito se calcula la fecha límite de pago. El sistema no cobra ni paga: es un dato para tesorería.
+3b. **Entrega y moneda (opcionales):** al crear o editar una orden puedes indicar la **fecha prometida de entrega** (si pasa y la orden sigue abierta, se marca como atrasada en la lista, en el detalle y en el dashboard), la **moneda** (soles o dólares, con su tipo de cambio) y si se **suma el IGV (18 %)** al total.
 3c. **Recepción contra documento:** al registrar una recepción anota el **N.º de guía o factura**, quién entregó y las **observaciones** (faltantes, daños). Cada recepción queda guardada en «Recepciones registradas» dentro de la orden.
 3d. **📎 Documentos adjuntos:** en el detalle de la orden sube la foto o el PDF de la factura, la guía de remisión o la cotización (hasta 10 MB; PDF, PNG, JPG o WEBP). «Abrir» los descarga o los muestra. También se pueden adjuntar al vale de salida firmado y al conteo de inventario. Necesita la clave de servicio de Supabase.
 4. **✏️ Editar orden:** corrige cantidades, precios, obra o notas mientras no haya recibido material.

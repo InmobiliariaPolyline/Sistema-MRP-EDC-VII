@@ -6,6 +6,31 @@ Formato de cada parche: **Agregado** · **Corregido** · **Problemas y causa** �
 
 ---
 
+## Parches 056–058 — Datos de la empresa (RUC), IGV real y condición de pago · 2026-10-16
+
+El sistema no paga nada: las compras se pagan fuera, con el RUC de la empresa. Estos cambios hacen que las órdenes se parezcan a una compra real.
+
+**Parche 056 · Datos de la empresa y RUC con contraseña**
+- **Mi cuenta** ahora tiene dos pestañas (la segunda solo para el administrador): **Contraseña** y **Empresa y RUC**. Los datos de facturación (razón social, nombre comercial, RUC, dirección fiscal) **no se ven hasta ingresar la contraseña de la sesión** (la del Administrador). Comparte el bloqueo por intentos fallidos del inicio de sesión (5 intentos, 15 min). Tras ingresarla se muestran 3 minutos y hay un botón «Ocultar»; se vuelven a ocultar al reabrir «Mi cuenta».
+- El **RUC se valida** con el dígito verificador de SUNAT (11 dígitos, empieza con 10, 15, 17 o 20) y se informa el tipo de contribuyente. En el **Historial** solo queda «RUC: (oculto) → (oculto)»: el número no se escribe ahí porque allí se vería sin contraseña.
+- **RUC del proveedor** (validado igual) en su formulario, su ficha y los reportes.
+- La **orden de compra en PDF** trae ahora «Facturar a» (razón social, nombre comercial, RUC y dirección fiscal de la empresa) y el RUC del proveedor; el mensaje de WhatsApp/correo incluye «Facturar a: … · RUC …». Es el dato que el proveedor necesita para emitir la factura.
+
+**Parche 057 · IGV real y condición de pago**
+- **IGV 18 %** (16 % IGV + 2 % IPM) con tres tratamientos por orden: los precios **no incluyen** IGV (se suma, por omisión), **ya lo incluyen** (se separa: valor de venta = total ÷ 1,18) o **sin IGV** (exonerada o inafecta).
+- Importes como en una factura: **valor de venta, IGV e importe total**, redondeados a céntimos con el .5 hacia arriba (15.75 + 18 % = 15.75 + 2.84 = 18.59). Se ven así al armar la orden, en su detalle, en el PDF, en el mensaje, en el reporte de órdenes (con «Condición de pago») y en la sugerencia de compra.
+- **Condición de pago informativa:** Contado, Contra entrega o Crédito de 7, 15, 30, 45 o 60 días, con la **fecha límite de pago** calculada. Solo informa a tesorería.
+- Las compras en dólares y las que ya traen IGV se convierten a soles correctamente en el dashboard; la gráfica «Compras por categoría» usa el mismo criterio que «Compras por mes» (soles e IGV de cada orden). El presupuesto de obra sigue comparando sin IGV.
+- Las órdenes nuevas nacen con IGV 18 % sumado (antes sin IGV).
+
+**Parche 058 · Cierre**
+- La ayuda de las contraseñas decía «al menos 6 caracteres» pero la política es de 8 con letras y números: ahora dice lo mismo que se exige.
+- **Pruebas nuevas (24):** RUC (validador con RUC reales, casos del dígito 10 y 11), IGV (sumado, incluido, exonerado, dólares, céntimos), condición de pago y vencimiento, ficha de la empresa (una sola fila, RUC inválido rechazado, respaldo), RUC de proveedores, PDF y mensaje con RUC e IGV; y 2 pruebas SQL en Postgres real (una sola ficha de empresa, RUC de 11 dígitos, y que nazca cerrada en una base cerrada). Comprobado en navegador real: Mi cuenta oculta el RUC hasta la contraseña, el formulario de orden con IGV y condición de pago, y el módulo Sistema.
+
+**Hay que hacer**
+- Correr `db/migrations/045_empresa_igv.sql` en Supabase (tabla `company_profile`, columna `ruc` de proveedores y `prices_include_tax` y `payment_terms` de las órdenes). Antes de eso todo sigue funcionando (las órdenes con IGV sumado y sin condición de pago se guardan igual); guardar el RUC, «precios con IGV incluido» o una condición de pago avisa que falta el SQL.
+- Cargar en «Mi cuenta → Empresa y RUC» la razón social y el RUC de la empresa.
+
 ## Parche 055 — El dinero es compra, no pérdida, y nuevo módulo Sistema · 2026-10-16
 
 **Aclaración del sistema:** el sistema no cobra ni paga nada (no usa tarjetas ni cuentas). Las compras las paga el administrador por fuera, con el RUC de la empresa; el sistema registra lo comprado para consulta y para tesorería.

@@ -9,6 +9,7 @@ import streamlit as st
 from db import repository as repo
 from modules import forms, ui
 from utils import audit, pricelist, pricing, ratings
+from utils import ruc as ruc_rules
 
 SELECTED_KEY = "selected_supplier_id"
 ALL_CATALOG = "Todos los materiales"
@@ -16,7 +17,7 @@ CATALOG_STATES = [ALL_CATALOG, "Ofrecidos", "Disponibles", "Sin precio", "Precio
 PRICE_AGE_KEY = "price_max_age"
 SUPPLIER_LABELS = {
     "name": "Nombre", "contact_name": "Contacto", "phone": "Teléfono", "email": "Correo", "notes": "Notas",
-    "lead_time_days": "Plazo de entrega (días)", "min_order_amount": "Mínimo de compra",
+    "lead_time_days": "Plazo de entrega (días)", "min_order_amount": "Mínimo de compra", "ruc": "RUC",
 }
 PRICE_MAX = 10000000.0
 
@@ -65,6 +66,10 @@ def _supplier_form(supplier: dict | None) -> tuple:
         placeholder="Ej. Ferretería Norte", max_chars=forms.RULES["Nombre del proveedor"]["max"],
         help="Nombre comercial o razón social para identificarlo en compras y catálogos.",
     )
+    ruc = st.text_input(
+        "RUC (opcional)", value=(supplier.get("ruc") or "") if supplier else "", placeholder="11 dígitos, ej. 20100070970", max_chars=14,
+        help="RUC del proveedor: sale en la orden de compra y sirve a tesorería para cuadrar las facturas.",
+    )
     forms.section("Contacto", "Todos estos datos son opcionales. Facilitan las llamadas, WhatsApp y el correo.")
     c1, c2 = st.columns(2)
     contact_name = c1.text_input(
@@ -103,12 +108,14 @@ def _supplier_form(supplier: dict | None) -> tuple:
     )
     return (
         name.strip(), contact_name.strip() or None, phone.strip() or None, email.strip() or None, notes.strip() or None,
-        int(lead_time) or None, float(min_order) or None,
+        int(lead_time) or None, float(min_order) or None, ruc_rules.clean(ruc) or None, ruc,
     )
 
 
 def _save(values: tuple, supplier_id: str | None, before: dict | None = None) -> None:
-    name, contact_name, phone, email, notes, lead_time, min_order = values
+    name, contact_name, phone, email, notes, lead_time, min_order, ruc, ruc_text = values
+    if forms.errors(ruc_rules.issues(ruc_text, "RUC")):
+        return
     if forms.errors(forms.validate({
         "Nombre del proveedor": name,
         "Persona de contacto (opcional)": contact_name,
@@ -118,13 +125,13 @@ def _save(values: tuple, supplier_id: str | None, before: dict | None = None) ->
     })):
         return
     try:
-        repo.upsert_supplier(name, contact_name, phone, email, notes, supplier_id, lead_time, min_order)
+        repo.upsert_supplier(name, contact_name, phone, email, notes, supplier_id, lead_time, min_order, ruc)
     except Exception as exc:
         ui.db_error(exc, "No se pudo guardar el proveedor. Tus datos se conservan; inténtalo de nuevo.")
         return
     if before:
         after = {"name": name, "contact_name": contact_name, "phone": phone, "email": email, "notes": notes,
-                 "lead_time_days": lead_time, "min_order_amount": min_order}
+                 "lead_time_days": lead_time, "min_order_amount": min_order, "ruc": ruc}
         changes = audit.diff(before, after, SUPPLIER_LABELS)
         ui.log_change(f"Proveedor «{name}» editado", "proveedor", supplier_id, changes, icon="✏️")
         if not changes:
@@ -158,13 +165,14 @@ def _supplier_dialog_form(supplier: dict | None) -> None:
     if cancel:
         st.rerun()
     if preview:
-        name, contact, phone, email, notes, lead_time, min_order = values
+        name, contact, phone, email, notes, lead_time, min_order, ruc, _ = values
         forms.section("Vista previa", "Estos datos todavía no se han guardado.")
         with st.container(border=True):
             st.write(name or "Nombre pendiente")
             st.caption(contact or "Sin persona de contacto")
             st.write(f"Teléfono: {phone or 'sin registrar'}")
             st.write(f"Correo: {email or 'sin registrar'}")
+            st.write(f"RUC: {ruc or 'sin registrar'}")
             st.write(f"Plazo de entrega: {f'{lead_time} días' if lead_time else 'sin dato'} · Mínimo de compra: {f'{min_order:,.2f}' if min_order else 'sin mínimo'}")
             if notes:
                 st.caption(notes)
@@ -339,6 +347,7 @@ def _render_supplier_detail(supplier_id: str) -> None:
             ui.stat_card("🙍", supplier["contact_name"] or "—", "Contacto"),
             ui.stat_card("📞", supplier["phone"] or "—", "Teléfono"),
             ui.stat_card("✉️", supplier["email"] or "—", "Correo"),
+            ui.stat_card("🪪", supplier.get("ruc") or "—", "RUC", ruc_rules.kind(supplier.get("ruc")) or ""),
             ui.stat_card("🚚", f"{int(supplier['lead_time_days'])} días" if supplier.get("lead_time_days") else "—", "Plazo de entrega"),
             ui.stat_card("🧾", f"{float(supplier['min_order_amount']):,.2f}" if supplier.get("min_order_amount") else "—", "Mínimo de compra"),
         ]

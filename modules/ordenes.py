@@ -38,6 +38,7 @@ STATUSES = {
 OPEN_STATUSES = ("pendiente", "enviada", "parcial")
 ALL_STATUSES = "Todos los estados"
 NO_SITE = "Sin obra destino"
+NO_PAYMENT = "No indicada"
 
 
 def status_pill(status: str) -> str:
@@ -90,8 +91,10 @@ def attention_orders(orders: pd.DataFrame) -> pd.DataFrame:
     return orders[orders["id"].isin(ids)]
 
 
-def _terms_inputs(prefix: str, expected_date=None, currency: str = money.BASE, exchange_rate: float = 3.75, tax_rate: float = 0.0) -> dict:
-    """Fecha prometida, moneda, tipo de cambio e IGV de una orden. Devuelve las condiciones para guardar."""
+def _terms_inputs(
+    prefix: str, expected_date=None, currency: str = money.BASE, exchange_rate: float = 3.75, tax_mode: str = "add", payment_terms: str | None = None,
+) -> dict:
+    """Fecha prometida, moneda, tipo de cambio, tratamiento del IGV y condición de pago de una orden. Devuelve las condiciones para guardar."""
     default_date = None
     if expected_date and str(expected_date) not in ("None", "nan", "NaT"):
         try:
@@ -116,32 +119,51 @@ def _terms_inputs(prefix: str, expected_date=None, currency: str = money.BASE, e
             "Tipo de cambio (S/ por US$)", min_value=0.0, value=float(exchange_rate or 3.75), step=0.01, format="%.3f", key=f"{prefix}_rate",
             help="Sirve para sumar esta orden en soles en el dashboard y en el presupuesto de la obra.",
         )
-    igv = st.checkbox(
-        f"Sumar IGV ({money.IGV:.0%}) al total", value=float(tax_rate or 0) > 0, key=f"{prefix}_igv",
-        help="Márcalo si los precios del proveedor NO incluyen IGV. Si ya lo incluyen, déjalo sin marcar.",
+    t1, t2 = st.columns([3, 2])
+    modes = list(money.TAX_MODES)
+    mode = t1.selectbox(
+        "IGV (18 %)", modes, index=modes.index(tax_mode) if tax_mode in modes else 0, key=f"{prefix}_taxmode",
+        format_func=lambda m: money.TAX_MODES[m][0],
+        help="En el Perú el IGV es 18 % (16 % de IGV + 2 % del Impuesto de Promoción Municipal). La mayoría de proveedores cotiza sin IGV: se suma 18 % "
+             "al valor de venta. Si su precio ya lo incluye, el sistema separa el IGV del total. Marca «sin IGV» solo para compras exoneradas o inafectas.",
     )
-    return {"expected_date": picked, "currency": chosen, "exchange_rate": rate, "tax_rate": money.IGV if igv else 0.0}
+    options = [NO_PAYMENT, *money.PAYMENT_TERMS]
+    pay = t2.selectbox(
+        "Condición de pago (informativa)", options, index=options.index(payment_terms) if payment_terms in options else 0, key=f"{prefix}_pay",
+        help="Solo para tesorería: el sistema no cobra ni paga. Con crédito se muestra la fecha límite de pago.",
+    )
+    tax_rate, include = money.tax_from_mode(mode)
+    return {
+        "expected_date": picked, "currency": chosen, "exchange_rate": rate, "tax_rate": tax_rate, "prices_include_tax": include,
+        "payment_terms": None if pay == NO_PAYMENT else pay,
+    }
 
 
 def _totals_block(subtotal: float, terms: dict) -> None:
-    """Subtotal, IGV y total de una orden en su moneda (y en soles si es otra moneda)."""
-    amounts = money.amounts(subtotal, terms["tax_rate"], terms["exchange_rate"])
+    """Valor de venta, IGV e importe total de una orden (como en una factura), en su moneda y en soles si es otra moneda."""
+    amounts = money.amounts(subtotal, terms["tax_rate"], terms["exchange_rate"], terms.get("prices_include_tax", False))
     cur = terms["currency"]
     if terms["tax_rate"]:
         c1, c2, c3 = st.columns(3)
-        c1.metric("Subtotal", money.fmt(amounts["subtotal"], cur))
+        c1.metric("Valor de venta", money.fmt(amounts["net"], cur))
         c2.metric(f"IGV ({terms['tax_rate']:.0%})", money.fmt(amounts["tax"], cur))
-        c3.metric("Total", money.fmt(amounts["total"], cur))
+        c3.metric("Importe total", money.fmt(amounts["total"], cur))
+        if terms.get("prices_include_tax"):
+            st.caption("Los precios ya incluyen IGV: el valor de venta es el total entre 1,18.")
     else:
-        st.metric("Total del pedido", money.fmt(amounts["total"], cur))
+        st.metric("Importe total", money.fmt(amounts["total"], cur))
+        st.caption("Sin IGV (operación exonerada o inafecta).")
     if cur != money.BASE:
         st.caption(f"Equivale a {money.fmt(amounts['total_base'], money.BASE)} al tipo de cambio {terms['exchange_rate']:g}.")
+    due = money.due_date(date.today(), terms.get("payment_terms"))
+    if terms.get("payment_terms"):
+        st.caption(f"Condición de pago: {terms['payment_terms']}" + (f" · pagar a más tardar el {due:%d/%m/%Y} si se emite hoy." if due else "."))
 
 
 def _clear_order_draft() -> None:
     for key in (
         LINES_KEY, SUPPLIER_KEY, PRESET_KEY, "new_order_supplier", "new_order_site", "new_order_notes",
-        "new_order_date", "new_order_currency", "new_order_rate", "new_order_igv",
+        "new_order_date", "new_order_currency", "new_order_rate", "new_order_taxmode", "new_order_pay",
     ):
         st.session_state.pop(key, None)
 
@@ -243,7 +265,8 @@ def _new_order_dialog() -> None:
         st.session_state["new_order_notes"] = preset["notes"] or ""
         st.session_state["new_order_currency"] = preset.get("currency") or money.BASE
         st.session_state["new_order_rate"] = float(preset.get("exchange_rate") or 3.75)
-        st.session_state["new_order_igv"] = float(preset.get("tax_rate") or 0) > 0
+        st.session_state["new_order_taxmode"] = money.tax_mode(preset.get("tax_rate"), preset.get("prices_include_tax"))
+        st.session_state["new_order_pay"] = preset.get("payment_terms") or NO_PAYMENT
         st.session_state[SUPPLIER_KEY] = preset["supplier_id"]
         st.session_state[LINES_KEY] = preset["lines"]
 
@@ -263,7 +286,7 @@ def _new_order_dialog() -> None:
     notes = st.text_input("Notas (opcional)", placeholder="Ej. Entregar antes del viernes", key="new_order_notes", max_chars=500,
                           help="Condiciones de entrega o indicaciones para el proveedor. Hasta 500 caracteres.")
 
-    forms.section("2. Entrega, moneda e IGV", "Todo opcional: la fecha prometida activa el aviso de atraso y el IGV se suma al total.")
+    forms.section("2. Entrega, moneda, IGV y pago", "La fecha prometida activa el aviso de atraso. El IGV (18 %) se suma o se separa según cómo cotiza el proveedor. La condición de pago es solo informativa.")
     terms = _terms_inputs("new_order")
 
     forms.section("3. Agrega materiales", "La cantidad se indica en la unidad del material. El precio unitario viene fijo del catálogo del proveedor y no se cambia aquí: lo que sube con la cantidad es el total. Agregar de nuevo un material suma cantidades.")
@@ -429,7 +452,7 @@ def _budget_warning(site_id: str, site_name: str, lines: list[dict], total: floa
 def _edit_state_keys(order_id: str) -> list[str]:
     return [f"edit_draft_{order_id}", f"edit_ver_{order_id}", f"edit_site_{order_id}", f"edit_notes_{order_id}",
             f"edit_add_mat_{order_id}", f"edit_add_qty_{order_id}", f"edit_{order_id}_date", f"edit_{order_id}_currency",
-            f"edit_{order_id}_rate", f"edit_{order_id}_igv"]
+            f"edit_{order_id}_rate", f"edit_{order_id}_taxmode", f"edit_{order_id}_pay"]
 
 
 def _clear_edit_draft(order_id: str) -> None:
@@ -467,9 +490,10 @@ def _edit_order_dialog(order: dict, items: pd.DataFrame) -> None:
     site_choice = st.selectbox("Obra destino (opcional)", site_names, index=site_names.index(current), key=f"edit_site_{oid}")
     notes = st.text_input("Notas (opcional)", value=order.get("notes") or "", max_chars=forms.RULES["Notas (opcional)"]["max"], key=f"edit_notes_{oid}")
 
-    forms.section("2. Entrega, moneda e IGV", "Cambia la fecha prometida, la moneda o si se suma IGV.")
+    forms.section("2. Entrega, moneda, IGV y pago", "Cambia la fecha prometida, la moneda, el tratamiento del IGV o la condición de pago.")
     terms = _terms_inputs(
-        f"edit_{oid}", order.get("expected_date"), order.get("currency") or money.BASE, order.get("exchange_rate") or 3.75, order.get("tax_rate") or 0.0
+        f"edit_{oid}", order.get("expected_date"), order.get("currency") or money.BASE, order.get("exchange_rate") or 3.75,
+        money.tax_mode(order.get("tax_rate"), order.get("prices_include_tax")), order.get("payment_terms"),
     )
 
     forms.section("3. Materiales de la orden", "Ajusta las cantidades. Marca «Quitar» para eliminar una línea al guardar.")
@@ -567,10 +591,11 @@ def _edit_order_dialog(order: dict, items: pd.DataFrame) -> None:
         _clear_edit_draft(oid)
         changes = audit.diff(
             {"site": order.get("site_name"), "notes": order.get("notes"), "expected": order.get("expected_date"),
-             "currency": order.get("currency") or money.BASE, "igv": float(order.get("tax_rate") or 0)},
+             "currency": order.get("currency") or money.BASE, "igv": money.TAX_MODES[money.tax_mode(order.get("tax_rate"), order.get("prices_include_tax"))][0],
+             "pay": order.get("payment_terms")},
             {"site": None if site_choice == NO_SITE else site_choice, "notes": notes.strip() or None, "expected": terms["expected_date"],
-             "currency": terms["currency"], "igv": float(terms["tax_rate"])},
-            {"site": "Obra destino", "notes": "Notas", "expected": "Fecha prometida", "currency": "Moneda", "igv": "IGV"},
+             "currency": terms["currency"], "igv": money.TAX_MODES[money.tax_mode(terms["tax_rate"], terms["prices_include_tax"])][0], "pay": terms["payment_terms"]},
+            {"site": "Obra destino", "notes": "Notas", "expected": "Fecha prometida", "currency": "Moneda", "igv": "Tratamiento del IGV", "pay": "Condición de pago"},
         ) + audit.diff_lines(items.to_dict("records"), new_items)
         reminder = " Reenvía el pedido actualizado al proveedor." if order["status"] == "enviada" else ""
         if changes:
@@ -603,6 +628,8 @@ def _duplicate(order: dict, items: pd.DataFrame) -> None:
         "currency": order.get("currency"),
         "exchange_rate": order.get("exchange_rate"),
         "tax_rate": order.get("tax_rate"),
+        "prices_include_tax": order.get("prices_include_tax"),
+        "payment_terms": order.get("payment_terms"),
         "lines": [
             {
                 "material_id": r["material_id"],
@@ -884,7 +911,7 @@ def _render_detail(order_id: str) -> None:
             ui.stat_card("🏭", order["supplier_name"], "Proveedor"),
             ui.stat_card("🏗️", order["site_name"] or "—", "Obra destino"),
             ui.stat_card("📅", str(order["created_at"])[:10], "Fecha"),
-            ui.stat_card("💰", money.fmt(order["total"], order.get("currency")), "Total con IGV" if float(order.get("tax_rate") or 0) else "Total"),
+            ui.stat_card("💰", money.fmt(order["total"], order.get("currency")), "Importe total (con IGV)" if float(order.get("tax_rate") or 0) else "Importe total"),
         ]
     )
     if _sent_text(order.get("sent_at")):
@@ -896,13 +923,18 @@ def _render_detail(order_id: str) -> None:
             st.error(f"Entrega prometida para el {when}: lleva {late_by} día(s) de atraso.", icon=":material/event_busy:")
         else:
             st.caption(f"📅 Entrega prometida para el {when}.")
-    if float(order.get("tax_rate") or 0) or (order.get("currency") or money.BASE) != money.BASE:
-        parts = [f"Subtotal {money.fmt(order['subtotal'], order.get('currency'))}"]
-        if float(order.get("tax_rate") or 0):
-            parts.append(f"IGV {float(order['tax_rate']):.0%} {money.fmt(order['tax'], order.get('currency'))}")
-        if (order.get("currency") or money.BASE) != money.BASE:
-            parts.append(f"equivale a {money.fmt(order['total_base'], money.BASE)} (tipo de cambio {float(order['exchange_rate']):g})")
-        st.caption(" · ".join(parts))
+    parts = [f"Valor de venta {money.fmt(order['net'], order.get('currency'))}"]
+    if float(order.get("tax_rate") or 0):
+        parts.append(f"IGV {float(order['tax_rate']):.0%} {money.fmt(order['tax'], order.get('currency'))}")
+        parts.append("precios con IGV incluido" if order.get("prices_include_tax") else "IGV sumado a los precios")
+    else:
+        parts.append("sin IGV")
+    if (order.get("currency") or money.BASE) != money.BASE:
+        parts.append(f"equivale a {money.fmt(order['total_base'], money.BASE)} (tipo de cambio {float(order['exchange_rate']):g})")
+    st.caption(" · ".join(parts))
+    if order.get("payment_terms"):
+        due = money.due_date(order["created_at"], order["payment_terms"])
+        st.caption(f"💳 Condición de pago: {order['payment_terms']}" + (f" · pagar a más tardar el {due:%d/%m/%Y}" if due else "") + " (informativo: el pago se hace fuera del sistema).")
     if order.get("notes"):
         st.caption(f"📝 {order['notes']}")
 
@@ -965,10 +997,11 @@ def _render_detail(order_id: str) -> None:
             _edit_order_dialog(order, items)
 
     if not items.empty:
+        company = repo.get_company()
         d1, d2, d4, d3, _ = st.columns([1.7, 2.4, 1.9, 1.9, 0.6])
         d1.download_button(
             "📄 PDF",
-            data=order_pdf(order, items, supplier),
+            data=order_pdf(order, items, supplier, company),
             file_name=f"{order['code']}.pdf",
             mime="application/pdf",
             width="stretch",
@@ -976,7 +1009,7 @@ def _render_detail(order_id: str) -> None:
         phone = re.sub(r"\D", "", (supplier or {}).get("phone") or "")
         d2.link_button(
             "💬 Enviar por WhatsApp",
-            f"https://wa.me/{phone}?text={quote(order_whatsapp_text(order, items))}",
+            f"https://wa.me/{phone}?text={quote(order_whatsapp_text(order, items, company))}",
             width="stretch",
             on_click=_mark_sent_from_link,
             args=(order_id, order["code"], status),
@@ -984,7 +1017,7 @@ def _render_detail(order_id: str) -> None:
         )
         d4.link_button(
             "✉️ Correo",
-            mailto_url((supplier or {}).get("email"), f"Pedido {order['code']}", order_whatsapp_text(order, items)),
+            mailto_url((supplier or {}).get("email"), f"Pedido {order['code']}", order_whatsapp_text(order, items, company)),
             width="stretch",
             on_click=_mark_sent_from_link,
             args=(order_id, order["code"], status),

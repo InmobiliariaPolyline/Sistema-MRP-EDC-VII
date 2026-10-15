@@ -14,7 +14,7 @@ from utils import money
 class MoneyTests(unittest.TestCase):
     def test_default_terms_are_soles_without_igv(self):
         terms = money.normalize_terms(None)
-        self.assertEqual(terms, {"expected_date": None, "currency": "PEN", "exchange_rate": 1.0, "tax_rate": 0.0})
+        self.assertEqual(terms, {"expected_date": None, "currency": "PEN", "exchange_rate": 1.0, "tax_rate": 0.0, "prices_include_tax": False, "payment_terms": None})
         self.assertTrue(money.is_default(terms))
 
     def test_dollars_need_an_exchange_rate_and_soles_ignore_it(self):
