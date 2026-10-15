@@ -6,6 +6,26 @@ Formato de cada parche: **Agregado** · **Corregido** · **Problemas y causa** �
 
 ---
 
+## Parche 054 — Nuevo diseño de los PDF · 2026-10-16
+
+Todos los PDF del sistema (orden de compra, vale de salida, reportes, reporte de obra y kardex) comparten ahora un mismo diseño con la identidad de la app (`utils/pdf_style.py`).
+
+**Qué cambia**
+- **Tipografía Inter** (la misma de la app), incluida en el proyecto (`utils/fonts/`, licencia SIL OFL), con acentos, ñ y los caracteres que antes se perdían: guiones largos, viñetas, flechas, ✓, ≥, ×, №, €… Los textos largos se recortan con «…» y no se montan unos sobre otros (antes «Entrega prometida:» se pisaba con su valor).
+- **Portada** de color con el tipo de documento, el código en grande, los datos clave a la derecha y una etiqueta de estado (Pendiente, Enviada, Recibida parcial, Recibida, Cancelada; o la etapa en un vale).
+- **Iconos vectoriales dibujados** (no emojis ni fuentes de iconos): orden, camión, caja, edificio, persona, teléfono, correo, calendario, moneda, ubicación, reloj, balanza, gráfico, capas y más.
+- **Tarjetas** con los datos del proveedor y de la entrega (orden), del despacho (vale), cifras clave con barra de avance (reporte de obra).
+- **Tablas** con encabezado de color, filas alternadas, números alineados a la derecha, numeración, encabezado repetido en cada página y etiquetas de color en las celdas de estado (recibido completo o parcial, excede lo previsto, fuera de presupuesto, completo…).
+- **Orden de compra:** columna «Recibido», cuadro de totales con subtotal, IGV y total destacado, equivalente en soles si es en dólares, notas en un recuadro y firmas con el nombre del proveedor.
+- **Vale de salida:** datos del despacho (obra, etapa, solicitante, quién lo registró, fecha y hora), nota, **tres firmas** (entrega, recibe y V.° B.° de obra) y una leyenda de conformidad.
+- **Reporte de obra:** seis cifras (presupuesto, pedido, recibido, despachado, disponible y avance), tabla de materiales con su estado, **barras de avance por etapa** y vales.
+- **Todas las páginas:** pie con fecha y hora de generación, versión del sistema y «Página X de Y»; encabezado fino en las páginas siguientes.
+- Armar un PDF toma unos 100 ms.
+
+**Pruebas nuevas (9):** fuentes incluidas, recorte y partido de textos, iconos, caracteres Unicode, tablas de varias páginas, y cada documento con datos completos, casi vacíos, muy largos o con valores faltantes.
+
+**Hay que hacer:** nada (no hay SQL nuevo).
+
 ## Parche 053 — Fase F: historial con antes y después, pruebas SQL reales y limpieza · 2026-10-16
 
 **Parche 052 · Pruebas contra un Postgres real**

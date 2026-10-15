@@ -1,0 +1,7 @@
+Fuente Inter — Copyright (c) 2016 The Inter Project Authors (https://github.com/rsms/Inter)
+
+Se distribuye bajo la licencia SIL Open Font License, Version 1.1.
+Texto completo: https://openfontlicense.org  (también en https://github.com/rsms/Inter/blob/master/LICENSE.txt)
+
+Se incluyen los archivos Inter_Regular.ttf, Inter_SemiBold.ttf e Inter_Bold.ttf tal como se publican en el paquete
+@expo-google-fonts/inter, sin modificaciones. Se usan para generar los PDF del sistema.

@@ -83,6 +83,10 @@ Los acumulados pesados (consumo por obra, contadores del dashboard) los calcula 
 
 `python -m unittest discover -s tests` corre todas las pruebas. Las de SQL usan un Postgres real (PGlite) vía Node: `cd tests/sql && npm ci` una vez. El historial de cambios guarda el valor anterior y el nuevo de las ediciones (`db/migrations/044_fase_f.sql`). `db/schema.sql` es el esquema completo para instalaciones nuevas.
 
+## PDF
+
+Los PDF (orden de compra, vale de salida, reportes, reporte de obra, kardex) se arman con `utils/pdf_style.py` (fuente Inter incluida en `utils/fonts/`, colores de la app, portada, tarjetas, tablas e iconos dibujados). Para un documento nuevo basta con `BrandPDF`.
+
 ## Arquitectura
 
 ### Formularios e interfaz (parche 030)
