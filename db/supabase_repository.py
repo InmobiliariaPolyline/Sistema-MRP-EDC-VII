@@ -14,6 +14,7 @@ import pandas as pd
 import streamlit as st
 
 from db.client import get_client
+from utils import consumption
 
 _CACHE_TTL = 30  # segundos: solo evita relecturas repetidas al navegar, no es "tiempo real"
 
@@ -717,7 +718,7 @@ def add_movement(
 def list_movements(project_site_id: str | None = None, limit: int = 500) -> pd.DataFrame:
     columns = [
         "id", "material_id", "material_name", "category", "unit", "project_site_id", "site_name",
-        "kind", "quantity", "note", "order_code", "actor", "created_at", "movement_type", "voucher_code", "requested_by",
+        "kind", "quantity", "note", "order_code", "actor", "created_at", "movement_type", "voucher_code", "requested_by", "count_code",
     ]
 
     def fetch(select: str):
@@ -728,18 +729,23 @@ def list_movements(project_site_id: str | None = None, limit: int = 500) -> pd.D
         return _select_all(build, limit=limit)
 
     base = "*, materials(name,category,metric_label), project_sites(name), purchase_orders(code)"
-    try:
-        data = fetch(base + ", dispatch_vouchers(code,requested_by)")
-    except Exception as exc:
-        if not _is_missing(exc):
-            raise
-        data = fetch(base)  # el SQL del parche 036 todavía no se corrió
+    data = None
+    for extra in (", dispatch_vouchers(code,requested_by), inventory_counts(code)", ", dispatch_vouchers(code,requested_by)", ""):
+        try:
+            data = fetch(base + extra)
+            break
+        except Exception as exc:
+            if not _is_missing(exc):
+                raise
+    if data is None:  # ni la tabla base responde: dejar que el error real salga
+        data = fetch(base)
     rows = []
     for row in data:
         material = row.pop("materials", None) or {}
         site = row.pop("project_sites", None) or {}
         order = row.pop("purchase_orders", None) or {}
         voucher = row.pop("dispatch_vouchers", None) or {}
+        count = row.pop("inventory_counts", None) or {}
         rows.append(
             {
                 "id": row["id"],
@@ -758,6 +764,7 @@ def list_movements(project_site_id: str | None = None, limit: int = 500) -> pd.D
                 "movement_type": row.get("movement_type"),
                 "voucher_code": voucher.get("code"),
                 "requested_by": voucher.get("requested_by"),
+                "count_code": count.get("code"),
             }
         )
     return _df(rows, columns=columns)
@@ -888,6 +895,140 @@ def list_dispatch_lines(voucher_id: str) -> pd.DataFrame:
                 "id": row["id"], "material_id": row["material_id"], "material_name": material.get("name"),
                 "category": material.get("category"), "unit": material.get("metric_label"),
                 "quantity": float(row["quantity"]), "note": row.get("note"),
+            }
+        )
+    df = _df(rows, columns=columns)
+    return df.sort_values("material_name").reset_index(drop=True) if not df.empty else df
+
+
+def _net_dispatched(project_site_id: str) -> dict[str, float]:
+    """{material_id: despachado a la obra − devuelto por la obra}, leído directo de la base (sin caché)."""
+    rows = _select_all(
+        lambda: get_client().table("stock_movements").select("material_id,kind,quantity,movement_type,project_site_id").eq("project_site_id", project_site_id).order("id")
+    )
+    return consumption.net_by_material(rows)
+
+
+def create_return(project_site_id: str, returned_by: str | None, note: str | None, lines: list[dict], actor: str | None) -> int:
+    """Devuelve material de una obra al almacén (suma al stock). No se puede devolver más de lo
+    que la obra tiene (despachado − ya devuelto). `lines`: [{"material_id", "quantity", "note"?}].
+    Todo o nada (un solo insert). Devuelve cuántos materiales se devolvieron."""
+    if not lines:
+        raise ValueError("La devolución no tiene materiales.")
+    client = get_client()
+    if not client.table("project_sites").select("id").eq("id", project_site_id).limit(1).execute().data:
+        raise ValueError("La obra no existe.")
+    wanted: dict[str, float] = {}
+    for line in lines:
+        if not line["quantity"] or line["quantity"] <= 0:
+            raise ValueError("Todas las cantidades deben ser mayores que 0.")
+        wanted[line["material_id"]] = wanted.get(line["material_id"], 0.0) + float(line["quantity"])
+    held = _net_dispatched(project_site_id)
+    names = list_materials().set_index("id")["name"].to_dict()
+    for material_id, qty in wanted.items():
+        if qty > held.get(material_id, 0.0) + 1e-9:
+            raise ValueError(
+                f"De «{names.get(material_id, material_id)}» la obra solo tiene {max(held.get(material_id, 0.0), 0):g} "
+                f"(despachado menos devuelto) y se intentan devolver {qty:g}."
+            )
+    who = (returned_by or "").strip()
+    base = (note or "").strip()
+    rows = [
+        {
+            "material_id": line["material_id"], "project_site_id": project_site_id, "kind": "entrada", "quantity": float(line["quantity"]),
+            "note": " · ".join(x for x in [f"Devuelve {who}" if who else "Devolución de obra", base, line.get("note")] if x),
+            "actor": actor, "movement_type": "devolucion",
+        }
+        for line in lines
+    ]
+    try:
+        client.table("stock_movements").insert(rows).execute()
+    except Exception as exc:
+        raise _friendly(exc) from exc
+    _invalidate_stock()
+    return len(lines)
+
+
+def create_inventory_count(lines: list[dict], note: str | None, actor: str | None) -> str:
+    """Toma de inventario físico. `lines`: [{"material_id", "counted_qty", "reason"?}] con lo contado en
+    estantería. Compara con el stock del sistema, guarda el conteo y genera un movimiento de ajuste por
+    cada diferencia (entrada si sobra, salida si falta). Devuelve el código (CT-0001)."""
+    if not lines:
+        raise ValueError("No hay materiales contados.")
+    for line in lines:
+        if float(line["counted_qty"]) < 0:
+            raise ValueError("Lo contado no puede ser negativo.")
+    client = get_client()
+    stock_levels.clear()
+    system_stock = stock_levels().set_index("material_id")["stock"].astype(float).to_dict()
+    try:
+        codes = [r["code"] for r in (client.table("inventory_counts").select("code").execute().data or [])]
+    except Exception as exc:
+        if _is_missing(exc):
+            raise ValueError("Falta correr el SQL de la Fase B en Supabase (db/migrations/041_fase_b.sql).") from exc
+        raise
+    number = max([int(c.split("-")[1]) for c in codes if c.startswith("CT-") and c.split("-")[1].isdigit()] or [0]) + 1
+    code = f"CT-{number:04d}"
+    count = client.table("inventory_counts").insert({"code": code, "note": (note or "").strip() or None, "actor": actor}).execute().data[0]
+    try:
+        detail, moves = [], []
+        for line in lines:
+            counted = float(line["counted_qty"])
+            system = float(system_stock.get(line["material_id"], 0.0))
+            diff = round(counted - system, 6)
+            reason = (line.get("reason") or "").strip()
+            detail.append(
+                {"count_id": count["id"], "material_id": line["material_id"], "system_qty": system, "counted_qty": counted, "difference": diff, "reason": reason or None}
+            )
+            if abs(diff) > 1e-9:
+                moves.append(
+                    {
+                        "material_id": line["material_id"], "kind": "entrada" if diff > 0 else "salida", "quantity": abs(diff),
+                        "note": f"Conteo {code}: sistema {system:g}, contado {counted:g}" + (f" · {reason}" if reason else ""),
+                        "actor": actor, "movement_type": "conteo", "count_id": count["id"],
+                    }
+                )
+        client.table("inventory_count_lines").insert(detail).execute()
+        if moves:
+            client.table("stock_movements").insert(moves).execute()
+    except Exception as exc:
+        client.table("inventory_counts").delete().eq("id", count["id"]).execute()  # nada a medias
+        raise _friendly(exc) from exc
+    _invalidate_stock()
+    list_inventory_counts.clear()
+    return code
+
+
+@st.cache_data(ttl=_CACHE_TTL, show_spinner=False)
+def list_inventory_counts(limit: int = 100) -> pd.DataFrame:
+    columns = ["id", "code", "note", "actor", "created_at", "lines_count", "adjusted_count"]
+    try:
+        data = get_client().table("inventory_counts").select("*, inventory_count_lines(difference)").order("created_at", desc=True).limit(limit).execute().data or []
+    except Exception as exc:
+        if _is_missing(exc):
+            return _df(columns=columns)
+        raise
+    rows = []
+    for row in data:
+        detail = row.pop("inventory_count_lines", None) or []
+        rows.append({**row, "lines_count": len(detail), "adjusted_count": sum(1 for d in detail if abs(float(d["difference"])) > 1e-9)})
+    return _df(rows, columns=columns)
+
+
+def list_count_lines(count_id: str) -> pd.DataFrame:
+    columns = ["id", "material_id", "material_name", "category", "unit", "system_qty", "counted_qty", "difference", "reason"]
+    data = (
+        get_client().table("inventory_count_lines").select("*, materials(name,category,metric_label)").eq("count_id", count_id).execute().data or []
+    )
+    rows = []
+    for row in data:
+        material = row.pop("materials", None) or {}
+        rows.append(
+            {
+                "id": row["id"], "material_id": row["material_id"], "material_name": material.get("name"),
+                "category": material.get("category"), "unit": material.get("metric_label"),
+                "system_qty": float(row["system_qty"]), "counted_qty": float(row["counted_qty"]),
+                "difference": float(row["difference"]), "reason": row.get("reason"),
             }
         )
     df = _df(rows, columns=columns)
@@ -1060,7 +1201,7 @@ def recent_activity(limit: int = 6) -> list[dict]:
 # Tablas de la app, en orden de dependencia (para respaldos y restauración).
 BACKUP_TABLES = [
     "materials", "suppliers", "supplier_materials", "users", "work_groups", "project_sites", "workers",
-    "purchase_orders", "purchase_order_items", "dispatch_vouchers", "stock_movements",
+    "purchase_orders", "purchase_order_items", "dispatch_vouchers", "inventory_counts", "inventory_count_lines", "stock_movements",
     "site_budgets", "attendance", "audit_log", "price_history",
 ]
 

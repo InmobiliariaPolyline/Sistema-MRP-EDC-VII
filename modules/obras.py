@@ -8,6 +8,7 @@ import streamlit as st
 
 from db import repository as repo
 from modules import forms, inventario, materiales, ui
+from utils.consumption import site_quantity
 from utils.geocode import google_maps_search_url
 
 SITE_KEY = "obras_site"
@@ -61,10 +62,11 @@ def progress_by_material(site_id: str) -> pd.DataFrame:
         s["Gasto pedido $"] += float(i["quantity"]) * float(i["unit_price"])
         s["Recibido $"] += float(i["received_qty"]) * float(i["unit_price"])
     for m in consumed.to_dict("records"):
-        if m["kind"] != "salida":
+        amount = site_quantity(m)
+        if not amount:
             continue
         s = slot(m["material_id"], m["material_name"], m["category"], m["unit"])
-        s["Despachado"] += float(m["quantity"])
+        s["Despachado"] += amount
 
     for s in data.values():  # el despacho se valora al precio presupuestado (o al promedio pedido)
         price = s["planned_price"] or (s["Gasto pedido $"] / s["Pedido"] if s["Pedido"] else 0.0)
@@ -227,12 +229,15 @@ def _tab_info(site: dict) -> None:
 def _tab_materials(site: dict, df: pd.DataFrame) -> None:
     site_id, site_name = site["id"], site["name"]
     ui.tip("Primero define lo que esperas usar con «＋ Material al presupuesto». Luego verás cuánto llevas pedido, recibido y despachado.")
-    b1, b2, _ = st.columns([2, 2, 4])
+    b1, b2, b3, _ = st.columns([2, 2, 2, 2])
     if b1.button("＋ Material al presupuesto", type="primary", width="stretch"):
         _clear_budget_draft(site_id)
         _budget_dialog(site_id, site_name)
     if b2.button("🚚 Despachar material", width="stretch", help="Saca material del almacén hacia esta obra y genera el vale de salida."):
         inventario.dispatch_dialog(default_site_id=site_id)
+    if b3.button("↩️ Devolver material", width="stretch", help="El material que sobra en esta obra vuelve al almacén."):
+        inventario._clear_return_draft()
+        inventario.return_dialog(default_site_id=site_id)
 
     if df.empty:
         ui.empty_state("Aún no hay materiales en esta obra", "Añade un material al presupuesto o crea una orden con esta obra como destino.")

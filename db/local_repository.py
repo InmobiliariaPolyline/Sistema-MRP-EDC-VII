@@ -16,6 +16,8 @@ from pathlib import Path
 
 import pandas as pd
 
+from utils import consumption
+
 DB_PATH = Path(os.environ.get("MRP_LOCAL_DB") or Path(__file__).resolve().parent / "local.db")
 
 
@@ -174,6 +176,24 @@ def _init_db() -> None:
                 created_at text default (datetime('now'))
             );
 
+            create table if not exists inventory_counts (
+                id text primary key,
+                code text not null unique,
+                note text,
+                actor text,
+                created_at text default (datetime('now'))
+            );
+
+            create table if not exists inventory_count_lines (
+                id text primary key,
+                count_id text not null references inventory_counts(id) on delete cascade,
+                material_id text not null references materials(id) on delete cascade,
+                system_qty real not null,
+                counted_qty real not null,
+                difference real not null,
+                reason text
+            );
+
             create table if not exists audit_log (
                 id text primary key,
                 actor text not null,
@@ -188,6 +208,7 @@ def _init_db() -> None:
             ("supplier_materials", "price_updated_at", "text"),
             ("stock_movements", "voucher_id", "text references dispatch_vouchers(id) on delete set null"),
             ("stock_movements", "movement_type", "text"),
+            ("stock_movements", "count_id", "text references inventory_counts(id) on delete set null"),
         ]:
             cols = [r[1] for r in conn.execute(f"pragma table_info({table})").fetchall()]
             if column not in cols:
@@ -769,12 +790,13 @@ def list_movements(project_site_id: str | None = None, limit: int = 500) -> pd.D
         select sm.id, sm.material_id, m.name as material_name, m.category, m.metric_label as unit,
                sm.project_site_id, ps.name as site_name, sm.kind, sm.quantity, sm.note,
                o.code as order_code, sm.actor, sm.created_at, sm.movement_type,
-               v.code as voucher_code, v.requested_by
+               v.code as voucher_code, v.requested_by, ic.code as count_code
         from stock_movements sm
         join materials m on m.id = sm.material_id
         left join project_sites ps on ps.id = sm.project_site_id
         left join purchase_orders o on o.id = sm.order_id
         left join dispatch_vouchers v on v.id = sm.voucher_id
+        left join inventory_counts ic on ic.id = sm.count_id
     """
     params: tuple = ()
     if project_site_id:
@@ -865,6 +887,113 @@ def list_dispatch_lines(voucher_id: str) -> pd.DataFrame:
             """,
             conn,
             params=(voucher_id,),
+        )
+    return df.astype(object).where(pd.notnull(df), None)
+
+
+def _net_dispatched(conn, project_site_id: str) -> dict[str, float]:
+    """{material_id: despachado a la obra − devuelto por la obra}."""
+    rows = conn.execute(
+        "select material_id, kind, quantity, movement_type, project_site_id from stock_movements where project_site_id = ?", (project_site_id,)
+    ).fetchall()
+    return consumption.net_by_material(
+        [{"material_id": r[0], "kind": r[1], "quantity": r[2], "movement_type": r[3], "project_site_id": r[4]} for r in rows]
+    )
+
+
+def create_return(project_site_id: str, returned_by: str | None, note: str | None, lines: list[dict], actor: str | None) -> int:
+    """Devuelve material de una obra al almacén (suma al stock). No se puede devolver más de lo
+    que la obra tiene (despachado − ya devuelto). `lines`: [{"material_id", "quantity", "note"?}].
+    Todo o nada. Devuelve cuántos materiales se devolvieron."""
+    if not lines:
+        raise ValueError("La devolución no tiene materiales.")
+    with _connect() as conn:
+        if conn.execute("select 1 from project_sites where id = ?", (project_site_id,)).fetchone() is None:
+            raise ValueError("La obra no existe.")
+        wanted: dict[str, float] = {}
+        for line in lines:
+            if not line["quantity"] or line["quantity"] <= 0:
+                raise ValueError("Todas las cantidades deben ser mayores que 0.")
+            wanted[line["material_id"]] = wanted.get(line["material_id"], 0.0) + float(line["quantity"])
+        held = _net_dispatched(conn, project_site_id)
+        for material_id, qty in wanted.items():
+            if qty > held.get(material_id, 0.0) + 1e-9:
+                name = conn.execute("select name from materials where id = ?", (material_id,)).fetchone()
+                raise ValueError(
+                    f"De «{name[0] if name else material_id}» la obra solo tiene {max(held.get(material_id, 0.0), 0):g} "
+                    f"(despachado menos devuelto) y se intentan devolver {qty:g}."
+                )
+        who = (returned_by or "").strip()
+        base = (note or "").strip()
+        for line in lines:
+            text = " · ".join(x for x in [f"Devuelve {who}" if who else "Devolución de obra", base, line.get("note")] if x)
+            conn.execute(
+                "insert into stock_movements (id, material_id, project_site_id, kind, quantity, note, actor, movement_type) "
+                "values (?, ?, ?, 'entrada', ?, ?, ?, 'devolucion')",
+                (str(uuid.uuid4()), line["material_id"], project_site_id, line["quantity"], text, actor),
+            )
+    return len(lines)
+
+
+def create_inventory_count(lines: list[dict], note: str | None, actor: str | None) -> str:
+    """Toma de inventario físico. `lines`: [{"material_id", "counted_qty", "reason"?}] con lo contado en
+    estantería. Compara con el stock del sistema, guarda el conteo y genera un movimiento de ajuste por
+    cada diferencia (entrada si sobra, salida si falta). Devuelve el código (CT-0001)."""
+    if not lines:
+        raise ValueError("No hay materiales contados.")
+    for line in lines:
+        if float(line["counted_qty"]) < 0:
+            raise ValueError("Lo contado no puede ser negativo.")
+    with _connect() as conn:
+        codes = [r[0] for r in conn.execute("select code from inventory_counts").fetchall()]
+        number = max([int(c.split("-")[1]) for c in codes if c.startswith("CT-") and c.split("-")[1].isdigit()] or [0]) + 1
+        code = f"CT-{number:04d}"
+        count_id = str(uuid.uuid4())
+        conn.execute("insert into inventory_counts (id, code, note, actor) values (?, ?, ?, ?)", (count_id, code, (note or "").strip() or None, actor))
+        for line in lines:
+            counted = float(line["counted_qty"])
+            system = _stock_of(conn, line["material_id"])
+            diff = round(counted - system, 6)
+            reason = (line.get("reason") or "").strip()
+            conn.execute(
+                "insert into inventory_count_lines (id, count_id, material_id, system_qty, counted_qty, difference, reason) values (?, ?, ?, ?, ?, ?, ?)",
+                (str(uuid.uuid4()), count_id, line["material_id"], system, counted, diff, reason or None),
+            )
+            if abs(diff) > 1e-9:
+                text = f"Conteo {code}: sistema {system:g}, contado {counted:g}" + (f" · {reason}" if reason else "")
+                conn.execute(
+                    "insert into stock_movements (id, material_id, kind, quantity, note, actor, movement_type, count_id) values (?, ?, ?, ?, ?, ?, 'conteo', ?)",
+                    (str(uuid.uuid4()), line["material_id"], "entrada" if diff > 0 else "salida", abs(diff), text, actor, count_id),
+                )
+    return code
+
+
+def list_inventory_counts(limit: int = 100) -> pd.DataFrame:
+    with _connect() as conn:
+        df = pd.read_sql_query(
+            """
+            select c.id, c.code, c.note, c.actor, c.created_at,
+                   (select count(*) from inventory_count_lines l where l.count_id = c.id) as lines_count,
+                   (select count(*) from inventory_count_lines l where l.count_id = c.id and l.difference != 0) as adjusted_count
+            from inventory_counts c order by c.created_at desc, c.rowid desc limit ?
+            """,
+            conn,
+            params=(limit,),
+        )
+    return df.astype(object).where(pd.notnull(df), None)
+
+
+def list_count_lines(count_id: str) -> pd.DataFrame:
+    with _connect() as conn:
+        df = pd.read_sql_query(
+            """
+            select l.id, l.material_id, m.name as material_name, m.category, m.metric_label as unit,
+                   l.system_qty, l.counted_qty, l.difference, l.reason
+            from inventory_count_lines l join materials m on m.id = l.material_id
+            where l.count_id = ? order by m.name
+            """,
+            conn,
+            params=(count_id,),
         )
     return df.astype(object).where(pd.notnull(df), None)
 
@@ -1028,7 +1157,7 @@ def recent_activity(limit: int = 6) -> list[dict]:
 # Tablas de la app, en orden de dependencia (para respaldos y restauración).
 BACKUP_TABLES = [
     "materials", "suppliers", "supplier_materials", "users", "work_groups", "project_sites", "workers",
-    "purchase_orders", "purchase_order_items", "dispatch_vouchers", "stock_movements",
+    "purchase_orders", "purchase_order_items", "dispatch_vouchers", "inventory_counts", "inventory_count_lines", "stock_movements",
     "site_budgets", "attendance", "audit_log", "price_history",
 ]
 

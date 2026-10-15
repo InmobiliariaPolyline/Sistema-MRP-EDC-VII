@@ -45,7 +45,9 @@ GUIDES: dict[str, str] = {
 - **Entra** con las recepciones de las órdenes de compra (y con entradas de ajuste).
 - **Sale** con un **despacho a obra**: cuando alguien pide material, pulsa **＋ Despachar a obra**, elige la obra y quién lo pide, agrega los materiales y confirma. Se descuenta del almacén y se genera un **vale de salida en PDF** para firmar.
 - Si te pasas del presupuesto de la obra, el sistema avisa (no lo impide).
-- **Entrada de ajuste o merma:** para corregir un conteo o dar de baja material dañado o prestado.
+- **Devolver de una obra:** lo que sobra en una obra vuelve al almacén y suma al stock. Solo se puede devolver lo que la obra recibió (despachado menos devuelto); también está en la pestaña Materiales de cada obra.
+- **Toma de inventario:** cuenta lo que hay en estantería, categoría por categoría. Escribe lo contado (lo que dejes vacío no se toca), anota el motivo de cada diferencia y se ajusta el stock. Cada conteo queda guardado en la pestaña **Conteos**.
+- **Entrada, merma o devolución a proveedor:** para dar de baja material dañado o prestado, o devolver al proveedor lo que llegó mal.
 - No se puede sacar más de lo que hay. La pestaña **Vales de salida** guarda todos los vales para reimprimirlos.
 
 *Ejemplo:* Juan Pérez pide 4 m³ de concreto para Torre Central → Despachar a obra → Torre Central, Juan Pérez, Concreto 4 → Registrar → descargar el vale.

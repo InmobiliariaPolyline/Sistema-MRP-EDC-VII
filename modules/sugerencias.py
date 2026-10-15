@@ -18,6 +18,7 @@ import streamlit as st
 
 from db import repository as repo
 from modules import forms, ui
+from utils.consumption import site_quantity
 
 OPEN_STATUSES = ("pendiente", "enviada", "parcial")
 COLUMNS = [
@@ -64,10 +65,11 @@ def compute_suggestions(
 
     dispatched: dict[tuple[str, str], float] = {}
     if not movements.empty:
-        out = movements[(movements["kind"] == "salida") & movements["project_site_id"].notna()]
-        for row in out.to_dict("records"):
-            key = (row["project_site_id"], row["material_id"])
-            dispatched[key] = dispatched.get(key, 0.0) + _num(row["quantity"])
+        for row in movements[movements["project_site_id"].notna()].to_dict("records"):
+            amount = site_quantity(row)
+            if amount:
+                key = (row["project_site_id"], row["material_id"])
+                dispatched[key] = dispatched.get(key, 0.0) + amount
 
     demand: dict[str, float] = {}
     if not budgets.empty:

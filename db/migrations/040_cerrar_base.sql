@@ -10,46 +10,43 @@
 -- Si lo ejecutas antes del paso 2, la app dejará de poder leer y escribir (se arregla
 -- corriendo db/migrations/040b_reabrir_base_emergencia.sql).
 --
--- Qué hace: activa RLS en todas las tablas SIN políticas y retira todos los permisos a los
--- roles `anon` y `authenticated` (los de la clave pública). La clave de servicio salta RLS,
+-- Qué hace: activa RLS en TODAS las tablas de la app SIN políticas y retira todos los permisos
+-- a los roles `anon` y `authenticated` (los de la clave pública). La clave de servicio salta RLS,
 -- así que la app sigue funcionando; quien solo tenga la clave pública ya no ve nada.
--- Es idempotente. Se verifica con: python scripts/check_security.py
+-- Es idempotente y recorre todas las tablas, vistas, secuencias y funciones de la app que existan
+-- (también las de parches posteriores). Se verifica con: python scripts/check_security.py
 -- =============================================================================
 
 do $$
 declare
-  t text;
+  r record;
 begin
-  foreach t in array array[
-    'materials', 'suppliers', 'supplier_materials', 'users',
-    'work_groups', 'project_sites', 'workers',
-    'purchase_orders', 'purchase_order_items',
-    'dispatch_vouchers', 'stock_movements', 'site_budgets', 'attendance', 'audit_log', 'price_history'
-  ]
+  -- Tablas
+  for r in select tablename from pg_tables where schemaname = 'public' loop
+    execute format('alter table public.%I enable row level security', r.tablename);
+    execute format('revoke all on table public.%I from anon, authenticated', r.tablename);
+  end loop;
+
+  -- Vistas: que usen los permisos de quien consulta (no los de su dueño) y sin acceso público
+  for r in select viewname from pg_views where schemaname = 'public' loop
+    execute format('alter view public.%I set (security_invoker = true)', r.viewname);
+    execute format('revoke all on public.%I from anon, authenticated', r.viewname);
+  end loop;
+
+  -- Secuencias
+  for r in select sequencename from pg_sequences where schemaname = 'public' loop
+    execute format('revoke all on sequence public.%I from anon, authenticated', r.sequencename);
+  end loop;
+
+  -- Funciones que la app llama por rpc: solo la clave de servicio
+  for r in
+    select p.oid::regprocedure as sig
+    from pg_proc p join pg_namespace n on n.oid = p.pronamespace
+    where n.nspname = 'public' and p.proname in ('receive_order', 'create_dispatch')
   loop
-    if to_regclass('public.' || t) is not null then
-      execute format('alter table public.%I enable row level security', t);
-      execute format('revoke all on table public.%I from anon, authenticated', t);
-    end if;
+    execute format('revoke all on function %s from public, anon, authenticated', r.sig);
+    execute format('grant execute on function %s to service_role', r.sig);
   end loop;
 end $$;
-
--- La vista de stock se ejecutaba con los permisos de su dueño (saltaba RLS): que use los del consultante.
-do $$
-begin
-  if to_regclass('public.stock_levels') is not null then
-    execute 'alter view public.stock_levels set (security_invoker = true)';
-    execute 'revoke all on public.stock_levels from anon, authenticated';
-  end if;
-  if to_regclass('public.voucher_seq') is not null then
-    execute 'revoke all on sequence public.voucher_seq from anon, authenticated';
-  end if;
-end $$;
-
--- Las funciones se pueden llamar por rpc: solo la clave de servicio.
-revoke all on function public.receive_order(uuid, jsonb, text) from public, anon, authenticated;
-revoke all on function public.create_dispatch(uuid, uuid, text, text, text, jsonb) from public, anon, authenticated;
-grant execute on function public.receive_order(uuid, jsonb, text) to service_role;
-grant execute on function public.create_dispatch(uuid, uuid, text, text, text, jsonb) to service_role;
 
 notify pgrst, 'reload schema';

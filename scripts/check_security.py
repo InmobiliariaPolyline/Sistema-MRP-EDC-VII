@@ -35,6 +35,11 @@ PROBES = {
     "attendance": {"worker_id": Z, "work_date": "2026-01-01"},
     "audit_log": {"actor": "zz-probe", "summary": "zz-probe"},
     "price_history": {"supplier_id": Z, "material_id": Z},
+    # Fase B (si todavía no se corrió su SQL, la tabla no existe y se omite)
+    "inventory_counts": {"code": "zz-probe"},
+    "inventory_count_lines": {"count_id": Z, "material_id": Z, "system_qty": 0, "counted_qty": 0, "difference": 0},
+    "order_receipts": {"order_id": Z},
+    "attachments": {"entity_type": "zz", "entity_id": Z, "filename": "zz", "storage_path": "zz-probe"},
 }
 
 
@@ -59,6 +64,8 @@ def main() -> int:
             code = str(getattr(exc, "code", ""))
             if code in ("42501",):
                 print(f"  cerrada   {table}")
+            elif code in ("PGRST205", "42P01"):
+                print(f"  (no existe) {table}: falta correr el SQL de su parche")
             else:  # pasó el control de acceso y falló después (p. ej. clave foránea): también está abierta
                 open_tables.append(table)
                 print(f"  ABIERTA   {table}  (pasó los permisos; falló por {code})")

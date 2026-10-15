@@ -6,6 +6,23 @@ Formato de cada parche: **Agregado** · **Corregido** · **Problemas y causa** �
 
 ---
 
+## Parche 042 — Devoluciones de obra y toma de inventario · 2026-10-16
+Fase B (operación real del almacén), primera parte.
+
+**Agregado**
+- **Devolver de una obra** (Inventario y pestaña Materiales de cada obra): el material que sobra vuelve al almacén. No deja devolver más de lo que la obra tiene (despachado menos devuelto) ni materiales que nunca recibió; es todo o nada. Queda anotado quién devuelve.
+- **Toma de inventario físico:** se cuenta por categoría, se compara con el sistema y cada diferencia genera un ajuste (entrada si sobra, salida si falta) con su motivo. Cada conteo queda guardado (CT-0001…) con el detalle de lo que decía el sistema y lo contado, en la pestaña nueva **Conteos**.
+- **Devolución a proveedor** como tercer tipo de movimiento manual (sale del almacén y no cuenta como consumo de ninguna obra).
+- Lo despachado a una obra ahora **descuenta lo devuelto** en el presupuesto de la obra, en el aviso al despachar y en la sugerencia de compra (`utils/consumption.py`).
+- Nuevas etiquetas en Movimientos: Devolución de obra, Devolución a proveedor y Toma de inventario.
+- Pruebas nuevas (11): devoluciones, topes, todo o nada, conteos en ambos sentidos y consumo neto.
+
+**Corregido**
+- `040_cerrar_base.sql` y `040b_reabrir_base_emergencia.sql` ahora recorren **todas** las tablas, vistas, secuencias y funciones del esquema público, en lugar de una lista fija: también cierran las tablas de los parches siguientes y no fallan si una función cambió de firma.
+
+**Hay que hacer**
+- Correr `db/migrations/041_fase_b.sql` en Supabase (es el script de toda la Fase B; se puede correr una sola vez cuando termine la fase). Sin él, las devoluciones funcionan, pero la toma de inventario avisa que falta el SQL.
+
 ## Parche 041 — Seguridad, respaldos, versiones fijas y revisión automática · 2026-10-16
 Primera fase del plan de mejoras (lo necesario antes de usar datos reales).
 
