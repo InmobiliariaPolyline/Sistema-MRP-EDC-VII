@@ -35,6 +35,8 @@ GUIDES: dict[str, str] = {
 1. **＋ Nueva orden:** proveedor, obra destino (opcional) y materiales con su cantidad. El **precio unitario es el del catálogo del proveedor y no se puede cambiar en la orden** (solo sube el total al pedir más); si hay que cambiarlo, edítalo en Proveedores → Catálogo. **💡 Comparar cotizaciones** te dice si otro proveedor es más barato; si eliges obra, avisa cuando el pedido supera su presupuesto.
 2. **Estados:** Pendiente → Enviada → Recibida (o Parcial si llegó solo una parte).
 3. **📦 Registrar recepción:** anota lo que llegó; entra al stock del almacén. No se puede recibir más de lo pedido.
+3b. **Entrega, moneda e IGV (opcionales):** al crear o editar una orden puedes indicar la **fecha prometida de entrega** (si pasa y la orden sigue abierta, se marca como atrasada en la lista, en el detalle y en el dashboard), la **moneda** (soles o dólares, con su tipo de cambio) y si se **suma el IGV (18 %)** al total.
+3c. **Recepción contra documento:** al registrar una recepción anota el **N.º de guía o factura**, quién entregó y las **observaciones** (faltantes, daños). Cada recepción queda guardada en «Recepciones registradas» dentro de la orden.
 4. **✏️ Editar orden:** corrige cantidades, precios, obra o notas mientras no haya recibido material.
 5. Una orden que ya recibió material **no se borra** (el stock quedaría descuadrado): si no continúa, cancélala.
 6. **Sugerencia de compra:** calcula qué falta pedir según los presupuestos de las obras, el stock y lo que ya viene en camino, y crea las órdenes agrupadas por el proveedor más barato.

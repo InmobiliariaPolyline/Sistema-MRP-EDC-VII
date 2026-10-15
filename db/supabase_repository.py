@@ -14,7 +14,7 @@ import pandas as pd
 import streamlit as st
 
 from db.client import get_client
-from utils import consumption
+from utils import consumption, money
 
 _CACHE_TTL = 30  # segundos: solo evita relecturas repetidas al navegar, no es "tiempo real"
 
@@ -63,11 +63,19 @@ def _friendly(exc: Exception) -> ValueError:
     return ValueError(message)
 
 
+PHASE_B_MESSAGE = "Falta correr el SQL de la Fase B en Supabase (db/migrations/041_fase_b.sql)."
+
+
+def _phase_b(exc: Exception) -> ValueError:
+    """Error legible cuando una función de la Fase B se usa antes de correr su SQL."""
+    return ValueError(PHASE_B_MESSAGE)
+
+
 def _is_missing(exc: Exception) -> bool:
     """¿El error significa que todavía no se corrió el SQL del parche (columna, tabla,
     vista o función inexistente)? Entonces se usa el camino de respaldo."""
     text = f"{getattr(exc, 'code', '')} {exc}"
-    return any(t in text for t in ("PGRST202", "PGRST200", "PGRST205", "42703", "42P01", "42883", "Could not find", "does not exist"))
+    return any(t in text for t in ("PGRST202", "PGRST200", "PGRST204", "PGRST205", "42703", "42P01", "42883", "Could not find", "does not exist"))
 
 
 def _invalidate_stock() -> None:
@@ -495,16 +503,21 @@ def list_orders() -> pd.DataFrame:
             {
                 **row,
                 "site_name": site.get("name"),
-                "total": sum(float(i["quantity"]) * float(i["unit_price"]) for i in items),
+                "subtotal": sum(float(i["quantity"]) * float(i["unit_price"]) for i in items),
                 "items_count": len(items),
             }
         )
     columns = [
         "id", "code", "supplier_id", "supplier_name", "project_site_id", "site_name",
-        "status", "notes", "created_at", "total", "items_count",
+        "status", "notes", "created_at", "expected_date", "currency", "exchange_rate", "tax_rate",
+        "subtotal", "tax", "total", "subtotal_base", "total_base", "items_count",
     ]
-    df = _df(rows)
-    return df[columns] if not df.empty else _df(columns=columns)
+    df = _df(rows, columns=[c for c in columns if c not in ("tax", "total", "subtotal_base", "total_base")]) if rows else _df(columns=columns)
+    if df.empty:
+        return _df(columns=columns)
+    df["currency"] = df["currency"].fillna(money.BASE)  # antes del SQL de la Fase B no existen estas columnas
+    df = money.add_amounts(df)
+    return _clean(df[columns])
 
 
 @st.cache_data(ttl=_CACHE_TTL, show_spinner=False)
@@ -536,22 +549,26 @@ def list_order_items(order_id: str | None = None) -> pd.DataFrame:
     return df.sort_values(["order_code", "material_name"]).reset_index(drop=True) if not df.empty else df
 
 
-def create_order(supplier_id: str, supplier_name: str, project_site_id: str | None, notes: str | None, items: list[dict]) -> str:
-    """Crea la orden con sus líneas y devuelve su código (OC-0001, OC-0002...)."""
+def create_order(
+    supplier_id: str, supplier_name: str, project_site_id: str | None, notes: str | None, items: list[dict], terms: dict | None = None,
+) -> str:
+    """Crea la orden con sus líneas y devuelve su código (OC-0001, OC-0002...).
+    `terms`: fecha prometida, moneda, tipo de cambio e IGV (ver utils/money.py)."""
+    terms = money.normalize_terms(terms)
     client = get_client()
     existing = client.table("purchase_orders").select("code").execute().data or []
     numbers = [int(r["code"].split("-")[1]) for r in existing if r["code"].startswith("OC-") and r["code"].split("-")[1].isdigit()]
     code = f"OC-{(max(numbers) if numbers else 0) + 1:04d}"
 
-    res = client.table("purchase_orders").insert(
-        {
-            "code": code,
-            "supplier_id": supplier_id,
-            "supplier_name": supplier_name,
-            "project_site_id": project_site_id,
-            "notes": notes,
-        }
-    ).execute()
+    payload = {"code": code, "supplier_id": supplier_id, "supplier_name": supplier_name, "project_site_id": project_site_id, "notes": notes}
+    if not money.is_default(terms):  # solo se envían las columnas nuevas si hacen falta (así funciona antes del SQL)
+        payload.update(terms)
+    try:
+        res = client.table("purchase_orders").insert(payload).execute()
+    except Exception as exc:
+        if _is_missing(exc):
+            raise _phase_b(exc) from exc
+        raise
     order_id = res.data[0]["id"]
     client.table("purchase_order_items").insert(
         [
@@ -588,8 +605,8 @@ def delete_order(order_id: str) -> None:
     _invalidate_orders()
 
 
-def update_order(order_id: str, project_site_id: str | None, notes: str | None, items: list[dict]) -> None:
-    """Edita obra, notas y líneas de una orden que todavía no recibió material.
+def update_order(order_id: str, project_site_id: str | None, notes: str | None, items: list[dict], terms: dict | None = None) -> None:
+    """Edita obra, notas, condiciones (si se pasan `terms`) y líneas de una orden que todavía no recibió material.
     `items` reemplaza las líneas actuales (material_id, material_name, unit, quantity, unit_price)."""
     client = get_client()
     rows = client.table("purchase_orders").select("status").eq("id", order_id).limit(1).execute().data
@@ -615,11 +632,20 @@ def update_order(order_id: str, project_site_id: str | None, notes: str | None, 
             for item in items
         ]
     ).execute()
-    client.table("purchase_orders").update({"project_site_id": project_site_id, "notes": notes}).eq("id", order_id).execute()
+    changes = {"project_site_id": project_site_id, "notes": notes}
+    if terms is not None:
+        changes.update(money.normalize_terms(terms))
+    try:
+        client.table("purchase_orders").update(changes).eq("id", order_id).execute()
+    except Exception as exc:
+        if _is_missing(exc):
+            raise _phase_b(exc) from exc
+        raise
     _invalidate_orders()
 
 
 def _invalidate_orders() -> None:
+    list_receipts.clear()
     list_orders.clear()
     list_order_items.clear()
     list_movements.clear()
@@ -627,15 +653,21 @@ def _invalidate_orders() -> None:
     dashboard_totals.clear()
 
 
-def receive_order_items(order_id: str, receipts: dict[str, float], actor: str | None = None) -> str:
+def receive_order_items(order_id: str, receipts: dict[str, float], actor: str | None = None, receipt: dict | None = None) -> str:
     """Registra lo recibido por línea (id de línea -> cantidad que llegó ahora),
     genera las entradas de stock y deja la orden en 'parcial' o 'recibida'.
     Usa la función `receive_order` de la base (todo o nada); si todavía no se corrió el
-    SQL del parche 036, usa un respaldo en Python que valida antes de escribir."""
+    SQL del parche 036, usa un respaldo en Python que valida antes de escribir.
+    `receipt`: datos del documento ({"delivered_by", "document_ref", "notes"}); necesita el SQL de la Fase B."""
     client = get_client()
     clean = {k: float(v) for k, v in receipts.items() if v and float(v) > 0}
+    receipt = {k: (v or "").strip() or None for k, v in (receipt or {}).items()}
+    has_doc = any(receipt.values())
+    params = {"p_order_id": order_id, "p_receipts": clean, "p_actor": actor}
+    if has_doc:
+        params.update({"p_delivered_by": receipt.get("delivered_by"), "p_document_ref": receipt.get("document_ref"), "p_notes": receipt.get("notes")})
     try:
-        res = client.rpc("receive_order", {"p_order_id": order_id, "p_receipts": clean, "p_actor": actor}).execute()
+        res = client.rpc("receive_order", params).execute()
         _invalidate_orders()
         return res.data if isinstance(res.data, str) else str(res.data)
     except Exception as exc:
@@ -657,14 +689,27 @@ def receive_order_items(order_id: str, receipts: dict[str, float], actor: str | 
             raise ValueError("La línea no pertenece a la orden.")
         if float(item.get("received_qty") or 0) + qty > float(item["quantity"]) + 1e-9:
             raise ValueError("Se intenta recibir más de lo pedido en una línea.")
+    receipt_id = None
+    if clean:
+        try:
+            receipt_id = client.table("order_receipts").insert(
+                {"order_id": order_id, "delivered_by": receipt.get("delivered_by"), "document_ref": receipt.get("document_ref"), "notes": receipt.get("notes"), "actor": actor}
+            ).execute().data[0]["id"]
+        except Exception as exc:
+            if not _is_missing(exc):
+                raise _friendly(exc) from exc
+            if has_doc:
+                raise _phase_b(exc) from exc  # no se puede guardar el documento sin la tabla
     movements, pending = [], False
+    doc_text = f" · {receipt['document_ref']}" if receipt.get("document_ref") else ""
     for item in items:
         received = float(item.get("received_qty") or 0)
         arrived = clean.get(item["id"], 0.0)
         if arrived > 0 and item.get("material_id"):
-            movements.append(
-                {"material_id": item["material_id"], "kind": "entrada", "quantity": arrived, "note": f"Recepción {code}", "order_id": order_id, "actor": actor}
-            )
+            movement = {"material_id": item["material_id"], "kind": "entrada", "quantity": arrived, "note": f"Recepción {code}{doc_text}", "order_id": order_id, "actor": actor}
+            if receipt_id:
+                movement["receipt_id"] = receipt_id
+            movements.append(movement)
         if received + arrived < float(item["quantity"]):
             pending = True
     if movements:  # primero el stock: si falla, ninguna línea quedó marcada como recibida
@@ -685,6 +730,20 @@ def receive_order_items(order_id: str, receipts: dict[str, float], actor: str | 
 # ---------------------------------------------------------------------------
 # Inventario (movimientos de stock) y presupuesto por obra
 # ---------------------------------------------------------------------------
+
+@st.cache_data(ttl=_CACHE_TTL, show_spinner=False)
+def list_receipts(order_id: str) -> pd.DataFrame:
+    """Recepciones registradas de una orden (más reciente primero)."""
+    columns = ["id", "order_id", "received_at", "delivered_by", "document_ref", "notes", "actor", "lines_count"]
+    try:
+        data = get_client().table("order_receipts").select("*, stock_movements(id)").eq("order_id", order_id).order("received_at", desc=True).execute().data or []
+    except Exception as exc:
+        if _is_missing(exc):
+            return _df(columns=columns)
+        raise
+    rows = [{**{k: v for k, v in row.items() if k != "stock_movements"}, "lines_count": len(row.get("stock_movements") or [])} for row in data]
+    return _df(rows, columns=columns)
+
 
 def add_movement(
     material_id: str, kind: str, quantity: float, project_site_id: str | None, note: str | None, actor: str | None,
@@ -1201,7 +1260,7 @@ def recent_activity(limit: int = 6) -> list[dict]:
 # Tablas de la app, en orden de dependencia (para respaldos y restauración).
 BACKUP_TABLES = [
     "materials", "suppliers", "supplier_materials", "users", "work_groups", "project_sites", "workers",
-    "purchase_orders", "purchase_order_items", "dispatch_vouchers", "inventory_counts", "inventory_count_lines", "stock_movements",
+    "purchase_orders", "purchase_order_items", "order_receipts", "dispatch_vouchers", "inventory_counts", "inventory_count_lines", "stock_movements",
     "site_budgets", "attendance", "audit_log", "price_history",
 ]
 

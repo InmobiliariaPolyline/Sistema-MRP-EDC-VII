@@ -16,7 +16,7 @@ from pathlib import Path
 
 import pandas as pd
 
-from utils import consumption
+from utils import consumption, money
 
 DB_PATH = Path(os.environ.get("MRP_LOCAL_DB") or Path(__file__).resolve().parent / "local.db")
 
@@ -176,6 +176,16 @@ def _init_db() -> None:
                 created_at text default (datetime('now'))
             );
 
+            create table if not exists order_receipts (
+                id text primary key,
+                order_id text not null references purchase_orders(id) on delete cascade,
+                delivered_by text,
+                document_ref text,
+                notes text,
+                actor text,
+                received_at text default (datetime('now'))
+            );
+
             create table if not exists inventory_counts (
                 id text primary key,
                 code text not null unique,
@@ -209,6 +219,11 @@ def _init_db() -> None:
             ("stock_movements", "voucher_id", "text references dispatch_vouchers(id) on delete set null"),
             ("stock_movements", "movement_type", "text"),
             ("stock_movements", "count_id", "text references inventory_counts(id) on delete set null"),
+            ("stock_movements", "receipt_id", "text references order_receipts(id) on delete set null"),
+            ("purchase_orders", "expected_date", "text"),
+            ("purchase_orders", "currency", "text not null default 'PEN'"),
+            ("purchase_orders", "exchange_rate", "real not null default 1"),
+            ("purchase_orders", "tax_rate", "real not null default 0"),
         ]:
             cols = [r[1] for r in conn.execute(f"pragma table_info({table})").fetchall()]
             if column not in cols:
@@ -624,7 +639,8 @@ def list_orders() -> pd.DataFrame:
             """
             select o.id, o.code, o.supplier_id, o.supplier_name, o.project_site_id,
                    ps.name as site_name, o.status, o.notes, o.created_at,
-                   coalesce((select sum(i.quantity * i.unit_price) from purchase_order_items i where i.order_id = o.id), 0) as total,
+                   o.expected_date, o.currency, o.exchange_rate, o.tax_rate,
+                   coalesce((select sum(i.quantity * i.unit_price) from purchase_order_items i where i.order_id = o.id), 0) as subtotal,
                    (select count(*) from purchase_order_items i where i.order_id = o.id) as items_count
             from purchase_orders o
             left join project_sites ps on ps.id = o.project_site_id
@@ -632,7 +648,7 @@ def list_orders() -> pd.DataFrame:
             """,
             conn,
         )
-    return df.astype(object).where(pd.notnull(df), None)
+    return money.add_amounts(df).astype(object).where(lambda d: pd.notnull(d), None)
 
 
 def list_order_items(order_id: str | None = None) -> pd.DataFrame:
@@ -652,16 +668,22 @@ def list_order_items(order_id: str | None = None) -> pd.DataFrame:
     return df.astype(object).where(pd.notnull(df), None)
 
 
-def create_order(supplier_id: str, supplier_name: str, project_site_id: str | None, notes: str | None, items: list[dict]) -> str:
-    """Crea la orden con sus líneas y devuelve su código (OC-0001, OC-0002...)."""
+def create_order(
+    supplier_id: str, supplier_name: str, project_site_id: str | None, notes: str | None, items: list[dict], terms: dict | None = None,
+) -> str:
+    """Crea la orden con sus líneas y devuelve su código (OC-0001, OC-0002...).
+    `terms`: fecha prometida, moneda, tipo de cambio e IGV (ver utils/money.py)."""
+    terms = money.normalize_terms(terms)
     order_id = str(uuid.uuid4())
     with _connect() as conn:
         codes = [row[0] for row in conn.execute("select code from purchase_orders").fetchall()]
         number = max([int(c.split("-")[1]) for c in codes if c.startswith("OC-") and c.split("-")[1].isdigit()] or [0]) + 1
         code = f"OC-{number:04d}"
         conn.execute(
-            "insert into purchase_orders (id, code, supplier_id, supplier_name, project_site_id, notes) values (?, ?, ?, ?, ?, ?)",
-            (order_id, code, supplier_id, supplier_name, project_site_id, notes),
+            "insert into purchase_orders (id, code, supplier_id, supplier_name, project_site_id, notes, expected_date, currency, exchange_rate, tax_rate) "
+            "values (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+            (order_id, code, supplier_id, supplier_name, project_site_id, notes,
+             terms["expected_date"], terms["currency"], terms["exchange_rate"], terms["tax_rate"]),
         )
         for item in items:
             conn.execute(
@@ -690,8 +712,8 @@ def delete_order(order_id: str) -> None:
         conn.execute("delete from purchase_orders where id = ?", (order_id,))
 
 
-def update_order(order_id: str, project_site_id: str | None, notes: str | None, items: list[dict]) -> None:
-    """Edita obra, notas y líneas de una orden que todavía no recibió material.
+def update_order(order_id: str, project_site_id: str | None, notes: str | None, items: list[dict], terms: dict | None = None) -> None:
+    """Edita obra, notas, condiciones (si se pasan `terms`) y líneas de una orden que todavía no recibió material.
     `items` reemplaza las líneas actuales (material_id, material_name, unit, quantity, unit_price)."""
     with _connect() as conn:
         row = conn.execute("select status from purchase_orders where id = ?", (order_id,)).fetchone()
@@ -718,12 +740,21 @@ def update_order(order_id: str, project_site_id: str | None, notes: str | None, 
             "update purchase_orders set project_site_id = ?, notes = ?, updated_at = datetime('now') where id = ?",
             (project_site_id, notes, order_id),
         )
+        if terms is not None:
+            t = money.normalize_terms(terms)
+            conn.execute(
+                "update purchase_orders set expected_date = ?, currency = ?, exchange_rate = ?, tax_rate = ? where id = ?",
+                (t["expected_date"], t["currency"], t["exchange_rate"], t["tax_rate"], order_id),
+            )
 
 
-def receive_order_items(order_id: str, receipts: dict[str, float], actor: str | None = None) -> str:
+def receive_order_items(order_id: str, receipts: dict[str, float], actor: str | None = None, receipt: dict | None = None) -> str:
     """Registra lo recibido por línea (id de línea -> cantidad que llegó ahora),
     genera las entradas de stock y deja la orden en 'parcial' o 'recibida'.
-    Todo en una sola transacción. Devuelve el nuevo estado."""
+    `receipt`: datos del documento ({"delivered_by", "document_ref", "notes"}). Todo en una sola transacción.
+    Devuelve el nuevo estado."""
+    receipt = {k: (v or "").strip() or None for k, v in (receipt or {}).items()}
+    receipt_id = None
     with _connect() as conn:
         order = conn.execute("select code, status from purchase_orders where id = ?", (order_id,)).fetchone()
         if order is None:
@@ -742,11 +773,17 @@ def receive_order_items(order_id: str, receipts: dict[str, float], actor: str | 
                 raise ValueError("La línea no pertenece a la orden.")
             if row[2] + qty > row[1] + 1e-9:
                 raise ValueError("Se intenta recibir más de lo pedido en una línea.")
+            if receipt_id is None:
+                receipt_id = str(uuid.uuid4())
+                conn.execute(
+                    "insert into order_receipts (id, order_id, delivered_by, document_ref, notes, actor) values (?, ?, ?, ?, ?, ?)",
+                    (receipt_id, order_id, receipt.get("delivered_by"), receipt.get("document_ref"), receipt.get("notes"), actor),
+                )
             conn.execute("update purchase_order_items set received_qty = received_qty + ? where id = ?", (qty, item_id))
             if row[0]:
                 conn.execute(
-                    "insert into stock_movements (id, material_id, kind, quantity, note, order_id, actor, movement_type) values (?, ?, 'entrada', ?, ?, ?, ?, 'recepcion')",
-                    (str(uuid.uuid4()), row[0], qty, f"Recepción {code}", order_id, actor),
+                    "insert into stock_movements (id, material_id, kind, quantity, note, order_id, actor, movement_type, receipt_id) values (?, ?, 'entrada', ?, ?, ?, ?, 'recepcion', ?)",
+                    (str(uuid.uuid4()), row[0], qty, f"Recepción {code}" + (f" · {receipt['document_ref']}" if receipt.get("document_ref") else ""), order_id, actor, receipt_id),
                 )
         pending = conn.execute(
             "select count(*) from purchase_order_items where order_id = ? and received_qty < quantity", (order_id,)
@@ -759,6 +796,21 @@ def receive_order_items(order_id: str, receipts: dict[str, float], actor: str | 
 # ---------------------------------------------------------------------------
 # Inventario (movimientos de stock) y presupuesto por obra
 # ---------------------------------------------------------------------------
+
+def list_receipts(order_id: str) -> pd.DataFrame:
+    """Recepciones registradas de una orden (más reciente primero)."""
+    with _connect() as conn:
+        df = pd.read_sql_query(
+            """
+            select r.id, r.order_id, r.received_at, r.delivered_by, r.document_ref, r.notes, r.actor,
+                   (select count(*) from stock_movements s where s.receipt_id = r.id) as lines_count
+            from order_receipts r where r.order_id = ? order by r.received_at desc, r.rowid desc
+            """,
+            conn,
+            params=(order_id,),
+        )
+    return df.astype(object).where(pd.notnull(df), None)
+
 
 def _stock_of(conn, material_id: str) -> float:
     row = conn.execute(
@@ -1157,7 +1209,7 @@ def recent_activity(limit: int = 6) -> list[dict]:
 # Tablas de la app, en orden de dependencia (para respaldos y restauración).
 BACKUP_TABLES = [
     "materials", "suppliers", "supplier_materials", "users", "work_groups", "project_sites", "workers",
-    "purchase_orders", "purchase_order_items", "dispatch_vouchers", "inventory_counts", "inventory_count_lines", "stock_movements",
+    "purchase_orders", "purchase_order_items", "order_receipts", "dispatch_vouchers", "inventory_counts", "inventory_count_lines", "stock_movements",
     "site_budgets", "attendance", "audit_log", "price_history",
 ]
 

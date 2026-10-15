@@ -6,6 +6,22 @@ Formato de cada parche: **Agregado** · **Corregido** · **Problemas y causa** �
 
 ---
 
+## Parche 043 — Fecha prometida, moneda, IGV y recepción contra documento · 2026-10-16
+Fase B, segunda parte.
+
+**Agregado**
+- **Fecha prometida de entrega** por orden. Una orden abierta que pasa esa fecha se marca «N d de atraso» en la lista, aparece en un aviso rojo (lista, detalle y dashboard) y cuenta en el chip de atrasadas del dashboard (junto a las que llevan muchos días sin cerrarse).
+- **Moneda (soles o dólares), tipo de cambio e IGV** por orden. Los totales muestran subtotal, IGV y total en la moneda de la orden. El dashboard y el aviso de presupuesto de obra suman siempre **en soles** (dólares × tipo de cambio; el presupuesto compara sin IGV). El PDF y el mensaje de WhatsApp incluyen fecha, moneda e IGV.
+- **Recepción contra documento:** N.º de guía o factura, quién entregó y observaciones. Cada recepción queda guardada (tabla `order_receipts`) y se ve en «Recepciones registradas» dentro de la orden; el movimiento de stock menciona la guía.
+- El reporte de órdenes (Reportes) trae ahora entrega prometida, moneda, subtotal, IGV y total.
+- Pruebas nuevas (13): moneda e IGV, totales en soles, atrasos, y recepciones con su documento.
+
+**Problemas y causa**
+- El panel de alertas del dashboard solo conocía las órdenes «viejas»; se separó el aviso de las atrasadas por fecha prometida para no mezclar los dos criterios.
+
+**Hay que hacer**
+- Correr `db/migrations/041_fase_b.sql` (el mismo script de toda la Fase B). Mientras no se corra, las órdenes siguen funcionando igual (soles, sin IGV), pero guardar una fecha, dólares, IGV o los datos del documento avisa que falta el SQL.
+
 ## Parche 042 — Devoluciones de obra y toma de inventario · 2026-10-16
 Fase B (operación real del almacén), primera parte.
 

@@ -65,11 +65,16 @@ def _orders() -> pd.DataFrame:
             "supplier_name": "Proveedor",
             "site_name": "Obra",
             "status": "Estado",
+            "expected_date": "Entrega prometida",
+            "currency": "Moneda",
             "items_count": "Líneas",
+            "subtotal": "Subtotal",
+            "tax": "IGV",
             "total": "Total",
         },
     )
     df["Fecha"] = df["Fecha"].map(lambda v: str(v)[:10] if v is not None and v == v else "")
+    df["Entrega prometida"] = df["Entrega prometida"].map(lambda v: str(v)[:10] if v is not None and v == v else "")
     df["Estado"] = df["Estado"].map(lambda v: STATUSES.get(v, (v,))[0] if v is not None else "")
     return df
 

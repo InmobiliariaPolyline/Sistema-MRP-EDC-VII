@@ -8,6 +8,8 @@ from datetime import datetime
 import pandas as pd
 from fpdf import FPDF
 
+from utils import money
+
 
 def _cell_text(value) -> str:
     if value is None or (isinstance(value, float) and value != value):
@@ -128,6 +130,10 @@ def order_pdf(order: dict, items: pd.DataFrame, supplier: dict | None = None) ->
         line("Teléfono:", supplier.get("phone"))
         line("Correo:", supplier.get("email"))
     line("Obra destino:", order.get("site_name"))
+    expected = str(order.get("expected_date") or "")
+    if expected and expected not in ("None", "nan", "NaT"):
+        line("Entrega prometida:", f"{expected[8:10]}/{expected[5:7]}/{expected[:4]}")
+    line("Moneda:", money.CURRENCY_NAMES.get(order.get("currency") or money.BASE))
     line("Notas:", order.get("notes"))
     pdf.ln(4)
 
@@ -155,9 +161,19 @@ def order_pdf(order: dict, items: pd.DataFrame, supplier: dict | None = None) ->
             pdf.cell(w, 7, value, border=1, align="L" if i < 2 else "R")
         pdf.ln()
 
+    sym = money.symbol(order.get("currency"))
+    tax_rate = float(order.get("tax_rate") or 0)
+    if tax_rate:
+        pdf.set_font("Helvetica", "", 10)
+        pdf.cell(sum(widths[:4]), 7, "Subtotal", border=1, align="R")
+        pdf.cell(widths[4], 7, f"{total:,.2f}", border=1, align="R")
+        pdf.ln()
+        pdf.cell(sum(widths[:4]), 7, f"IGV ({tax_rate:.0%})", border=1, align="R")
+        pdf.cell(widths[4], 7, f"{total * tax_rate:,.2f}", border=1, align="R")
+        pdf.ln()
     pdf.set_font("Helvetica", "B", 11)
-    pdf.cell(sum(widths[:4]), 9, "TOTAL", border=1, align="R")
-    pdf.cell(widths[4], 9, f"{total:,.2f}", border=1, align="R")
+    pdf.cell(sum(widths[:4]), 9, _latin1(f"TOTAL ({sym})"), border=1, align="R")
+    pdf.cell(widths[4], 9, f"{total * (1 + tax_rate):,.2f}", border=1, align="R")
     pdf.ln(18)
 
     pdf.set_font("Helvetica", "", 9)
@@ -178,7 +194,14 @@ def order_whatsapp_text(order: dict, items: pd.DataFrame) -> str:
         total += subtotal
         unit = f" {row['unit']}" if row.get("unit") else ""
         lines.append(f"- {row['material_name']}: {float(row['quantity']):g}{unit} x {float(row['unit_price']):,.2f} = {subtotal:,.2f}")
-    lines += ["", f"Total: {total:,.2f}"]
+    tax_rate = float(order.get("tax_rate") or 0)
+    cur = order.get("currency") or money.BASE
+    if tax_rate:
+        lines += ["", f"Subtotal: {money.fmt(total, cur)}", f"IGV ({tax_rate:.0%}): {money.fmt(total * tax_rate, cur)}"]
+    lines += ["", f"Total: {money.fmt(total * (1 + tax_rate), cur)}"]
+    expected = str(order.get("expected_date") or "")
+    if expected and expected not in ("None", "nan", "NaT"):
+        lines.append(f"Fecha de entrega solicitada: {expected[8:10]}/{expected[5:7]}/{expected[:4]}")
     if order.get("site_name"):
         lines.append(f"Entrega en: {order['site_name']}")
     if order.get("notes"):

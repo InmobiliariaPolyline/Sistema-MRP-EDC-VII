@@ -41,11 +41,13 @@ def render(user: dict) -> None:
     totals = repo.dashboard_totals()
     orders = repo.list_orders()
     stale = ordenes.stale_orders(orders)
+    late = ordenes.late_orders(orders)
+    attention = ordenes.attention_orders(orders)
 
     chips = [f"📅 {DIAS[now.weekday()].capitalize()} {now.day} de {MESES[now.month - 1]}"]
     chips.append(f"🧾 {totals.get('orders_open', 0)} orden(es) abierta(s)")
-    if len(stale):
-        chips.append(f"⏰ {len(stale)} atrasada(s)")
+    if len(attention):
+        chips.append(f"⏰ {len(attention)} atrasada(s)")
     ui.hero(
         f"Centro de control · {MESES[now.month - 1].upper()} DE {now.year}",
         f"{_saludo()}, {user['name'].split()[0]}",
@@ -70,7 +72,7 @@ def render(user: dict) -> None:
         ]
     )
 
-    _render_alerts(stale, _low_stock_rows())
+    _render_alerts(stale, _low_stock_rows(), late)
     _render_purchase_analytics(orders)
     _render_site_and_attendance()
 
@@ -100,7 +102,7 @@ def _billable(orders: pd.DataFrame) -> pd.DataFrame:
     if orders.empty:
         return orders
     active = orders[orders["status"] != "cancelada"]
-    return active.assign(total=active["total"].astype(float), mes=active["created_at"].astype(str).str[:7])
+    return active.assign(total=active["total_base"].astype(float), mes=active["created_at"].astype(str).str[:7])  # siempre en soles
 
 
 def _monthly_spend(orders: pd.DataFrame) -> list[float]:
@@ -119,7 +121,7 @@ def _low_stock_rows() -> list[dict]:
     return low.sort_values("stock").to_dict("records")
 
 
-def _render_alerts(stale: pd.DataFrame, low: list[dict] | None = None) -> None:
+def _render_alerts(stale: pd.DataFrame, low: list[dict] | None = None, late: pd.DataFrame | None = None) -> None:
     low = low or []
     if low:
         detail = ", ".join(f"{r['material_name']} ({r['stock']:g} de mín. {r['min_stock']:g})" for r in low[:5])
@@ -127,6 +129,12 @@ def _render_alerts(stale: pd.DataFrame, low: list[dict] | None = None) -> None:
         st.warning(
             f"**{len(low)} material(es) con stock bajo:** {detail}{more}. Revisa la sugerencia de compra en Órdenes de compra.",
             icon=":material/inventory:",
+        )
+    if late is not None and not late.empty:
+        detail = ", ".join(f"{r['code']} ({r['supplier_name']}, {int(r['days_late'])} d)" for r in late.to_dict("records")[:5])
+        st.error(
+            f"**{len(late)} orden(es) pasaron su fecha prometida de entrega:** {detail}. Llama al proveedor o reprograma la entrega.",
+            icon=":material/event_busy:",
         )
     if stale.empty:
         return

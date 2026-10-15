@@ -7,6 +7,7 @@ línea (que alimenta el inventario), duplicar una orden, PDF de la orden y
 mensaje listo para WhatsApp."""
 import math
 import re
+from datetime import date
 from urllib.parse import quote
 
 import pandas as pd
@@ -14,6 +15,7 @@ import streamlit as st
 
 from db import repository as repo
 from modules import forms, sugerencias, ui
+from utils import money
 from utils.reports import order_pdf, order_whatsapp_text
 from utils.timeago import age_days
 
@@ -55,8 +57,86 @@ def stale_orders(orders: pd.DataFrame) -> pd.DataFrame:
     return open_orders[ages > alert_days()].assign(age=ages[ages > alert_days()])
 
 
+def _days_late(row) -> int:
+    """Días de atraso de una orden abierta respecto de su fecha prometida (0 si no hay fecha o no se pasó)."""
+    expected = row.get("expected_date")
+    if not expected or str(expected) in ("None", "nan", "NaT") or row.get("status") not in OPEN_STATUSES:
+        return 0
+    try:
+        return max((date.today() - date.fromisoformat(str(expected)[:10])).days, 0)
+    except ValueError:
+        return 0
+
+
+def late_orders(orders: pd.DataFrame) -> pd.DataFrame:
+    """Órdenes abiertas cuya fecha prometida de entrega ya pasó."""
+    if orders.empty or "expected_date" not in orders.columns:
+        return orders.iloc[0:0]
+    days = orders.apply(_days_late, axis=1)
+    return orders[days > 0].assign(days_late=days[days > 0])
+
+
+def attention_orders(orders: pd.DataFrame) -> pd.DataFrame:
+    """Órdenes que piden atención: sin cerrarse tras X días desde que se crearon o pasadas de su fecha prometida."""
+    if orders.empty:
+        return orders
+    ids = set(stale_orders(orders)["id"]) | set(late_orders(orders)["id"])
+    return orders[orders["id"].isin(ids)]
+
+
+def _terms_inputs(prefix: str, expected_date=None, currency: str = money.BASE, exchange_rate: float = 3.75, tax_rate: float = 0.0) -> dict:
+    """Fecha prometida, moneda, tipo de cambio e IGV de una orden. Devuelve las condiciones para guardar."""
+    default_date = None
+    if expected_date and str(expected_date) not in ("None", "nan", "NaT"):
+        try:
+            default_date = date.fromisoformat(str(expected_date)[:10])
+        except ValueError:
+            default_date = None
+    c1, c2, c3 = st.columns([2, 2, 2])
+    picked = c1.date_input(
+        "Fecha prometida de entrega (opcional)", value=default_date, key=f"{prefix}_date", format="DD/MM/YYYY",
+        min_value=date.today() if not default_date or default_date >= date.today() else None,
+        help="Cuándo prometió entregar el proveedor. Si pasa y la orden sigue abierta, se marca como atrasada.",
+    )
+    currencies = list(money.CURRENCIES)
+    chosen = c2.selectbox(
+        "Moneda", currencies, index=currencies.index(currency) if currency in currencies else 0, key=f"{prefix}_currency",
+        format_func=lambda c: money.CURRENCY_NAMES[c],
+        help="Los precios del catálogo del proveedor se toman tal cual en esta moneda. Elige dólares solo si ese proveedor cotiza en dólares.",
+    )
+    rate = 1.0
+    if chosen != money.BASE:
+        rate = c3.number_input(
+            "Tipo de cambio (S/ por US$)", min_value=0.0, value=float(exchange_rate or 3.75), step=0.01, format="%.3f", key=f"{prefix}_rate",
+            help="Sirve para sumar esta orden en soles en el dashboard y en el presupuesto de la obra.",
+        )
+    igv = st.checkbox(
+        f"Sumar IGV ({money.IGV:.0%}) al total", value=float(tax_rate or 0) > 0, key=f"{prefix}_igv",
+        help="Márcalo si los precios del proveedor NO incluyen IGV. Si ya lo incluyen, déjalo sin marcar.",
+    )
+    return {"expected_date": picked, "currency": chosen, "exchange_rate": rate, "tax_rate": money.IGV if igv else 0.0}
+
+
+def _totals_block(subtotal: float, terms: dict) -> None:
+    """Subtotal, IGV y total de una orden en su moneda (y en soles si es otra moneda)."""
+    amounts = money.amounts(subtotal, terms["tax_rate"], terms["exchange_rate"])
+    cur = terms["currency"]
+    if terms["tax_rate"]:
+        c1, c2, c3 = st.columns(3)
+        c1.metric("Subtotal", money.fmt(amounts["subtotal"], cur))
+        c2.metric(f"IGV ({terms['tax_rate']:.0%})", money.fmt(amounts["tax"], cur))
+        c3.metric("Total", money.fmt(amounts["total"], cur))
+    else:
+        st.metric("Total del pedido", money.fmt(amounts["total"], cur))
+    if cur != money.BASE:
+        st.caption(f"Equivale a {money.fmt(amounts['total_base'], money.BASE)} al tipo de cambio {terms['exchange_rate']:g}.")
+
+
 def _clear_order_draft() -> None:
-    for key in (LINES_KEY, SUPPLIER_KEY, PRESET_KEY, "new_order_supplier", "new_order_site", "new_order_notes"):
+    for key in (
+        LINES_KEY, SUPPLIER_KEY, PRESET_KEY, "new_order_supplier", "new_order_site", "new_order_notes",
+        "new_order_date", "new_order_currency", "new_order_rate", "new_order_igv",
+    ):
         st.session_state.pop(key, None)
 
 
@@ -155,6 +235,9 @@ def _new_order_dialog() -> None:
         st.session_state["new_order_supplier"] = preset["supplier_name"]
         st.session_state["new_order_site"] = preset["site_name"] if preset["site_name"] in sites["name"].tolist() else NO_SITE
         st.session_state["new_order_notes"] = preset["notes"] or ""
+        st.session_state["new_order_currency"] = preset.get("currency") or money.BASE
+        st.session_state["new_order_rate"] = float(preset.get("exchange_rate") or 3.75)
+        st.session_state["new_order_igv"] = float(preset.get("tax_rate") or 0) > 0
         st.session_state[SUPPLIER_KEY] = preset["supplier_id"]
         st.session_state[LINES_KEY] = preset["lines"]
 
@@ -174,7 +257,10 @@ def _new_order_dialog() -> None:
     notes = st.text_input("Notas (opcional)", placeholder="Ej. Entregar antes del viernes", key="new_order_notes", max_chars=500,
                           help="Condiciones de entrega o indicaciones para el proveedor. Hasta 500 caracteres.")
 
-    forms.section("2. Agrega materiales", "La cantidad se indica en la unidad del material. El precio unitario viene fijo del catálogo del proveedor y no se cambia aquí: lo que sube con la cantidad es el total. Agregar de nuevo un material suma cantidades.")
+    forms.section("2. Entrega, moneda e IGV", "Todo opcional: la fecha prometida activa el aviso de atraso y el IGV se suma al total.")
+    terms = _terms_inputs("new_order")
+
+    forms.section("3. Agrega materiales", "La cantidad se indica en la unidad del material. El precio unitario viene fijo del catálogo del proveedor y no se cambia aquí: lo que sube con la cantidad es el total. Agregar de nuevo un material suma cantidades.")
     catalog = repo.get_supplier_catalog(supplier_id)
     offered = catalog[catalog["offered"]] if not catalog.empty else catalog
     if offered.empty:
@@ -201,7 +287,7 @@ def _new_order_dialog() -> None:
                 icon=":material/sell:",
             )
         else:
-            st.caption(f"Esta selección: {qty:g} {record['metric_label'] or 'unid.'} × {price:,.2f} = **{qty * price:,.2f}**")
+            st.caption(f"Esta selección: {qty:g} {record['metric_label'] or 'unid.'} × {money.fmt(price, terms['currency'])} = **{money.fmt(qty * price, terms['currency'])}**")
         if not record.get("available", True):
             st.caption("El catálogo indica que este material no está disponible. Confirma la entrega con el proveedor.")
         _material_quotes(record["id"], supplier_id, offers)
@@ -229,22 +315,22 @@ def _new_order_dialog() -> None:
                     )
                 st.rerun(scope="fragment")
 
-    forms.section("3. Revisa y crea", "Comprueba las cantidades, el destino y el total del pedido.")
+    forms.section("4. Revisa y crea", "Comprueba las cantidades, el destino y el total del pedido.")
     total = 0.0
     for index, line in enumerate(lines):
         subtotal = line["quantity"] * line["unit_price"]
         total += subtotal
         l1, l2, l3 = st.columns([6, 3, 1])
         l1.write(f"{line['material_name']}  ·  {line['quantity']:g} {line['unit'] or ''} × {line['unit_price']:,.2f}")
-        l2.write(f"**{subtotal:,.2f}**")
+        l2.write(f"**{money.fmt(subtotal, terms['currency'])}**")
         if l3.button("✖", key=f"oline_del_{index}", help="Quitar línea"):
             lines.pop(index)
             st.rerun(scope="fragment")
     if lines:
-        st.metric("Total del pedido", f"{total:,.2f}")
+        _totals_block(total, terms)
         st.caption(f"{len(lines)} material(es) · Proveedor: {supplier_name} · Destino: {site_choice}")
         if site_choice != NO_SITE:
-            _budget_warning(sites.loc[sites["name"] == site_choice, "id"].iloc[0], site_choice, lines, total)
+            _budget_warning(sites.loc[sites["name"] == site_choice, "id"].iloc[0], site_choice, lines, total * terms["exchange_rate"])
         if any(line["unit_price"] == 0 for line in lines):
             st.warning("Hay materiales con precio 0. El total solo incluye los precios registrados.")
         totals = _supplier_totals(lines, offers)
@@ -253,10 +339,10 @@ def _new_order_dialog() -> None:
             mine = next((t for n, t in totals if n == supplier_name), None)
             with st.expander("💡 Este mismo pedido con otros proveedores", expanded=cheapest_name != supplier_name):
                 st.dataframe(
-                    pd.DataFrame({"Proveedor": [("⭐ " if i == 0 else "") + n for i, (n, _) in enumerate(totals)], "Total del pedido": [t for _, t in totals]}),
+                    pd.DataFrame({"Proveedor": [("⭐ " if i == 0 else "") + n for i, (n, _) in enumerate(totals)], "Total del pedido (sin IGV)": [t for _, t in totals]}),
                     hide_index=True,
                     width="stretch",
-                    column_config={"Total del pedido": st.column_config.NumberColumn(format="%.2f")},
+                    column_config={"Total del pedido (sin IGV)": st.column_config.NumberColumn(format="%.2f")},
                 )
                 if mine is not None and cheapest_name != supplier_name:
                     st.caption(f"Con {cheapest_name} ahorrarías {mine - cheapest_total:,.2f} en todo el pedido.")
@@ -279,7 +365,11 @@ def _new_order_dialog() -> None:
         if forms.errors(issues):
             return
         site_id = None if site_choice == NO_SITE else sites.loc[sites["name"] == site_choice, "id"].iloc[0]
-        code = repo.create_order(supplier_id, supplier_name, site_id, notes.strip() or None, lines)
+        try:
+            code = repo.create_order(supplier_id, supplier_name, site_id, notes.strip() or None, lines, terms)
+        except ValueError as exc:
+            st.error(f"No se pudo crear la orden: {exc}")
+            return
         _clear_order_draft()
         ui.flash(f"Orden {code} creada.", "🧾")
         st.rerun()
@@ -293,7 +383,7 @@ def _budget_warning(site_id: str, site_name: str, lines: list[dict], total: floa
     planned = float((budgets["planned_qty"].astype(float) * budgets["planned_unit_price"].astype(float)).sum())
     orders = repo.list_orders()
     site_orders = orders[(orders["project_site_id"] == site_id) & (orders["status"] != "cancelada")] if not orders.empty else orders
-    ordered = float(site_orders["total"].astype(float).sum()) if not site_orders.empty else 0.0
+    ordered = float(site_orders["subtotal_base"].astype(float).sum()) if not site_orders.empty else 0.0
     if planned > 0 and ordered + total > planned + 1e-9:
         st.warning(
             f"Con esta orden, «{site_name}» pasaría lo presupuestado: previsto {planned:,.2f}, ya pedido {ordered:,.2f} + esta orden {total:,.2f} "
@@ -319,7 +409,8 @@ def _budget_warning(site_id: str, site_name: str, lines: list[dict], total: floa
 
 def _edit_state_keys(order_id: str) -> list[str]:
     return [f"edit_draft_{order_id}", f"edit_ver_{order_id}", f"edit_site_{order_id}", f"edit_notes_{order_id}",
-            f"edit_add_mat_{order_id}", f"edit_add_qty_{order_id}"]
+            f"edit_add_mat_{order_id}", f"edit_add_qty_{order_id}", f"edit_{order_id}_date", f"edit_{order_id}_currency",
+            f"edit_{order_id}_rate", f"edit_{order_id}_igv"]
 
 
 def _clear_edit_draft(order_id: str) -> None:
@@ -357,7 +448,12 @@ def _edit_order_dialog(order: dict, items: pd.DataFrame) -> None:
     site_choice = st.selectbox("Obra destino (opcional)", site_names, index=site_names.index(current), key=f"edit_site_{oid}")
     notes = st.text_input("Notas (opcional)", value=order.get("notes") or "", max_chars=forms.RULES["Notas (opcional)"]["max"], key=f"edit_notes_{oid}")
 
-    forms.section("2. Materiales de la orden", "Ajusta las cantidades. Marca «Quitar» para eliminar una línea al guardar.")
+    forms.section("2. Entrega, moneda e IGV", "Cambia la fecha prometida, la moneda o si se suma IGV.")
+    terms = _terms_inputs(
+        f"edit_{oid}", order.get("expected_date"), order.get("currency") or money.BASE, order.get("exchange_rate") or 3.75, order.get("tax_rate") or 0.0
+    )
+
+    forms.section("3. Materiales de la orden", "Ajusta las cantidades. Marca «Quitar» para eliminar una línea al guardar.")
     table = pd.DataFrame(
         {
             "Quitar": [bool(l["remove"]) for l in draft],
@@ -382,7 +478,7 @@ def _edit_order_dialog(order: dict, items: pd.DataFrame) -> None:
             draft[i]["quantity"] = float(row["Cantidad"])
             draft[i]["remove"] = bool(row["Quitar"])
 
-    forms.section("3. Agregar material", "Elige un material del catálogo de este proveedor. Si ya está en la orden, se suma a su cantidad.")
+    forms.section("4. Agregar material", "Elige un material del catálogo de este proveedor. Si ya está en la orden, se suma a su cantidad.")
     catalog = repo.get_supplier_catalog(order["supplier_id"]) if order.get("supplier_id") else pd.DataFrame()
     offered = catalog[catalog["offered"]] if not catalog.empty else catalog
     if offered.empty:
@@ -420,7 +516,7 @@ def _edit_order_dialog(order: dict, items: pd.DataFrame) -> None:
 
     kept = edited[~edited["Quitar"]]
     total = float((kept["Cantidad"] * kept["Precio unit."]).sum())
-    st.metric("Total de la orden", f"{total:,.2f}")
+    _totals_block(total, terms)
     st.caption(f"{len(kept)} material(es) en la orden. Al guardar, el mensaje de WhatsApp y el PDF se arman con estos datos.")
 
     cancel, save = st.columns([1, 2])
@@ -445,7 +541,7 @@ def _edit_order_dialog(order: dict, items: pd.DataFrame) -> None:
         ]
         site_id = None if site_choice == NO_SITE else sites.loc[sites["name"] == site_choice, "id"].iloc[0]
         try:
-            repo.update_order(oid, site_id, notes.strip() or None, new_items)
+            repo.update_order(oid, site_id, notes.strip() or None, new_items, terms)
         except ValueError as exc:
             st.error(str(exc))
             return
@@ -474,6 +570,9 @@ def _duplicate(order: dict, items: pd.DataFrame) -> None:
         "supplier_name": order["supplier_name"],
         "site_name": order.get("site_name"),
         "notes": order.get("notes"),
+        "currency": order.get("currency"),
+        "exchange_rate": order.get("exchange_rate"),
+        "tax_rate": order.get("tax_rate"),
         "lines": [
             {
                 "material_id": r["material_id"],
@@ -530,6 +629,10 @@ def _render_list() -> None:
     stale = stale_orders(df)
     if not stale.empty:
         st.warning(f"⏰ {len(stale)} orden(es) abierta(s) con más de {alert_days()} días sin cerrarse: {', '.join(stale['code'].tolist()[:6])}")
+    late = late_orders(df)
+    if not late.empty:
+        st.error(f"📅 {len(late)} orden(es) pasaron su fecha prometida de entrega: {', '.join(late['code'].tolist()[:6])}", icon=":material/event_busy:")
+    late_days = dict(zip(late["id"], late["days_late"])) if not late.empty else {}
 
     if status_label != ALL_STATUSES:
         df = df[df["status"] == labels[status_label]]
@@ -554,12 +657,16 @@ def _render_list() -> None:
                 pills = status_pill(row["status"])
                 if row["id"] in stale_ids:
                     pills += " " + ui.pill("⏰ " + f"{age_days(str(row['created_at']))} días", "red")
+                if row["id"] in late_days:
+                    pills += " " + ui.pill(f"📅 {int(late_days[row['id']])} d de atraso", "red")
+                elif row.get("expected_date") and row["status"] in OPEN_STATUSES:
+                    pills += " " + ui.pill(f"📅 entrega {str(row['expected_date'])[8:10]}/{str(row['expected_date'])[5:7]}", "gray")
                 if row.get("site_name"):
                     pills += " " + ui.pill(row["site_name"], "gray")
                 st.markdown(pills, unsafe_allow_html=True)
             with c3:
                 st.markdown(
-                    f'<div class="mrp-row-name">{float(row["total"]):,.2f}</div><div class="mrp-row-sub">total</div>',
+                    f'<div class="mrp-row-name">{money.fmt(row["total"], row.get("currency"))}</div><div class="mrp-row-sub">total{" con IGV" if float(row.get("tax_rate") or 0) else ""}</div>',
                     unsafe_allow_html=True,
                 )
             with c4:
@@ -584,7 +691,7 @@ def _change_status(order_id: str, code: str, status: str) -> None:
     st.rerun()
 
 
-def _receive(order_id: str, code: str, receipts: dict[str, float]) -> None:
+def _receive(order_id: str, code: str, receipts: dict[str, float], receipt: dict | None = None) -> None:
     # Las listas de Supabase usan caché: volver a leer antes de validar el saldo.
     for reader in (repo.list_orders, repo.list_order_items):
         clear = getattr(reader, "clear", None)
@@ -619,7 +726,11 @@ def _receive(order_id: str, code: str, receipts: dict[str, float]) -> None:
         issues.append("Recibido ahora: indica al menos una cantidad mayor que 0.")
     if forms.errors(issues):
         return
-    status = repo.receive_order_items(order_id, valid_receipts, ui.current_actor())
+    try:
+        status = repo.receive_order_items(order_id, valid_receipts, ui.current_actor(), receipt)
+    except ValueError as exc:
+        st.error(f"No se pudo registrar la recepción: {exc}")
+        return
     ui.flash(f"Orden {code}: recepción registrada ({STATUSES[status][0].lower()}). El stock se actualizó.", "📦")
     st.rerun()
 
@@ -655,7 +766,15 @@ def _render_reception(order: dict, items: pd.DataFrame) -> None:
                 key=keys[r["id"]],
                 help=f"Máximo pendiente: {remaining:g} {r.get('unit') or 'unid.'}. Usa 0 si este material no llegó.",
             )
-        forms.section("2. Revisa la entrega", "Confirma estas cantidades antes de actualizar el stock.")
+        forms.section("2. Documento de la entrega", "Opcional pero recomendable: queda guardado con la recepción para poder revisarla después.")
+        d1, d2 = st.columns(2)
+        doc_ref = d1.text_input("N.º de guía o factura", placeholder="Ej. T001-004521", max_chars=80, key=f"recv_doc_{order['id']}")
+        delivered_by = d2.text_input("Entregado por", placeholder="Ej. chofer Luis Prado", max_chars=120, key=f"recv_by_{order['id']}")
+        recv_notes = st.text_input(
+            "Observaciones (faltantes, daños…)", placeholder="Ej. 2 bolsas rotas; faltó 1 varilla", max_chars=500, key=f"recv_notes_{order['id']}"
+        )
+
+        forms.section("3. Revisa la entrega", "Confirma estas cantidades antes de actualizar el stock.")
         arriving = [r for r in records if receipts[r["id"]] > 0]
         if arriving:
             st.dataframe(pd.DataFrame([{"Material": r["material_name"], "Unidad": r.get("unit") or "unid.",
@@ -671,7 +790,22 @@ def _render_reception(order: dict, items: pd.DataFrame) -> None:
                 st.session_state.pop(key, None)
             st.rerun()
         if b2.button("Registrar lo indicado", type="primary", width="stretch", key=f"recv_go_{order['id']}"):
-            _receive(order["id"], order["code"], receipts)
+            _receive(order["id"], order["code"], receipts, {"document_ref": doc_ref, "delivered_by": delivered_by, "notes": recv_notes})
+
+
+def _render_receipts(order_id: str) -> None:
+    """Recepciones ya registradas de la orden, con su documento y observaciones."""
+    receipts = repo.list_receipts(order_id)
+    if receipts.empty:
+        return
+    with st.expander(f"🧾 Recepciones registradas ({len(receipts)})"):
+        for r in receipts.to_dict("records"):
+            when = str(r["received_at"])[:16].replace("T", " ")
+            pills = ui.pill(r["document_ref"], "blue") if r.get("document_ref") else ui.pill("sin documento", "gray")
+            st.markdown(f"**{when}** · registró {r.get('actor') or 'sistema'} &nbsp; {pills}", unsafe_allow_html=True)
+            detail = " · ".join(x for x in [r.get("delivered_by") and f"entregó {r['delivered_by']}", r.get("notes") and f"observaciones: {r['notes']}"] if x)
+            if detail:
+                st.caption(detail)
 
 
 def _render_detail(order_id: str) -> None:
@@ -696,9 +830,23 @@ def _render_detail(order_id: str) -> None:
             ui.stat_card("🏭", order["supplier_name"], "Proveedor"),
             ui.stat_card("🏗️", order["site_name"] or "—", "Obra destino"),
             ui.stat_card("📅", str(order["created_at"])[:10], "Fecha"),
-            ui.stat_card("💰", f"{float(order['total']):,.2f}", "Total"),
+            ui.stat_card("💰", money.fmt(order["total"], order.get("currency")), "Total con IGV" if float(order.get("tax_rate") or 0) else "Total"),
         ]
     )
+    late_by = _days_late(order)
+    if order.get("expected_date") and status in OPEN_STATUSES:
+        when = f"{str(order['expected_date'])[8:10]}/{str(order['expected_date'])[5:7]}/{str(order['expected_date'])[:4]}"
+        if late_by:
+            st.error(f"Entrega prometida para el {when}: lleva {late_by} día(s) de atraso.", icon=":material/event_busy:")
+        else:
+            st.caption(f"📅 Entrega prometida para el {when}.")
+    if float(order.get("tax_rate") or 0) or (order.get("currency") or money.BASE) != money.BASE:
+        parts = [f"Subtotal {money.fmt(order['subtotal'], order.get('currency'))}"]
+        if float(order.get("tax_rate") or 0):
+            parts.append(f"IGV {float(order['tax_rate']):.0%} {money.fmt(order['tax'], order.get('currency'))}")
+        if (order.get("currency") or money.BASE) != money.BASE:
+            parts.append(f"equivale a {money.fmt(order['total_base'], money.BASE)} (tipo de cambio {float(order['exchange_rate']):g})")
+        st.caption(" · ".join(parts))
     if order.get("notes"):
         st.caption(f"📝 {order['notes']}")
 
@@ -739,6 +887,8 @@ def _render_detail(order_id: str) -> None:
         )
         if status in ("pendiente", "enviada", "parcial"):
             _render_reception(order, items)
+
+    _render_receipts(order_id)
 
     received_any = bool(not items.empty and (items["received_qty"].astype(float) > 0).any())
     b1, b2, b3, b4 = st.columns([3, 2.2, 2, 1.8])
