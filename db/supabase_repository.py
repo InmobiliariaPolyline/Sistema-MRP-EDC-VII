@@ -18,6 +18,25 @@ from db.client import get_client
 _CACHE_TTL = 30  # segundos: solo evita relecturas repetidas al navegar, no es "tiempo real"
 
 
+def _clean(df: pd.DataFrame) -> pd.DataFrame:
+    """Los vacíos de las columnas de texto quedan como None, nunca como NaN.
+
+    Con pandas 3, una columna de texto con algunos vacíos pasa a tipo `str` y sus vacíos son NaN,
+    que en Python es «verdadero» y un `float`: rompe `" · ".join(...)`, hace que `x or "otro texto"`
+    nunca use el texto de reemplazo y se muestra como «nan». La capa local (SQLite) ya devolvía None;
+    así Supabase se comporta igual."""
+    for col in df.columns:
+        series = df[col]
+        if (series.dtype == object or pd.api.types.is_string_dtype(series)) and series.isna().any():
+            df[col] = series.astype(object).where(series.notna(), None)
+    return df
+
+
+def _df(data=None, *args, **kwargs) -> pd.DataFrame:
+    """pd.DataFrame(...) con los vacíos de texto limpios (ver `_clean`)."""
+    return _clean(pd.DataFrame(data, *args, **kwargs))
+
+
 def _select_all(build, limit: int | None = None, page: int = 1000) -> list[dict]:
     """Trae TODAS las filas de una consulta. PostgREST corta cada respuesta en 1 000 filas sin avisar,
     así que se pide por páginas. `build()` debe devolver una consulta nueva y ya ordenada (con un
@@ -62,7 +81,7 @@ def _invalidate_stock() -> None:
 @st.cache_data(ttl=_CACHE_TTL, show_spinner=False)
 def list_materials() -> pd.DataFrame:
     res = get_client().table("materials").select("*").order("category").order("name").execute()
-    df = pd.DataFrame(res.data or [], columns=["id", "category", "name", "density", "metric_label", "min_stock", "created_at", "updated_at"])
+    df = _df(res.data or [], columns=["id", "category", "name", "density", "metric_label", "min_stock", "created_at", "updated_at"])
     df["min_stock"] = pd.to_numeric(df["min_stock"], errors="coerce").fillna(0.0)
     return df
 
@@ -109,7 +128,7 @@ def _invalidate_materials() -> None:
 @st.cache_data(ttl=_CACHE_TTL, show_spinner=False)
 def list_suppliers() -> pd.DataFrame:
     res = get_client().table("suppliers").select("*").order("name").execute()
-    return pd.DataFrame(
+    return _df(
         res.data or [],
         columns=["id", "name", "contact_name", "phone", "email", "notes", "created_at", "updated_at"],
     )
@@ -162,7 +181,7 @@ def get_supplier_catalog(supplier_id: str) -> pd.DataFrame:
         .eq("supplier_id", supplier_id)
         .execute()
     )
-    links = pd.DataFrame(res.data or [], columns=["id", "supplier_id", "material_id", "available", "price"])
+    links = _df(res.data or [], columns=["id", "supplier_id", "material_id", "available", "price"])
 
     if materials.empty:
         return materials.assign(link_id=None, offered=False, available=False, price=None)
@@ -231,14 +250,14 @@ def list_price_history(material_id: str | None = None, supplier_id: str | None =
         data = query.execute().data or []
     except Exception as exc:
         if _is_missing(exc):
-            return pd.DataFrame(columns=columns)
+            return _df(columns=columns)
         raise
     rows = []
     for row in data:
         supplier = row.pop("suppliers", None) or {}
         material = row.pop("materials", None) or {}
         rows.append({**row, "supplier_name": supplier.get("name"), "material_name": material.get("name")})
-    return pd.DataFrame(rows, columns=columns)
+    return _df(rows, columns=columns)
 
 
 # ---------------------------------------------------------------------------
@@ -254,7 +273,7 @@ def count_users() -> int:
 
 def list_users() -> pd.DataFrame:
     res = get_client().table("users").select("*").order("name").execute()
-    df = pd.DataFrame(
+    df = _df(
         res.data or [],
         columns=["id", "username", "password_hash", "name", "role", "active", "created_at", "updated_at"],
     )
@@ -288,7 +307,7 @@ def delete_user(user_id: str) -> None:
 @st.cache_data(ttl=_CACHE_TTL, show_spinner=False)
 def list_work_groups() -> pd.DataFrame:
     res = get_client().table("work_groups").select("*").order("name").execute()
-    return pd.DataFrame(res.data or [], columns=["id", "name", "created_at"])
+    return _df(res.data or [], columns=["id", "name", "created_at"])
 
 
 def create_work_group(name: str) -> None:
@@ -305,7 +324,7 @@ def delete_work_group(group_id: str) -> None:
 @st.cache_data(ttl=_CACHE_TTL, show_spinner=False)
 def list_project_sites() -> pd.DataFrame:
     res = get_client().table("project_sites").select("*").order("name").execute()
-    return pd.DataFrame(res.data or [], columns=["id", "name", "address", "latitude", "longitude", "created_at"])
+    return _df(res.data or [], columns=["id", "name", "address", "latitude", "longitude", "created_at"])
 
 
 def create_project_site(name: str, address: str | None, latitude: float | None, longitude: float | None) -> None:
@@ -347,7 +366,7 @@ def list_workers() -> pd.DataFrame:
                 "role": user.get("role"),
             }
         )
-    return pd.DataFrame(rows)
+    return _df(rows)
 
 
 def create_worker(
@@ -450,7 +469,7 @@ def list_offers() -> pd.DataFrame:
             }
         )
     columns = ["supplier_id", "supplier_name", "material_id", "category", "material_name", "available", "price"]
-    df = pd.DataFrame(rows, columns=columns)
+    df = _df(rows, columns=columns)
     return df.sort_values(["category", "material_name", "supplier_name"]).reset_index(drop=True) if not df.empty else df
 
 
@@ -483,8 +502,8 @@ def list_orders() -> pd.DataFrame:
         "id", "code", "supplier_id", "supplier_name", "project_site_id", "site_name",
         "status", "notes", "created_at", "total", "items_count",
     ]
-    df = pd.DataFrame(rows)
-    return df[columns] if not df.empty else pd.DataFrame(columns=columns)
+    df = _df(rows)
+    return df[columns] if not df.empty else _df(columns=columns)
 
 
 @st.cache_data(ttl=_CACHE_TTL, show_spinner=False)
@@ -512,7 +531,7 @@ def list_order_items(order_id: str | None = None) -> pd.DataFrame:
             }
         )
     columns = ["id", "order_id", "order_code", "material_id", "material_name", "unit", "quantity", "unit_price", "received_qty", "subtotal"]
-    df = pd.DataFrame(rows, columns=columns)
+    df = _df(rows, columns=columns)
     return df.sort_values(["order_code", "material_name"]).reset_index(drop=True) if not df.empty else df
 
 
@@ -741,7 +760,7 @@ def list_movements(project_site_id: str | None = None, limit: int = 500) -> pd.D
                 "requested_by": voucher.get("requested_by"),
             }
         )
-    return pd.DataFrame(rows, columns=columns)
+    return _df(rows, columns=columns)
 
 
 @st.cache_data(ttl=_CACHE_TTL, show_spinner=False)
@@ -752,7 +771,7 @@ def stock_levels() -> pd.DataFrame:
     client = get_client()
     try:
         data = client.table("stock_levels").select("*").order("category").order("material_name").execute().data or []
-        df = pd.DataFrame(data, columns=columns)
+        df = _df(data, columns=columns)
     except Exception as exc:
         if not _is_missing(exc):
             raise
@@ -773,7 +792,7 @@ def stock_levels() -> pd.DataFrame:
             }
             for r in materials.to_dict("records")
         ]
-        df = pd.DataFrame(rows, columns=columns)
+        df = _df(rows, columns=columns)
         df["stock"] = df["entradas"].astype(float) - df["salidas"].astype(float)
     for col in ("min_stock", "entradas", "salidas", "stock"):
         df[col] = pd.to_numeric(df[col], errors="coerce").fillna(0.0)
@@ -850,10 +869,10 @@ def list_dispatches(limit: int = 200) -> pd.DataFrame:
         data = get_client().table("dispatch_vouchers").select("*, stock_movements(id)").order("created_at", desc=True).limit(limit).execute().data or []
     except Exception as exc:
         if _is_missing(exc):
-            return pd.DataFrame(columns=columns)
+            return _df(columns=columns)
         raise
     rows = [{**{k: v for k, v in row.items() if k != "stock_movements"}, "lines_count": len(row.get("stock_movements") or [])} for row in data]
-    return pd.DataFrame(rows, columns=columns)
+    return _df(rows, columns=columns)
 
 
 def list_dispatch_lines(voucher_id: str) -> pd.DataFrame:
@@ -871,7 +890,7 @@ def list_dispatch_lines(voucher_id: str) -> pd.DataFrame:
                 "quantity": float(row["quantity"]), "note": row.get("note"),
             }
         )
-    df = pd.DataFrame(rows, columns=columns)
+    df = _df(rows, columns=columns)
     return df.sort_values("material_name").reset_index(drop=True) if not df.empty else df
 
 
@@ -897,7 +916,7 @@ def list_budgets(project_site_id: str | None = None) -> pd.DataFrame:
             }
         )
     columns = ["id", "project_site_id", "material_id", "category", "material_name", "unit", "planned_qty", "planned_unit_price"]
-    df = pd.DataFrame(rows, columns=columns)
+    df = _df(rows, columns=columns)
     return df.sort_values(["category", "material_name"]).reset_index(drop=True) if not df.empty else df
 
 
@@ -952,7 +971,7 @@ def list_attendance(start: str, end: str) -> pd.DataFrame:
             }
         )
     columns = ["id", "worker_id", "worker_name", "project_site_id", "site_name", "work_date", "status", "note"]
-    df = pd.DataFrame(rows, columns=columns)
+    df = _df(rows, columns=columns)
     return df.sort_values(["work_date", "worker_name"], ascending=[False, True]).reset_index(drop=True) if not df.empty else df
 
 
@@ -982,7 +1001,7 @@ def log_action(actor: str, summary: str) -> None:
 @st.cache_data(ttl=_CACHE_TTL, show_spinner=False)
 def list_audit(limit: int = 300) -> pd.DataFrame:
     res = get_client().table("audit_log").select("*").order("created_at", desc=True).limit(limit).execute()
-    return pd.DataFrame(res.data or [], columns=["id", "actor", "summary", "created_at"])
+    return _df(res.data or [], columns=["id", "actor", "summary", "created_at"])
 
 
 # ---------------------------------------------------------------------------
@@ -994,7 +1013,7 @@ def dashboard_totals() -> dict:
     materials = list_materials()
     suppliers = list_suppliers()
     data = _select_all(lambda: get_client().table("supplier_materials").select("supplier_id,material_id,available").order("id"))
-    links = pd.DataFrame(data, columns=["supplier_id", "material_id", "available"])
+    links = _df(data, columns=["supplier_id", "material_id", "available"])
 
     suppliers_with_available = links.loc[links["available"] == True, "supplier_id"].nunique() if not links.empty else 0  # noqa: E712
     materials_with_supplier = set(links["material_id"]) if not links.empty else set()

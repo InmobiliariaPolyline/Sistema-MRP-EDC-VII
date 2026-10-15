@@ -6,6 +6,16 @@ Formato de cada parche: **Agregado** · **Corregido** · **Problemas y causa** �
 
 ---
 
+## Parche 040 — Error al hacer un despacho (vacíos que llegaban como NaN) · 2026-10-16
+**Corregido**
+- Después de despachar, la pantalla de Inventario mostraba «No se pudo completar esta operación» (`TypeError: sequence item 3: expected str instance, float found`).
+- El mismo fallo podía aparecer en otras pantallas con datos de Supabase (lista de trabajadores en Obras, nombres con puesto o documento vacíos…), y los textos de reemplazo («Sin puesto», «sin solicitante») no se usaban o salía «nan».
+
+**Problemas y causa**
+- Con **pandas 3** (la versión que instala Streamlit Cloud), una columna de texto con algunos vacíos pasa a tipo `str` y sus vacíos son `NaN`, que en Python es un `float` «verdadero». `" · ".join(...)` falla con él y `x or "otro texto"` nunca usa el texto de reemplazo. La capa local (SQLite) ya devolvía `None`, por eso no se veía al probar sin Supabase.
+- Se arregló en la raíz: todos los DataFrames que devuelve `db/supabase_repository.py` pasan por `_df(...)`, que deja los vacíos de texto como `None` (las columnas numéricas conservan su NaN numérico). Se comprobó con tus datos reales: ninguna tabla devuelve ya `NaN` en columnas de texto y las 10 pantallas cargan.
+- Prueba automática nueva (`tests/test_nan.py`) que documenta y vigila el problema.
+
 ## Parche 039 — No se podía registrar trabajadores (RLS activo en `workers`) · 2026-10-16
 **Corregido**
 - Al registrar un trabajador salía «No se pudo registrar al trabajador».
