@@ -56,6 +56,11 @@ adelante.
 
 El historial completo de parches, correcciones, problemas encontrados y pendientes está en [CHANGELOG.md](CHANGELOG.md).
 
+## Qué hace y qué no hace el sistema
+
+- **Sí:** prepara cada pedido con su **valor exacto (IGV 18 % incluido)** para saber cuánto será antes de comprar; registra **lo pedido a cada proveedor**, **lo que entra al almacén** (recepción) y **lo que sale a cada obra** (despacho con vale); y deja los datos y reportes (Excel, PDF, kardex) a mano.
+- **No:** no se conecta con el sistema ni la base de datos del proveedor, no hace la compra y **no maneja dinero** (nada de tarjetas ni cuentas). La compra y el pago los hace el administrador por fuera, con el RUC de la empresa. Por eso las cifras son «valor de los pedidos», no pérdidas ni pagos hechos.
+
 ## Seguridad y respaldos
 
 - **Dos claves de Supabase.** La app usa `SUPABASE_SERVICE_KEY` (service_role, solo en el servidor) si está configurada; si no, la pública (modo abierto). Con la clave de servicio se puede **cerrar la base** (`db/migrations/040_cerrar_base.sql`) para que la clave pública no lea ni escriba nada. Orden: configurar la clave → reiniciar → ejecutar el script → `python scripts/check_security.py`. Para deshacerlo: `040b_reabrir_base_emergencia.sql`.

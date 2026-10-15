@@ -130,7 +130,7 @@ def _terms_inputs(
     options = [NO_PAYMENT, *money.PAYMENT_TERMS]
     pay = t2.selectbox(
         "Condición de pago (informativa)", options, index=options.index(payment_terms) if payment_terms in options else 0, key=f"{prefix}_pay",
-        help="Solo para tesorería: el sistema no cobra ni paga. Con crédito se muestra la fecha límite de pago.",
+        help="Lo pactado con el proveedor, para saber cuánto y hasta cuándo. El sistema no cobra ni paga: el pago se hace fuera. Con crédito se muestra la fecha límite.",
     )
     tax_rate, include = money.tax_from_mode(mode)
     return {
@@ -157,7 +157,7 @@ def _totals_block(subtotal: float, terms: dict) -> None:
         st.caption(f"Equivale a {money.fmt(amounts['total_base'], money.BASE)} al tipo de cambio {terms['exchange_rate']:g}.")
     due = money.due_date(date.today(), terms.get("payment_terms"))
     if terms.get("payment_terms"):
-        st.caption(f"Condición de pago: {terms['payment_terms']}" + (f" · pagar a más tardar el {due:%d/%m/%Y} si se emite hoy." if due else "."))
+        st.caption(f"Condición de pago: {terms['payment_terms']}" + (f" · pago pactado hasta el {due:%d/%m/%Y} si se emite hoy." if due else "."))
 
 
 def _clear_order_draft() -> None:
@@ -934,7 +934,7 @@ def _render_detail(order_id: str) -> None:
     st.caption(" · ".join(parts))
     if order.get("payment_terms"):
         due = money.due_date(order["created_at"], order["payment_terms"])
-        st.caption(f"💳 Condición de pago: {order['payment_terms']}" + (f" · pagar a más tardar el {due:%d/%m/%Y}" if due else "") + " (informativo: el pago se hace fuera del sistema).")
+        st.caption(f"💳 Condición de pago: {order['payment_terms']}" + (f" · pago pactado hasta el {due:%d/%m/%Y}" if due else "") + " (informativo: la compra y el pago se hacen fuera del sistema).")
     if order.get("notes"):
         st.caption(f"📝 {order['notes']}")
 

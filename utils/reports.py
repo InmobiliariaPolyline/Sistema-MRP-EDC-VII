@@ -87,7 +87,8 @@ def to_pdf(title: str, sections: dict[str, pd.DataFrame]) -> bytes:
 def order_pdf(order: dict, items: pd.DataFrame, supplier: dict | None = None, company: dict | None = None) -> bytes:
     """Orden de compra lista para imprimir o mandar al proveedor: portada con estado, tarjetas del proveedor y de «facturar a»
     (razón social y RUC de la empresa), entrega y pago, tabla de materiales (con lo recibido), importes como en una factura
-    (valor de venta, IGV 18 % e importe total), notas y firmas. El pago se hace fuera del sistema: la condición de pago es informativa."""
+    (valor de venta, IGV 18 % e importe total), notas y firmas. Es el valor exacto del trato: la compra y el pago se hacen fuera del
+    sistema y la condición de pago es informativa."""
     supplier, company = supplier or {}, company or {}
     status_text, status_tone = ORDER_STATUS.get(order.get("status"), (str(order.get("status") or ""), "gray"))
     currency = order.get("currency") or money.BASE
@@ -122,7 +123,7 @@ def order_pdf(order: dict, items: pd.DataFrame, supplier: dict | None = None, co
     due = money.due_date(order["created_at"], order.get("payment_terms"))
     pdf.info_card(
         [("Obra destino", order.get("site_name") or "Sin obra destino", "pin"), ("Entrega prometida", _date(order.get("expected_date")), "calendar"),
-         ("Condición de pago", order.get("payment_terms"), "coin"), ("Pagar a más tardar", f"{due:%d/%m/%Y}" if due else None, "clock"),
+         ("Condición de pago", order.get("payment_terms"), "coin"), ("Pago pactado hasta el", f"{due:%d/%m/%Y}" if due else None, "clock"),
          ("Enviada el", _date(order.get("sent_at"), True), "truck"), ("Tratamiento del IGV", money.TAX_MODES[money.tax_mode(tax_rate, include)][0].replace(" (18 %)", ""), "scale")],
         columns=3, title="Entrega y pago",
     )
@@ -255,12 +256,12 @@ def site_report_pdf(site: dict, prog: dict, materials: pd.DataFrame, stages: lis
     consumed = prog.get("pct_consumed")
     over = int(((materials["Pedido"] > materials["Presupuesto"] + 1e-9) & (materials["Presupuesto"] > 0)).sum()) if not materials.empty else 0
     pdf.font(8, color=MUTED_TEXT)
-    pdf.cell(0, 5, "Importes en soles y sin IGV. «Comprado» es lo pedido en las órdenes (se paga fuera del sistema). Lo despachado se valora al precio presupuestado (o al promedio pedido).", new_x="LMARGIN", new_y="NEXT")
+    pdf.cell(0, 5, "Importes en soles y sin IGV. «Pedido» es el valor de las órdenes: la compra y el pago se hacen fuera del sistema. Lo despachado se valora al precio presupuestado (o al promedio pedido).", new_x="LMARGIN", new_y="NEXT")
     pdf.ln(1)
     pdf.kpis(
         [
             {"label": "Presupuesto", "value": f"S/ {planned:,.0f}", "sub": "costo previsto", "icon": "coin"},
-            {"label": "Comprado", "value": f"S/ {ordered:,.0f}", "sub": f"{ordered / planned * 100:.0f} % del presupuesto" if planned else "sin presupuesto", "icon": "order", "tone": "warn" if planned and ordered > planned else "info"},
+            {"label": "Pedido", "value": f"S/ {ordered:,.0f}", "sub": f"{ordered / planned * 100:.0f} % del presupuesto" if planned else "sin presupuesto", "icon": "order", "tone": "warn" if planned and ordered > planned else "info"},
             {"label": "Recibido", "value": f"S/ {received:,.0f}", "sub": "en almacén", "icon": "box", "tone": "teal"},
             {"label": "Despachado", "value": f"S/ {dispatched:,.0f}", "sub": "valorizado", "icon": "truck", "tone": "good"},
             {"label": "Saldo", "value": f"S/ {planned - ordered:,.0f}", "sub": "presupuesto − pedido", "icon": "scale", "tone": "warn" if planned - ordered < 0 else "accent"},
@@ -291,7 +292,7 @@ def site_report_pdf(site: dict, prog: dict, materials: pd.DataFrame, stages: lis
                  f"{m['Presupuesto $']:,.2f}", f"{m['Pedido $']:,.2f}", f"{m['Despachado $']:,.2f}", state]
             )
         pdf.table(
-            ["Material", "Unidad", "Presup.", "Pedido", "Recibido", "Despach.", "Presup. S/", "Comprado S/", "Despach. S/", "Estado"], rows,
+            ["Material", "Unidad", "Presup.", "Pedido", "Recibido", "Despach.", "Presup. S/", "Pedido S/", "Despach. S/", "Estado"], rows,
             [4.2, 1.5, 1.3, 1.3, 1.3, 1.3, 1.6, 1.6, 1.6, 2.5], ["L", "L", "R", "R", "R", "R", "R", "R", "R", "L"], tones=tones, row_h=7.0,
         )
 

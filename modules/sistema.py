@@ -1,8 +1,9 @@
 """Módulo Sistema: qué es este sistema, en qué versión está, con qué datos y en qué entorno corre.
 
 Sirve para saber si Streamlit Cloud ya redesplegó, para dar soporte (hay un resumen listo para copiar) y para dejar
-claro cómo se trata el dinero: las compras se pagan fuera del sistema, con el RUC de la empresa; aquí solo se
-registran para consulta y para tesorería."""
+claro qué hace y qué no hace el sistema: prepara el pedido con su valor exacto (IGV incluido) y registra lo pedido por
+proveedor, lo que entra al almacén y lo que sale a cada obra. No se conecta con el sistema del proveedor ni compra ni
+paga: eso se hace fuera, con el RUC de la empresa."""
 from __future__ import annotations
 
 import platform
@@ -22,10 +23,10 @@ from modules import ui
 CHANGELOG = Path(__file__).resolve().parent.parent / "CHANGELOG.md"
 FLOW = [
     ("Proveedor", "Se registra con su catálogo y precios."),
-    ("Orden de compra", "El administrador pide el material; el pago se hace aparte."),
-    ("Recepción", "Llega el material: guía o factura, quién entregó y observaciones."),
-    ("Almacén", "Entra al stock. Se cuenta, se corrige y se devuelve lo que sobra."),
-    ("Despacho a obra", "Sale con un vale firmado y se compara con el presupuesto."),
+    ("Orden de compra", "Se arma el pedido con su valor exacto (con IGV) y se comunica al proveedor por WhatsApp, correo o llamada."),
+    ("Recepción", "Llega el material y se registra con su guía o factura, quién entregó y observaciones."),
+    ("Almacén", "Lo recibido entra al stock. Se cuenta, se corrige y se devuelve lo que sobra."),
+    ("Despacho a obra", "Sale hacia la obra con un vale firmado y se compara con el presupuesto."),
 ]
 
 
@@ -85,12 +86,13 @@ def render() -> None:
 
     st.markdown('<div class="mrp-eyebrow">Para qué sirve</div><div class="mrp-panel-title">Compras, almacén y obras en un solo lugar</div>', unsafe_allow_html=True)
     st.write(
-        "El sistema ayuda al administrador a **comunicarse con los proveedores**, **controlar el almacén** y **repartir el material a las obras**, "
-        "dejando todo registrado: quién pidió qué, a qué precio, cuándo llegó y adónde se despachó."
+        "El sistema ayuda al administrador a **preparar los pedidos a los proveedores con su valor exacto (IGV incluido)**, **controlar lo que entra y sale del almacén** "
+        "y **repartir el material a las obras**, dejando todo registrado: qué se pidió a cada proveedor, qué llegó al almacén y qué salió hacia qué obra."
     )
     ui.tip(
-        "Sobre el dinero: el sistema no cobra ni paga nada (no usa tarjetas ni cuentas bancarias). Las compras las paga el administrador por fuera, con el RUC de la empresa. "
-        "Las cifras que ves son lo comprado o comprometido en las órdenes: un registro para consulta y para tesorería, no una pérdida."
+        "Qué no hace: el sistema no se conecta con el sistema ni la base de datos del proveedor, no compra y no paga (no usa tarjetas ni cuentas). "
+        "La compra y el pago los hace el administrador por fuera, con el RUC de la empresa. Los importes que ves son el valor exacto de cada pedido con su IGV, "
+        "para saber cuánto será antes de comprar y para dejarlo registrado; no son una pérdida."
     )
 
     st.markdown('<div class="mrp-eyebrow">Cómo fluye</div><div class="mrp-panel-title">De la compra a la obra</div>', unsafe_allow_html=True)

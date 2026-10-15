@@ -256,8 +256,8 @@ def render() -> None:
     ui.stat_grid(
         [
             ui.stat_card("🧮", f"{prog['planned']:,.0f}", "Presupuesto", "costo previsto de materiales"),
-            ui.stat_card("🧾", f"{prog['ordered']:,.0f}", "Comprado hasta hoy", pct, warn=prog["planned"] > 0 and prog["ordered"] > prog["planned"]),
-            ui.stat_card("⚖️", f"{prog['planned'] - prog['ordered']:,.0f}", "Saldo del presupuesto", "presupuesto − comprado"),
+            ui.stat_card("🧾", f"{prog['ordered']:,.0f}", "Pedido hasta hoy", pct, warn=prog["planned"] > 0 and prog["ordered"] > prog["planned"]),
+            ui.stat_card("⚖️", f"{prog['planned'] - prog['ordered']:,.0f}", "Saldo del presupuesto", "presupuesto − pedido"),
             ui.stat_card("📐", over, "Sobre lo presupuestado", "materiales pedidos por encima de lo previsto", warn=over > 0),
         ]
     )

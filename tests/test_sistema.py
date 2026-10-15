@@ -40,7 +40,8 @@ class SistemaTests(unittest.TestCase):
 
     def test_flow_describes_the_real_process(self):
         self.assertEqual([step for step, _ in sistema.FLOW][:2], ["Proveedor", "Orden de compra"])
-        self.assertIn("pago se hace aparte", dict(sistema.FLOW)["Orden de compra"])
+        self.assertIn("valor exacto", dict(sistema.FLOW)["Orden de compra"])
+        self.assertIn("WhatsApp", dict(sistema.FLOW)["Orden de compra"])
 
 
 if __name__ == "__main__":

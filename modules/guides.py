@@ -7,7 +7,7 @@ GUIDES: dict[str, str] = {
 **Para qué sirve:** una lectura rápida de cómo va todo.
 
 - **Tarjetas:** cuántos materiales, proveedores y órdenes abiertas hay.
-- **Gráficos:** compras por mes, por categoría y por proveedor, y órdenes por estado. Son lo comprado (órdenes no canceladas): el pago se hace fuera del sistema.
+- **Gráficos:** valor de los pedidos por mes, por categoría y por proveedor, y órdenes por estado. Son el valor exacto de las órdenes no canceladas (con IGV): la compra y el pago se hacen fuera del sistema.
 - **⏰ Alerta amarilla:** órdenes abiertas hace demasiado tiempo (el límite en días se cambia en *Órdenes de compra*).
 - **Mapa:** todas las obras con ubicación.
 
@@ -42,7 +42,7 @@ GUIDES: dict[str, str] = {
 3a0. **✉️ Correo:** abre tu programa de correo con el pedido escrito y el correo del proveedor; adjunta el PDF descargado y envía (no se manda nada desde el servidor). Igual que WhatsApp, marca la orden como enviada.
 3a. **Envío al proveedor:** al abrir **💬 Enviar por WhatsApp** una orden pendiente pasa sola a «enviada» y queda anotada la fecha y hora (también con «Marcar como enviada»).
 3b0. **IGV real (18 %):** en el Perú el IGV es 18 % (16 % de IGV + 2 % del Impuesto de Promoción Municipal). Al crear la orden eliges cómo cotiza el proveedor: **sin IGV** (se suma 18 % al valor de venta, lo más común), **con IGV incluido** (el sistema separa el IGV del total) o **sin IGV** por ser exonerada o inafecta. Los importes salen como en una factura: **valor de venta, IGV e importe total**, redondeados a céntimos.
-3b1. **Condición de pago (informativa):** Contado, contra entrega o crédito de 7 a 60 días; con crédito se calcula la fecha límite de pago. El sistema no cobra ni paga: es un dato para tesorería.
+3b1. **Condición de pago (informativa):** Contado, contra entrega o crédito de 7 a 60 días; con crédito se calcula la fecha límite pactada. El sistema no cobra ni paga: es lo acordado con el proveedor, para saber cuánto y hasta cuándo.
 3b. **Entrega y moneda (opcionales):** al crear o editar una orden puedes indicar la **fecha prometida de entrega** (si pasa y la orden sigue abierta, se marca como atrasada en la lista, en el detalle y en el dashboard), la **moneda** (soles o dólares, con su tipo de cambio) y si se **suma el IGV (18 %)** al total.
 3c. **Recepción contra documento:** al registrar una recepción anota el **N.º de guía o factura**, quién entregó y las **observaciones** (faltantes, daños). Cada recepción queda guardada en «Recepciones registradas» dentro de la orden.
 3d. **📎 Documentos adjuntos:** en el detalle de la orden sube la foto o el PDF de la factura, la guía de remisión o la cotización (hasta 10 MB; PDF, PNG, JPG o WEBP). «Abrir» los descarga o los muestra. También se pueden adjuntar al vale de salida firmado y al conteo de inventario. Necesita la clave de servicio de Supabase.
@@ -105,7 +105,7 @@ La pestaña *Resumen* cuenta asistencias y faltas de los últimos días.
 **Para qué sirve:** ver en qué versión está el sistema, dónde guarda los datos, cuántos registros hay y las últimas novedades.
 
 - Al final hay un **resumen técnico** para copiar si necesitas pedir ayuda (no lleva contraseñas ni claves).
-- El sistema **no procesa pagos**: las compras se pagan fuera, con el RUC de la empresa; aquí solo queda el registro de lo comprado.
+- El sistema **no se conecta con el sistema del proveedor ni procesa pagos**: prepara el pedido con su valor exacto (IGV incluido) y registra lo pedido por proveedor, lo que entra al almacén y lo que sale a cada obra. La compra y el pago se hacen fuera, con el RUC de la empresa.
 """,
     "Respaldo de datos": """
 **Para qué sirve:** tener una copia de todo fuera del sistema, por si algo se borra por error.

@@ -6,6 +6,21 @@ Formato de cada parche: **Agregado** · **Corregido** · **Problemas y causa** �
 
 ---
 
+## Parche 059 — Corrección de lenguaje: el sistema prepara pedidos, no compra · 2026-10-16
+
+**Aclaración (definitiva):** una orden de compra en el sistema **no es una transacción**: no se conecta con el sistema ni la base de datos del proveedor, no compra y no maneja dinero. Sirve para llegar a la **exactitud del trato, con el IGV**, de modo que al hacer la compra (por fuera) se sepa cuánto es. El sistema solo maneja datos: qué se pide a cada proveedor, qué entra al almacén y qué sale a cada obra.
+
+**Se corrigió lo que decía otra cosa**
+- «Comprado hasta hoy», «Comprado» y «Comprado S/» (Obras y reporte de obra en PDF) volvieron a **«Pedido»**: afirmaban una compra hecha.
+- En el dashboard, «Compras por mes / por categoría / por proveedor» pasó a **«Valor de los pedidos por mes», «Pedidos por categoría» y «Pedidos por proveedor»**.
+- «Pagar a más tardar» pasó a **«pago pactado hasta el…»** (es lo acordado con el proveedor, no una orden de pago).
+- El módulo **Sistema**, las guías y el README ahora explican qué hace y qué no hace: no se conecta con el proveedor, no compra y no paga; el flujo dice «se arma el pedido con su valor exacto (con IGV) y se comunica al proveedor por WhatsApp, correo o llamada», «lo recibido entra al stock» y «sale hacia la obra».
+- Nuevo apartado «Qué hace y qué no hace el sistema» en el README.
+
+**Se dejó igual (sigue siendo coherente):** IGV 18 % y valor de venta / IGV / importe total, RUC de la empresa con contraseña, «Facturar a» en la orden, condición de pago informativa, recepción contra guía o factura, almacén, despacho, devoluciones, conteos, kardex, reportes y el resto.
+
+**Hay que hacer:** nada.
+
 ## Parches 056–058 — Datos de la empresa (RUC), IGV real y condición de pago · 2026-10-16
 
 El sistema no paga nada: las compras se pagan fuera, con el RUC de la empresa. Estos cambios hacen que las órdenes se parezcan a una compra real.

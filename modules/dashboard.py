@@ -170,7 +170,7 @@ def _bar_marker(color) -> dict:
 
 
 def _render_purchase_analytics(orders: pd.DataFrame) -> None:
-    """Compras por mes, estado de las órdenes, compras por categoría y por proveedor."""
+    """Valor de los pedidos por mes, estado de las órdenes, pedidos por categoría y por proveedor."""
     if orders.empty:
         return
     billable = _billable(orders)
@@ -178,7 +178,7 @@ def _render_purchase_analytics(orders: pd.DataFrame) -> None:
     c1, c2 = st.columns([5, 3])
     with c1:
         with st.container(border=True):
-            _panel("Compras", "Compras por mes", "Barras: monto de las órdenes (en soles, con IGV). Línea: cantidad de órdenes. Se paga fuera del sistema.")
+            _panel("Pedidos", "Valor de los pedidos por mes", "Barras: valor exacto de las órdenes (en soles, con IGV). Línea: cantidad de órdenes. La compra y el pago se hacen fuera del sistema.")
             _spend_combo(billable)
     with c2:
         with st.container(border=True):
@@ -188,11 +188,11 @@ def _render_purchase_analytics(orders: pd.DataFrame) -> None:
     c3, c4 = st.columns([1, 1])
     with c3:
         with st.container(border=True):
-            _panel("Compras", "Compras por categoría", "En qué tipo de material se compra más.")
+            _panel("Pedidos", "Pedidos por categoría", "En qué tipo de material se pide más.")
             _category_treemap()
     with c4:
         with st.container(border=True):
-            _panel("Compras", "Compras por proveedor", "Los seis proveedores con más compras.")
+            _panel("Pedidos", "Pedidos por proveedor", "Los seis proveedores con más pedidos.")
             _supplier_bars(billable)
 
 
@@ -245,7 +245,7 @@ def _category_treemap() -> None:
         _empty_chart("Sin líneas de órdenes activas.")
         return
     categories = repo.list_materials().set_index("id")["category"].to_dict()
-    # cada línea vale lo que su orden: en soles y con IGV (el mismo criterio que «Compras por mes»)
+    # cada línea vale lo que su orden: en soles y con IGV (el mismo criterio que «Valor de los pedidos por mes»)
     ratio = (orders["total_base"].astype(float) / orders["subtotal"].astype(float).where(orders["subtotal"].astype(float) > 0)).fillna(1.0)
     factor = dict(zip(orders["id"], ratio))
     spend = (
