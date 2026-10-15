@@ -15,7 +15,7 @@ import streamlit as st
 
 from db import repository as repo
 from modules import attachments_ui, forms, sugerencias, ui
-from utils import money
+from utils import money, pricing
 from utils.reports import order_pdf, order_whatsapp_text
 from utils.timeago import age_days
 
@@ -42,6 +42,11 @@ NO_SITE = "Sin obra destino"
 def status_pill(status: str) -> str:
     label, color = STATUSES.get(status, (status, "gray"))
     return ui.pill(label, color)
+
+
+def price_max_age() -> int:
+    """Vigencia de las cotizaciones en días (se ajusta en la ficha del proveedor)."""
+    return int(st.session_state.get("price_max_age", pricing.DEFAULT_MAX_AGE_DAYS))
 
 
 def alert_days() -> int:
@@ -288,6 +293,12 @@ def _new_order_dialog() -> None:
             )
         else:
             st.caption(f"Esta selección: {qty:g} {record['metric_label'] or 'unid.'} × {money.fmt(price, terms['currency'])} = **{money.fmt(qty * price, terms['currency'])}**")
+        if catalog_price > 0 and pricing.is_stale(record.get("price_updated_at"), price_max_age()):
+            st.warning(
+                f"Este precio está vencido ({pricing.describe(record.get('price_updated_at'), price_max_age())}). "
+                "Confirma la cotización con el proveedor antes de comprar.",
+                icon=":material/history:",
+            )
         if not record.get("available", True):
             st.caption("El catálogo indica que este material no está disponible. Confirma la entrega con el proveedor.")
         _material_quotes(record["id"], supplier_id, offers)
@@ -311,6 +322,7 @@ def _new_order_dialog() -> None:
                             "unit": record["metric_label"] or None,
                             "quantity": qty,
                             "unit_price": price,
+                            "price_updated_at": record.get("price_updated_at"),
                         }
                     )
                 st.rerun(scope="fragment")
@@ -333,6 +345,12 @@ def _new_order_dialog() -> None:
             _budget_warning(sites.loc[sites["name"] == site_choice, "id"].iloc[0], site_choice, lines, total * terms["exchange_rate"])
         if any(line["unit_price"] == 0 for line in lines):
             st.warning("Hay materiales con precio 0. El total solo incluye los precios registrados.")
+        stale_lines = [line["material_name"] for line in lines if pricing.is_stale(line.get("price_updated_at"), price_max_age())]
+        if stale_lines:
+            st.warning(
+                f"Cotizaciones con más de {price_max_age()} días sin actualizarse: {', '.join(stale_lines)}. Conviene confirmar el precio con el proveedor.",
+                icon=":material/history:",
+            )
         totals = _supplier_totals(lines, offers)
         if len(totals) > 1:
             cheapest_name, cheapest_total = totals[0]
@@ -685,6 +703,24 @@ def _render_list() -> None:
 # Detalle
 # ---------------------------------------------------------------------------
 
+def _mark_sent_from_link(order_id: str, code: str, status: str) -> None:
+    """Al abrir WhatsApp con el pedido, la orden pendiente pasa sola a «enviada» y anota la hora de envío."""
+    if status != "pendiente":
+        return
+    try:
+        repo.set_order_status(order_id, "enviada")
+        ui.flash(f"Orden {code}: marcada como enviada al abrir WhatsApp.", "📤")
+    except Exception:  # abrir WhatsApp nunca debe fallar por esto
+        pass
+
+
+def _sent_text(value) -> str:
+    text = str(value or "")
+    if not text or text in ("None", "nan", "NaT"):
+        return ""
+    return f"{text[8:10]}/{text[5:7]}/{text[:4]} {text[11:16]}".strip()
+
+
 def _change_status(order_id: str, code: str, status: str) -> None:
     repo.set_order_status(order_id, status)
     ui.flash(f"Orden {code}: {STATUSES[status][0].lower()}.", "🔄")
@@ -833,6 +869,8 @@ def _render_detail(order_id: str) -> None:
             ui.stat_card("💰", money.fmt(order["total"], order.get("currency")), "Total con IGV" if float(order.get("tax_rate") or 0) else "Total"),
         ]
     )
+    if _sent_text(order.get("sent_at")):
+        st.caption(f"📤 Enviada al proveedor el {_sent_text(order['sent_at'])}.")
     late_by = _days_late(order)
     if order.get("expected_date") and status in OPEN_STATUSES:
         when = f"{str(order['expected_date'])[8:10]}/{str(order['expected_date'])[5:7]}/{str(order['expected_date'])[:4]}"
@@ -922,6 +960,9 @@ def _render_detail(order_id: str) -> None:
             "💬 Enviar por WhatsApp",
             f"https://wa.me/{phone}?text={quote(order_whatsapp_text(order, items))}",
             width="stretch",
+            on_click=_mark_sent_from_link,
+            args=(order_id, order["code"], status),
+            help="Abre WhatsApp con el pedido y, si la orden estaba pendiente, la marca como enviada con la hora." if status == "pendiente" else None,
         )
         if d3.button("⧉ Duplicar", width="stretch", help="Crea una orden nueva con estos mismos materiales"):
             _duplicate(order, items)

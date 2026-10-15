@@ -6,6 +6,27 @@ Formato de cada parche: **Agregado** · **Corregido** · **Problemas y causa** �
 
 ---
 
+## Parche 049 — Fase C: compras y precios (vigencia, plazos, envío y calificación) · 2026-10-16
+
+**Parche 047 · Vigencia de precios**
+- Cada precio del catálogo de un proveedor muestra **cuándo se actualizó** («actualizado hace 12 d», «⚠ hace 5 meses (vencido)»). La vigencia es de 90 días y se ajusta en la ficha del proveedor.
+- Filtro **«Precio vencido»** y tarjeta «Precios vencidos» en el catálogo del proveedor.
+- Al crear una orden: aviso al elegir un material con precio vencido y un resumen de cotizaciones vencidas antes de crearla. En la sugerencia de compra: columna «Cotización» y aviso de las vencidas. Un precio sin fecha conocida (anterior al historial) no se marca como vencido.
+
+**Parche 048 · Plazos, mínimo de compra y registro del envío**
+- El proveedor tiene **plazo de entrega habitual** y **monto mínimo de compra** (opcionales).
+- La **sugerencia de compra** muestra por proveedor el total estimado, su mínimo, el plazo y la fecha aproximada de llegada. Si el pedido no llega al mínimo avisa cuánto falta y ofrece **completar con materiales que ese proveedor vende y están por debajo del doble de su stock mínimo** (marcas los que quieras sumar). Las órdenes creadas por la sugerencia llevan como fecha prometida «hoy + plazo».
+- **Envío registrado:** al abrir «Enviar por WhatsApp» una orden pendiente pasa sola a «enviada» y guarda la fecha y hora de envío (`sent_at`); también al marcarla como enviada a mano. El detalle de la orden muestra «Enviada al proveedor el …». La primera fecha no se pisa.
+
+**Parche 049 · Calificación de proveedores**
+- Nota de 0 a 100 por proveedor: **entrega a tiempo** (60 %: órdenes completadas a más tardar en su fecha prometida; las abiertas con fecha vencida cuentan como atrasadas) y **cantidades completas** (40 %: lo recibido sobre lo pedido en órdenes recibidas o parciales de más de 30 días). Etiquetas: Excelente (90+), Buena (75+), Regular (50+), Baja. Sin historial no se califica.
+- Se ve en la lista de proveedores y, con el detalle (a tiempo, cantidades, atraso promedio), en la ficha.
+
+**Pruebas nuevas (22):** vigencia de precios, plazos y mínimos, candidatos para completar un pedido, orden del envío y calificación.
+
+**Hay que hacer**
+- Correr `db/migrations/042_fase_c.sql` en Supabase (agrega `lead_time_days`, `min_order_amount` y `sent_at`). Antes de eso todo sigue funcionando; guardar plazo o mínimo avisa que falta el SQL y el envío se marca sin hora.
+
 ## Parche 046 — Métricas de cómputo de lista cerrada · 2026-10-16
 Fase B, última parte.
 

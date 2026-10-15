@@ -236,6 +236,9 @@ def _init_db() -> None:
             ("stock_movements", "receipt_id", "text references order_receipts(id) on delete set null"),
             ("stock_movements", "stage", "text"),
             ("dispatch_vouchers", "stage", "text"),
+            ("suppliers", "lead_time_days", "integer"),
+            ("suppliers", "min_order_amount", "real"),
+            ("purchase_orders", "sent_at", "text"),
             ("purchase_orders", "expected_date", "text"),
             ("purchase_orders", "currency", "text not null default 'PEN'"),
             ("purchase_orders", "exchange_rate", "real not null default 1"),
@@ -329,7 +332,7 @@ def delete_material(material_id: str) -> None:
 def list_suppliers() -> pd.DataFrame:
     with _connect() as conn:
         df = pd.read_sql_query("select * from suppliers order by name", conn)
-    for col in ["id", "name", "contact_name", "phone", "email", "notes", "created_at", "updated_at"]:
+    for col in ["id", "name", "contact_name", "phone", "email", "notes", "created_at", "updated_at", "lead_time_days", "min_order_amount"]:
         if col not in df.columns:
             df[col] = None
     return df.astype(object).where(pd.notnull(df), None)
@@ -342,17 +345,20 @@ def upsert_supplier(
     email: str | None,
     notes: str | None,
     supplier_id: str | None = None,
+    lead_time_days: int | None = None,
+    min_order_amount: float | None = None,
 ) -> None:
+    """`lead_time_days`: plazo de entrega habitual; `min_order_amount`: monto mínimo de compra (None = sin dato)."""
     with _connect() as conn:
         if supplier_id:
             conn.execute(
-                "update suppliers set name = ?, contact_name = ?, phone = ?, email = ?, notes = ?, updated_at = datetime('now') where id = ?",
-                (name, contact_name, phone, email, notes, supplier_id),
+                "update suppliers set name = ?, contact_name = ?, phone = ?, email = ?, notes = ?, lead_time_days = ?, min_order_amount = ?, updated_at = datetime('now') where id = ?",
+                (name, contact_name, phone, email, notes, lead_time_days, min_order_amount, supplier_id),
             )
         else:
             conn.execute(
-                "insert into suppliers (id, name, contact_name, phone, email, notes) values (?, ?, ?, ?, ?, ?)",
-                (str(uuid.uuid4()), name, contact_name, phone, email, notes),
+                "insert into suppliers (id, name, contact_name, phone, email, notes, lead_time_days, min_order_amount) values (?, ?, ?, ?, ?, ?, ?, ?)",
+                (str(uuid.uuid4()), name, contact_name, phone, email, notes, lead_time_days, min_order_amount),
             )
 
 
@@ -369,7 +375,7 @@ def get_supplier_catalog(supplier_id: str) -> pd.DataFrame:
     materials = list_materials()
     with _connect() as conn:
         links = pd.read_sql_query(
-            "select id as link_id, material_id, available, price from supplier_materials where supplier_id = ?",
+            "select id as link_id, material_id, available, price, price_updated_at from supplier_materials where supplier_id = ?",
             conn,
             params=(supplier_id,),
         )
@@ -653,7 +659,7 @@ def list_offers() -> pd.DataFrame:
         df = pd.read_sql_query(
             """
             select sm.supplier_id, s.name as supplier_name, sm.material_id,
-                   m.category, m.name as material_name, sm.available, sm.price
+                   m.category, m.name as material_name, sm.available, sm.price, sm.price_updated_at
             from supplier_materials sm
             join suppliers s on s.id = sm.supplier_id
             join materials m on m.id = sm.material_id
@@ -675,7 +681,7 @@ def list_orders() -> pd.DataFrame:
             """
             select o.id, o.code, o.supplier_id, o.supplier_name, o.project_site_id,
                    ps.name as site_name, o.status, o.notes, o.created_at,
-                   o.expected_date, o.currency, o.exchange_rate, o.tax_rate,
+                   o.expected_date, o.sent_at, o.currency, o.exchange_rate, o.tax_rate,
                    coalesce((select sum(i.quantity * i.unit_price) from purchase_order_items i where i.order_id = o.id), 0) as subtotal,
                    (select count(*) from purchase_order_items i where i.order_id = o.id) as items_count
             from purchase_orders o
@@ -733,8 +739,11 @@ def create_order(
 
 
 def set_order_status(order_id: str, status: str) -> None:
+    """Cambia el estado de la orden. Al pasar a «enviada» anota cuándo se envió (`sent_at`)."""
     with _connect() as conn:
         conn.execute("update purchase_orders set status = ?, updated_at = datetime('now') where id = ?", (status, order_id))
+        if status == "enviada":
+            conn.execute("update purchase_orders set sent_at = datetime('now') where id = ? and sent_at is null", (order_id,))
 
 
 def delete_order(order_id: str) -> None:
@@ -833,18 +842,20 @@ def receive_order_items(order_id: str, receipts: dict[str, float], actor: str | 
 # Inventario (movimientos de stock) y presupuesto por obra
 # ---------------------------------------------------------------------------
 
-def list_receipts(order_id: str) -> pd.DataFrame:
-    """Recepciones registradas de una orden (más reciente primero)."""
+def list_receipts(order_id: str | None = None) -> pd.DataFrame:
+    """Recepciones registradas de una orden (o de todas si no se indica), la más reciente primero."""
+    query = """
+        select r.id, r.order_id, r.received_at, r.delivered_by, r.document_ref, r.notes, r.actor,
+               (select count(*) from stock_movements s where s.receipt_id = r.id) as lines_count
+        from order_receipts r
+    """
+    params: tuple = ()
+    if order_id:
+        query += " where r.order_id = ?"
+        params = (order_id,)
+    query += " order by r.received_at desc, r.rowid desc"
     with _connect() as conn:
-        df = pd.read_sql_query(
-            """
-            select r.id, r.order_id, r.received_at, r.delivered_by, r.document_ref, r.notes, r.actor,
-                   (select count(*) from stock_movements s where s.receipt_id = r.id) as lines_count
-            from order_receipts r where r.order_id = ? order by r.received_at desc, r.rowid desc
-            """,
-            conn,
-            params=(order_id,),
-        )
+        df = pd.read_sql_query(query, conn, params=params)
     return df.astype(object).where(pd.notnull(df), None)
 
 

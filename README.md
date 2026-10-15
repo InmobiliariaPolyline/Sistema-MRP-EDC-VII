@@ -67,6 +67,10 @@ El historial completo de parches, correcciones, problemas encontrados y pendient
 
 Devoluciones de obra al almacén, toma de inventario físico (conteos con motivo), fecha prometida de entrega con aviso de atraso, moneda e IGV por orden, recepción contra guía o factura, documentos adjuntos (Supabase Storage, solo con la clave de servicio) y presupuesto y despacho por etapas de obra. Todo el SQL está en `db/migrations/041_fase_b.sql` (idempotente; si la base ya está cerrada, lo nuevo nace cerrado). Detalle por parche en el `CHANGELOG.md` (042 a 046).
 
+## Compras y precios (Fase C)
+
+Vigencia de precios de proveedores (aviso de cotizaciones vencidas), plazo de entrega y monto mínimo de compra por proveedor (la sugerencia de compra calcula la llegada y propone completar pedidos), registro automático de cuándo se envió una orden y calificación de proveedores por plazos y cantidades. SQL en `db/migrations/042_fase_c.sql`. Detalle en el `CHANGELOG.md` (parche 049).
+
 ## Arquitectura
 
 ### Formularios e interfaz (parche 030)

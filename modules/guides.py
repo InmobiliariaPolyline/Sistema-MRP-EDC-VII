@@ -20,6 +20,9 @@ GUIDES: dict[str, str] = {
 2. **Catálogo:** marca *Lo ofrece*, si está *Disponible* y su *precio*. Esos precios alimentan el comparador y la sugerencia de compra.
 3. **📥 Importar precios:** sube el Excel o CSV que te mandó el proveedor. Se enlaza cada fila con tu catálogo y ves qué cambia antes de aplicar. Si no tiene formato, descarga la plantilla.
 4. Cada cambio de precio queda en el historial automáticamente.
+5. **Vigencia de precios:** cada precio muestra cuándo se actualizó; si pasa de la vigencia (90 días, ajustable en la ficha) se marca como vencido y avisa al crear una orden y en la sugerencia de compra. El filtro «Precio vencido» lista lo que conviene volver a cotizar.
+6. **Plazo de entrega y mínimo de compra** (al editar el proveedor): la sugerencia de compra calcula cuándo llegaría el pedido y avisa si no alcanza el mínimo, proponiendo materiales bajos del mismo proveedor para completarlo.
+7. **Calificación:** cada proveedor recibe una nota de 0 a 100 según sus órdenes: entrega a tiempo respecto de la fecha prometida (60 %) y cantidades completas (40 %). Aparece en la lista y en su ficha.
 """,
     "Materiales": """
 **Para qué sirve:** el catálogo maestro de todo lo que el almacén puede manejar.
@@ -35,6 +38,7 @@ GUIDES: dict[str, str] = {
 1. **＋ Nueva orden:** proveedor, obra destino (opcional) y materiales con su cantidad. El **precio unitario es el del catálogo del proveedor y no se puede cambiar en la orden** (solo sube el total al pedir más); si hay que cambiarlo, edítalo en Proveedores → Catálogo. **💡 Comparar cotizaciones** te dice si otro proveedor es más barato; si eliges obra, avisa cuando el pedido supera su presupuesto.
 2. **Estados:** Pendiente → Enviada → Recibida (o Parcial si llegó solo una parte).
 3. **📦 Registrar recepción:** anota lo que llegó; entra al stock del almacén. No se puede recibir más de lo pedido.
+3a. **Envío al proveedor:** al abrir **💬 Enviar por WhatsApp** una orden pendiente pasa sola a «enviada» y queda anotada la fecha y hora (también con «Marcar como enviada»).
 3b. **Entrega, moneda e IGV (opcionales):** al crear o editar una orden puedes indicar la **fecha prometida de entrega** (si pasa y la orden sigue abierta, se marca como atrasada en la lista, en el detalle y en el dashboard), la **moneda** (soles o dólares, con su tipo de cambio) y si se **suma el IGV (18 %)** al total.
 3c. **Recepción contra documento:** al registrar una recepción anota el **N.º de guía o factura**, quién entregó y las **observaciones** (faltantes, daños). Cada recepción queda guardada en «Recepciones registradas» dentro de la orden.
 3d. **📎 Documentos adjuntos:** en el detalle de la orden sube la foto o el PDF de la factura, la guía de remisión o la cotización (hasta 10 MB; PDF, PNG, JPG o WEBP). «Abrir» los descarga o los muestra. También se pueden adjuntar al vale de salida firmado y al conteo de inventario. Necesita la clave de servicio de Supabase.

@@ -138,10 +138,13 @@ def _invalidate_materials() -> None:
 @st.cache_data(ttl=_CACHE_TTL, show_spinner=False)
 def list_suppliers() -> pd.DataFrame:
     res = get_client().table("suppliers").select("*").order("name").execute()
-    return _df(
+    df = _df(
         res.data or [],
-        columns=["id", "name", "contact_name", "phone", "email", "notes", "created_at", "updated_at"],
+        columns=["id", "name", "contact_name", "phone", "email", "notes", "created_at", "updated_at", "lead_time_days", "min_order_amount"],
     )
+    for col in ("lead_time_days", "min_order_amount"):  # sin dato = None (nunca NaN), igual que en la base local
+        df[col] = df[col].astype(object).where(df[col].notna(), None)
+    return df
 
 
 def upsert_supplier(
@@ -151,13 +154,28 @@ def upsert_supplier(
     email: str | None,
     notes: str | None,
     supplier_id: str | None = None,
+    lead_time_days: int | None = None,
+    min_order_amount: float | None = None,
 ) -> None:
+    """`lead_time_days`: plazo de entrega habitual; `min_order_amount`: monto mínimo de compra (None = sin dato).
+    Estos dos necesitan el SQL de la Fase C; si aún no se corrió y no se indican, se guarda lo demás igual."""
     payload = {"name": name, "contact_name": contact_name, "phone": phone, "email": email, "notes": notes}
     client = get_client()
-    if supplier_id:
-        client.table("suppliers").update(payload).eq("id", supplier_id).execute()
-    else:
-        client.table("suppliers").insert(payload).execute()
+
+    def write(data: dict) -> None:
+        if supplier_id:
+            client.table("suppliers").update(data).eq("id", supplier_id).execute()
+        else:
+            client.table("suppliers").insert(data).execute()
+
+    try:
+        write({**payload, "lead_time_days": lead_time_days, "min_order_amount": min_order_amount})
+    except Exception as exc:
+        if not _is_missing(exc):
+            raise
+        if lead_time_days is not None or min_order_amount is not None:
+            raise ValueError("Falta correr el SQL de la Fase C en Supabase (db/migrations/042_fase_c.sql).") from exc
+        write(payload)
     _invalidate_suppliers()
 
 
@@ -191,13 +209,13 @@ def get_supplier_catalog(supplier_id: str) -> pd.DataFrame:
         .eq("supplier_id", supplier_id)
         .execute()
     )
-    links = _df(res.data or [], columns=["id", "supplier_id", "material_id", "available", "price"])
+    links = _df(res.data or [], columns=["id", "supplier_id", "material_id", "available", "price", "price_updated_at"])
 
     if materials.empty:
         return materials.assign(link_id=None, offered=False, available=False, price=None)
 
     merged = materials.merge(
-        links[["material_id", "id", "available", "price"]].rename(columns={"id": "link_id"}),
+        links[["material_id", "id", "available", "price", "price_updated_at"]].rename(columns={"id": "link_id"}),
         left_on="id",
         right_on="material_id",
         how="left",
@@ -460,7 +478,7 @@ def list_offers() -> pd.DataFrame:
     data = _select_all(
         lambda: get_client()
         .table("supplier_materials")
-        .select("supplier_id,material_id,available,price,suppliers(name),materials(category,name)")
+        .select("supplier_id,material_id,available,price,price_updated_at,suppliers(name),materials(category,name)")
         .order("id")
     )
     rows = []
@@ -476,9 +494,10 @@ def list_offers() -> pd.DataFrame:
                 "material_name": material.get("name"),
                 "available": bool(row.get("available")),
                 "price": row.get("price"),
+                "price_updated_at": row.get("price_updated_at"),
             }
         )
-    columns = ["supplier_id", "supplier_name", "material_id", "category", "material_name", "available", "price"]
+    columns = ["supplier_id", "supplier_name", "material_id", "category", "material_name", "available", "price", "price_updated_at"]
     df = _df(rows, columns=columns)
     return df.sort_values(["category", "material_name", "supplier_name"]).reset_index(drop=True) if not df.empty else df
 
@@ -510,7 +529,7 @@ def list_orders() -> pd.DataFrame:
         )
     columns = [
         "id", "code", "supplier_id", "supplier_name", "project_site_id", "site_name",
-        "status", "notes", "created_at", "expected_date", "currency", "exchange_rate", "tax_rate",
+        "status", "notes", "created_at", "expected_date", "sent_at", "currency", "exchange_rate", "tax_rate",
         "subtotal", "tax", "total", "subtotal_base", "total_base", "items_count",
     ]
     df = _df(rows, columns=[c for c in columns if c not in ("tax", "total", "subtotal_base", "total_base")]) if rows else _df(columns=columns)
@@ -589,7 +608,22 @@ def create_order(
 
 
 def set_order_status(order_id: str, status: str) -> None:
-    get_client().table("purchase_orders").update({"status": status}).eq("id", order_id).execute()
+    """Cambia el estado de la orden. Al pasar a «enviada» anota cuándo se envió (`sent_at`)."""
+    from datetime import datetime, timezone
+
+    table = get_client().table("purchase_orders")
+    if status == "enviada":
+        try:
+            current = table.select("sent_at").eq("id", order_id).limit(1).execute().data
+            keep = current and current[0].get("sent_at")
+            table.update({"status": status, **({} if keep else {"sent_at": datetime.now(timezone.utc).isoformat()})}).eq("id", order_id).execute()
+            _invalidate_orders()
+            return
+        except Exception as exc:
+            if not _is_missing(exc):
+                raise
+            # el SQL de la Fase C aún no se corrió: se cambia solo el estado
+    table.update({"status": status}).eq("id", order_id).execute()
     _invalidate_orders()
 
 
@@ -733,11 +767,16 @@ def receive_order_items(order_id: str, receipts: dict[str, float], actor: str | 
 # ---------------------------------------------------------------------------
 
 @st.cache_data(ttl=_CACHE_TTL, show_spinner=False)
-def list_receipts(order_id: str) -> pd.DataFrame:
-    """Recepciones registradas de una orden (más reciente primero)."""
+def list_receipts(order_id: str | None = None) -> pd.DataFrame:
+    """Recepciones registradas de una orden (o de todas si no se indica), la más reciente primero."""
     columns = ["id", "order_id", "received_at", "delivered_by", "document_ref", "notes", "actor", "lines_count"]
+
+    def build():
+        query = get_client().table("order_receipts").select("*, stock_movements(id)").order("received_at", desc=True).order("id")
+        return query.eq("order_id", order_id) if order_id else query
+
     try:
-        data = get_client().table("order_receipts").select("*, stock_movements(id)").eq("order_id", order_id).order("received_at", desc=True).execute().data or []
+        data = _select_all(build)
     except Exception as exc:
         if _is_missing(exc):
             return _df(columns=columns)
