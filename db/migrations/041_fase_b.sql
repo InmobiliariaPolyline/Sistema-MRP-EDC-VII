@@ -14,7 +14,6 @@
 --   4. Adjuntos              tabla attachments y el depósito privado «adjuntos» (Storage)
 --   5. Presupuesto por etapas  site_budgets.stage, dispatch_vouchers.stage, stock_movements.stage
 --                              y la función create_dispatch con la etapa
---   6. Unidades              materials.unit (lista cerrada) rellenada desde la métrica actual
 --
 -- Si la base ya está cerrada (040_cerrar_base.sql), lo nuevo se cierra solo al final.
 -- =============================================================================
@@ -230,22 +229,7 @@ end $$;
 
 
 -- -----------------------------------------------------------------------------
--- 6. Unidades de medida (lista cerrada que define la app)
--- -----------------------------------------------------------------------------
-alter table materials add column if not exists unit text;
-
--- Rellena la unidad a partir de la métrica actual («Área (m²)» → m², «Peso (kg)» → kg…).
--- Si la métrica menciona dos unidades se toma la primera; se puede corregir luego en Materiales.
-update materials
-set unit = coalesce(
-  (regexp_match(metric_label, '\((m³|m²|kg|m|ton|gal|l)[ )/]'))[1],
-  case when metric_label ilike 'unidad%' then 'und' end
-)
-where unit is null and metric_label is not null;
-
-
--- -----------------------------------------------------------------------------
--- 7. Permisos: si la base ya está cerrada, lo nuevo nace cerrado; si no, abierto como el resto
+-- 6. Permisos: si la base ya está cerrada, lo nuevo nace cerrado; si no, abierto como el resto
 -- -----------------------------------------------------------------------------
 do $$
 declare

@@ -502,7 +502,7 @@ def render() -> None:
     ):
         _clear_dispatch_draft()
         dispatch_dialog()
-    b1, b2, b3, _ = st.columns([1.3, 1.3, 1.5, 3])
+    b1, b2, b3, _ = st.columns([2, 2, 3.4, 2])
     if b1.button("Devolver de una obra", key="new_return_open", icon=":material/undo:", width="stretch"):
         _clear_return_draft()
         return_dialog()

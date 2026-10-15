@@ -7,8 +7,10 @@ import streamlit as st
 
 from db import repository as repo
 from modules import forms, inventario, ui
+from utils import units
 
 ALL_CATEGORIES = "Todas las categorías"
+OTHER_METRIC = "➕ Otra métrica…"
 DENSITY_MAX = float(forms.RULES["Densidad (kg/m³, opcional)"]["num"]["max"])
 
 
@@ -48,11 +50,21 @@ def _material_form(material: dict | None) -> tuple[str, str, float | None, str, 
         value=stored_density,
         help="Ej. 2400 para concreto. Deja 0 si no conoces la densidad.",
     )
-    metric_label = c4.text_input(
-        "Métrica de cómputo", value=(material["metric_label"] or "") if material else "",
-        placeholder="Ej. Volumen (m³)", max_chars=forms.RULES["Métrica de cómputo"]["max"],
-        help="Unidad con la que presupuestas y solicitas el material: m³, kg, m², unidades…",
+    current_metric = (material["metric_label"] or "") if material else ""
+    choices = units.options(repo.list_materials()["metric_label"].tolist())
+    if current_metric and current_metric not in choices:
+        choices = [current_metric, *choices]
+    metric_pick = c4.selectbox(
+        "Métrica de cómputo", [*choices, OTHER_METRIC], index=choices.index(current_metric) if current_metric in choices else 0,
+        help="Unidad con la que presupuestas y solicitas el material. Elegirla de la lista evita escribir lo mismo de varias formas (m3, M³…).",
     )
+    metric_label = metric_pick
+    if metric_pick == OTHER_METRIC:
+        metric_label = c4.text_input(
+            "Nueva métrica", placeholder="Ej. Volumen (m³)", max_chars=forms.RULES["Métrica de cómputo"]["max"],
+            help="Se escribe con la unidad entre paréntesis. Se normaliza sola (m3 → m³).",
+        )
+    metric_label = units.normalize(metric_label, choices)
     forms.section("Stock del almacén", "Si defines un mínimo, el sistema avisa en el tablero y sugiere comprar cuando el stock llega a ese nivel.")
     stored_min = float(material.get("min_stock") or 0) if material else 0.0
     min_stock = st.number_input(

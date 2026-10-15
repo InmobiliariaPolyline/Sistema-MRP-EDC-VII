@@ -6,6 +6,19 @@ Formato de cada parche: **Agregado** · **Corregido** · **Problemas y causa** �
 
 ---
 
+## Parche 046 — Métricas de cómputo de lista cerrada · 2026-10-16
+Fase B, última parte.
+
+**Agregado**
+- **La métrica de cómputo se elige de una lista** (Materiales → nuevo / editar): primero las métricas que ya usa tu catálogo (por frecuencia) y luego las estándar (m², m³, kg, m, unidad, litros, galones, bolsa, saco, rollo, plancha, caja, balde, juego, millar, global). Con «➕ Otra métrica…» se puede escribir una nueva.
+- **Normalización:** lo que se escribe se unifica antes de guardarse (m3, M³ y m^3 → m³; Kg y kgs → kg; unidades y und → unidad) y si coincide con una métrica conocida se usa tal cual está escrita. Así «Volumen (m3)» y «Volumen (m³)» ya no son dos cosas distintas.
+- No hace falta SQL ni cambia el catálogo existente: las 22 métricas que ya tienes (por ejemplo «Área (m²)») siguen siendo válidas y aparecen en la lista. Se descartó agregar una columna `unit` aparte porque la métrica ya es la unidad que se muestra en toda la app.
+- Pruebas nuevas (4): normalización, respeto de métricas conocidas y orden de las opciones.
+
+**Ajustes**
+- Los botones de Inventario («Devolver de una obra», «Toma de inventario», «Entrada, merma o devolución a proveedor») tienen más ancho y ya no se parten en tres líneas.
+- Comprobado en un navegador real con una base de prueba: el diálogo de devolución, la toma de inventario completa (contar, anotar el motivo, guardar → «Conteo CT-0001 guardado», stock ajustado de 46 a 44) y el formulario de nueva orden con la fecha, la moneda y el IGV.
+
 ## Parche 045 — Presupuesto por etapas de obra · 2026-10-16
 Fase B, cuarta parte.
 

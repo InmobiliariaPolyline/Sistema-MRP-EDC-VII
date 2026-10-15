@@ -63,6 +63,10 @@ El historial completo de parches, correcciones, problemas encontrados y pendient
 - **Respaldo:** pantalla *Respaldo* (ZIP con un CSV por tabla, cifrado AES-256 opcional), `python scripts/backup.py` y restauración con `python scripts/restore_backup.py`. El flujo de GitHub *Respaldo semanal* lo hace solo (repositorio privado y secretos `SUPABASE_URL`, `SUPABASE_SERVICE_KEY`, `BACKUP_PASSWORD`).
 - **Pruebas:** `pip install -r requirements-dev.txt` y `python -m unittest discover -s tests`. GitHub Actions las corre en cada subida.
 
+## Operación del almacén (Fase B)
+
+Devoluciones de obra al almacén, toma de inventario físico (conteos con motivo), fecha prometida de entrega con aviso de atraso, moneda e IGV por orden, recepción contra guía o factura, documentos adjuntos (Supabase Storage, solo con la clave de servicio) y presupuesto y despacho por etapas de obra. Todo el SQL está en `db/migrations/041_fase_b.sql` (idempotente; si la base ya está cerrada, lo nuevo nace cerrado). Detalle por parche en el `CHANGELOG.md` (042 a 046).
+
 ## Arquitectura
 
 ### Formularios e interfaz (parche 030)
