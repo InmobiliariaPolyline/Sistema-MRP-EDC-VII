@@ -6,6 +6,25 @@ Formato de cada parche: **Agregado** · **Corregido** · **Problemas y causa** �
 
 ---
 
+## Parche 051 — Fase E: rendimiento · 2026-10-16
+
+**Problema:** tres pantallas (la ficha de una obra, el despacho/devolución y la sugerencia de compra) traían **todos** los movimientos de stock (hasta 100 000 filas, en peticiones de 1 000) y los sumaban en Python cada vez que se abrían. Funcionaba con pocos datos, pero se pondría lento con el uso.
+
+**Cambios**
+- **Consumo por obra ya sumado en la base** (vista `site_consumption`: despachado − devuelto por obra, material y etapa). Lo usan el progreso de la obra, el aviso de presupuesto al despachar, el stock devuelto por obra y la sugerencia de compra. En una prueba con 60 000 movimientos en la base local, de 582 ms a 54 ms; contra Supabase el ahorro es mayor: de ~40 peticiones de red a 1. El resultado es idéntico (hay una prueba que compara la vista con el cálculo en Python).
+- **Contadores del dashboard en una sola consulta** (vista `dashboard_stats`) en lugar de leer materiales, proveedores, vínculos, órdenes y vales completos.
+- **Conteo de líneas de vales y de recepciones** con un conteo agregado en vez de traer los ids de cada línea.
+- **Índices** para las consultas frecuentes (movimientos por obra/material/fecha, líneas de orden, estado y fecha de órdenes, ofertas por material, presupuestos por obra, historial).
+- **Botón «Actualizar datos»** en el menú lateral: vuelve a leer todo de la base al instante. La lectura se guarda en memoria 30 s para ir rápido; si algún día hay varias personas, ese botón (o la variable `MRP_CACHE_TTL` para cambiar los segundos) cubre el desfase.
+- La **devolución de obra** puede indicar la etapa de la que se devuelve, para descontar del consumo de esa etapa (antes un material despachado a una etapa y devuelto sin etapa dejaba la etapa sin descontar).
+- Si el SQL de la fase aún no se corrió, la app calcula lo mismo leyendo las tablas (como antes): nada se rompe.
+- `compute_suggestions` recibe ahora el consumo ya sumado en lugar de la lista de movimientos.
+
+**Pruebas nuevas (5):** la vista equivale al cálculo en Python con devoluciones, mermas, conteos, devoluciones a proveedor y etapas; filtros; filas netas en cero; devolución por etapa; y que ninguna pantalla vuelva a leer todos los movimientos.
+
+**Hay que hacer**
+- Correr `db/migrations/043_fase_e.sql` en Supabase (crea las dos vistas y los índices; no toca datos). La app ya funciona sin él, solo que sin la mejora.
+
 ## Parche 050 — Fase D: reportes, reporte de obra, kardex y correo · 2026-10-16
 
 **Agregado**

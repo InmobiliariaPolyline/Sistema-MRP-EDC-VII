@@ -8,7 +8,6 @@ import streamlit as st
 
 from db import repository as repo
 from modules import forms, inventario, materiales, ui
-from utils.consumption import site_quantity
 from utils.reports import site_report_pdf
 from utils.geocode import google_maps_search_url
 
@@ -51,7 +50,7 @@ def progress_by_material(site_id: str, stage: str | None = None) -> pd.DataFrame
     if stage is not None:
         items = items.iloc[0:0]
     rates = dict(zip(orders["id"], orders["exchange_rate"].astype(float))) if not orders.empty else {}
-    consumed = repo.list_movements(project_site_id=site_id, limit=100000)
+    consumed = repo.site_consumption(site_id)  # ya sumado por la base: despachado − devuelto por material y etapa
     if stage is not None and not consumed.empty:
         consumed = consumed[consumed["stage"].fillna("") == stage]
 
@@ -84,7 +83,7 @@ def progress_by_material(site_id: str, stage: str | None = None) -> pd.DataFrame
         s["Gasto pedido $"] += float(i["quantity"]) * float(i["unit_price"]) * rate
         s["Recibido $"] += float(i["received_qty"]) * float(i["unit_price"]) * rate
     for m in consumed.to_dict("records"):
-        amount = site_quantity(m)
+        amount = float(m["quantity"] or 0)
         if not amount:
             continue
         s = slot(m["material_id"], m["material_name"], m["category"], m["unit"])

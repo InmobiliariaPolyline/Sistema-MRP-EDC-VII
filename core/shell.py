@@ -76,6 +76,9 @@ def render(user: dict) -> None:
         st.divider()
         if st.button("Mi cuenta", icon=":material/manage_accounts:", width="stretch", help="Cambia tu contraseña."):
             security.account_dialog(user)
+        if st.button("Actualizar datos", icon=":material/refresh:", width="stretch", help="Vuelve a leer todo de la base. Úsalo si otra persona acaba de hacer cambios (los datos se guardan unos segundos en memoria para ir más rápido)."):
+            st.cache_data.clear()
+            st.rerun()
         st.toggle("Modo oscuro", key="dark_mode", help="Cambia entre el tema claro y el oscuro.")
         if st.button("Cerrar sesión", icon=":material/logout:", width="stretch"):
             login.logout()

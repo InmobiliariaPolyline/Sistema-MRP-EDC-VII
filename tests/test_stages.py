@@ -70,7 +70,7 @@ class StageTests(unittest.TestCase):
         repo.set_budget(self.site, self.mat, 60, 100, "Estructura")
         repo.create_dispatch(self.site, None, "Juan", None, [{"material_id": self.mat, "quantity": 20}], "admin")
         data = sugerencias.compute_suggestions(
-            repo.list_budgets(), repo.list_orders(), repo.list_order_items(), repo.stock_levels(), repo.list_movements(limit=100), repo.list_offers()
+            repo.list_budgets(), repo.list_orders(), repo.list_order_items(), repo.stock_levels(), repo.site_consumption(), repo.list_offers()
         )
         # presupuesto 120, despachado 20 -> demanda 100; stock 80 -> faltan 20
         self.assertEqual(round(float(data.iloc[0]["demand"]), 6), 100.0)

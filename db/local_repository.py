@@ -997,6 +997,35 @@ def list_dispatch_lines(voucher_id: str) -> pd.DataFrame:
     return df.astype(object).where(pd.notnull(df), None)
 
 
+def site_consumption(project_site_id: str | None = None, material_id: str | None = None) -> pd.DataFrame:
+    """Consumo neto por obra, material y etapa (despachado − devuelto), ya sumado por la base.
+    Columnas: project_site_id, material_id, stage ('' = sin etapa), material_name, category, unit, quantity.
+    Solo filas con cantidad distinta de 0. Reglas en utils/consumption.py."""
+    conditions, params = ["project_site_id is not null"], []
+    if project_site_id:
+        conditions.append("project_site_id = ?")
+        params.append(project_site_id)
+    if material_id:
+        conditions.append("material_id = ?")
+        params.append(material_id)
+    query = f"""
+        select c.project_site_id, c.material_id, c.stage, m.name as material_name, m.category, m.metric_label as unit, c.quantity
+        from (
+            select project_site_id, material_id, coalesce(stage, '') as stage,
+                   sum(case
+                         when kind = 'salida' and coalesce(movement_type, '') <> 'devolucion_proveedor' then quantity
+                         when kind = 'entrada' and movement_type = 'devolucion' then -quantity
+                         else 0 end) as quantity
+            from stock_movements where {' and '.join(conditions)}
+            group by project_site_id, material_id, coalesce(stage, '')
+        ) c join materials m on m.id = c.material_id
+        where c.quantity != 0 order by m.category, m.name, c.stage
+    """
+    with _connect() as conn:
+        df = pd.read_sql_query(query, conn, params=params)
+    return df.astype(object).where(pd.notnull(df), None)
+
+
 def _net_dispatched(conn, project_site_id: str) -> dict[str, float]:
     """{material_id: despachado a la obra − devuelto por la obra}."""
     rows = conn.execute(
@@ -1007,7 +1036,9 @@ def _net_dispatched(conn, project_site_id: str) -> dict[str, float]:
     )
 
 
-def create_return(project_site_id: str, returned_by: str | None, note: str | None, lines: list[dict], actor: str | None) -> int:
+def create_return(
+    project_site_id: str, returned_by: str | None, note: str | None, lines: list[dict], actor: str | None, stage: str | None = None,
+) -> int:
     """Devuelve material de una obra al almacén (suma al stock). No se puede devolver más de lo
     que la obra tiene (despachado − ya devuelto). `lines`: [{"material_id", "quantity", "note"?}].
     Todo o nada. Devuelve cuántos materiales se devolvieron."""
@@ -1034,9 +1065,9 @@ def create_return(project_site_id: str, returned_by: str | None, note: str | Non
         for line in lines:
             text = " · ".join(x for x in [f"Devuelve {who}" if who else "Devolución de obra", base, line.get("note")] if x)
             conn.execute(
-                "insert into stock_movements (id, material_id, project_site_id, kind, quantity, note, actor, movement_type) "
-                "values (?, ?, ?, 'entrada', ?, ?, ?, 'devolucion')",
-                (str(uuid.uuid4()), line["material_id"], project_site_id, line["quantity"], text, actor),
+                "insert into stock_movements (id, material_id, project_site_id, kind, quantity, note, actor, movement_type, stage) "
+                "values (?, ?, ?, 'entrada', ?, ?, ?, 'devolucion', ?)",
+                (str(uuid.uuid4()), line["material_id"], project_site_id, line["quantity"], text, actor, (stage or "").strip() or None),
             )
     return len(lines)
 

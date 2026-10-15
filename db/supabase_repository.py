@@ -8,6 +8,7 @@ demora perceptible al navegar). Cada función que escribe limpia el caché
 de las lecturas que dejó desactualizadas."""
 from __future__ import annotations
 
+import os
 from typing import Any
 
 import pandas as pd
@@ -17,7 +18,7 @@ from db.client import get_client, using_service_key
 from utils import attachments as attach_rules
 from utils import consumption, money
 
-_CACHE_TTL = 30  # segundos: solo evita relecturas repetidas al navegar, no es "tiempo real"
+_CACHE_TTL = int(os.environ.get("MRP_CACHE_TTL") or 30)  # segundos: solo evita relecturas repetidas al navegar, no es "tiempo real"
 
 
 def _clean(df: pd.DataFrame) -> pd.DataFrame:
@@ -79,8 +80,16 @@ def _is_missing(exc: Exception) -> bool:
     return any(t in text for t in ("PGRST202", "PGRST200", "PGRST204", "PGRST205", "42703", "42P01", "42883", "Could not find", "does not exist"))
 
 
+def _embedded_count(value) -> int:
+    """Cantidad de filas de una relación pedida como `tabla(count)` (PostgREST devuelve [{"count": n}])."""
+    if not value:
+        return 0
+    first = value[0] if isinstance(value, list) else value
+    return int(first.get("count", 0)) if isinstance(first, dict) else 0
+
+
 def _invalidate_stock() -> None:
-    for fn in (list_movements, stock_levels, dashboard_totals, list_dispatches, list_orders, list_order_items):
+    for fn in (list_movements, stock_levels, dashboard_totals, list_dispatches, list_orders, list_order_items, site_consumption):
         fn.clear()
 
 
@@ -772,7 +781,7 @@ def list_receipts(order_id: str | None = None) -> pd.DataFrame:
     columns = ["id", "order_id", "received_at", "delivered_by", "document_ref", "notes", "actor", "lines_count"]
 
     def build():
-        query = get_client().table("order_receipts").select("*, stock_movements(id)").order("received_at", desc=True).order("id")
+        query = get_client().table("order_receipts").select("*, stock_movements(count)").order("received_at", desc=True).order("id")
         return query.eq("order_id", order_id) if order_id else query
 
     try:
@@ -781,7 +790,7 @@ def list_receipts(order_id: str | None = None) -> pd.DataFrame:
         if _is_missing(exc):
             return _df(columns=columns)
         raise
-    rows = [{**{k: v for k, v in row.items() if k != "stock_movements"}, "lines_count": len(row.get("stock_movements") or [])} for row in data]
+    rows = [{**{k: v for k, v in row.items() if k != "stock_movements"}, "lines_count": _embedded_count(row.get("stock_movements"))} for row in data]
     return _df(rows, columns=columns)
 
 
@@ -991,12 +1000,12 @@ def create_dispatch(
 def list_dispatches(limit: int = 200) -> pd.DataFrame:
     columns = ["id", "code", "project_site_id", "site_name", "worker_id", "requested_by", "note", "actor", "created_at", "stage", "lines_count"]
     try:
-        data = get_client().table("dispatch_vouchers").select("*, stock_movements(id)").order("created_at", desc=True).limit(limit).execute().data or []
+        data = get_client().table("dispatch_vouchers").select("*, stock_movements(count)").order("created_at", desc=True).limit(limit).execute().data or []
     except Exception as exc:
         if _is_missing(exc):
             return _df(columns=columns)
         raise
-    rows = [{**{k: v for k, v in row.items() if k != "stock_movements"}, "lines_count": len(row.get("stock_movements") or [])} for row in data]
+    rows = [{**{k: v for k, v in row.items() if k != "stock_movements"}, "lines_count": _embedded_count(row.get("stock_movements"))} for row in data]
     return _df(rows, columns=columns)
 
 
@@ -1019,6 +1028,52 @@ def list_dispatch_lines(voucher_id: str) -> pd.DataFrame:
     return df.sort_values("material_name").reset_index(drop=True) if not df.empty else df
 
 
+@st.cache_data(ttl=_CACHE_TTL, show_spinner=False)
+def site_consumption(project_site_id: str | None = None, material_id: str | None = None) -> pd.DataFrame:
+    """Consumo neto por obra, material y etapa (despachado − devuelto), ya sumado por la base (vista `site_consumption`).
+    Columnas: project_site_id, material_id, stage ('' = sin etapa), material_name, category, unit, quantity.
+    Solo filas con cantidad distinta de 0. Reglas en utils/consumption.py. Si la vista aún no existe
+    (SQL de la Fase E pendiente), lo calcula con los movimientos."""
+    columns = ["project_site_id", "material_id", "stage", "material_name", "category", "unit", "quantity"]
+    client = get_client()
+
+    def build():
+        query = client.table("site_consumption").select("*").order("project_site_id").order("material_id").order("stage")
+        if project_site_id:
+            query = query.eq("project_site_id", project_site_id)
+        return query.eq("material_id", material_id) if material_id else query
+
+    try:
+        df = _df(_select_all(build), columns=columns)
+        df["quantity"] = pd.to_numeric(df["quantity"], errors="coerce").fillna(0.0)
+        return df
+    except Exception as exc:
+        if not _is_missing(exc):
+            raise
+
+    def build_moves():
+        query = client.table("stock_movements").select("material_id,project_site_id,kind,quantity,movement_type,stage").not_.is_("project_site_id", "null").order("id")
+        if project_site_id:
+            query = query.eq("project_site_id", project_site_id)
+        return query.eq("material_id", material_id) if material_id else query
+
+    totals: dict[tuple, float] = {}
+    for move in _select_all(build_moves):
+        amount = consumption.site_quantity(move)
+        if amount:
+            key = (move["project_site_id"], move["material_id"], move.get("stage") or "")
+            totals[key] = totals.get(key, 0.0) + amount
+    info = list_materials().set_index("id").to_dict("index")
+    rows = [
+        {
+            "project_site_id": site, "material_id": mid, "stage": stage, "material_name": info.get(mid, {}).get("name"),
+            "category": info.get(mid, {}).get("category"), "unit": info.get(mid, {}).get("metric_label"), "quantity": qty,
+        }
+        for (site, mid, stage), qty in totals.items() if abs(qty) > 1e-12
+    ]
+    return _df(rows, columns=columns)
+
+
 def _net_dispatched(project_site_id: str) -> dict[str, float]:
     """{material_id: despachado a la obra − devuelto por la obra}, leído directo de la base (sin caché)."""
     rows = _select_all(
@@ -1027,7 +1082,9 @@ def _net_dispatched(project_site_id: str) -> dict[str, float]:
     return consumption.net_by_material(rows)
 
 
-def create_return(project_site_id: str, returned_by: str | None, note: str | None, lines: list[dict], actor: str | None) -> int:
+def create_return(
+    project_site_id: str, returned_by: str | None, note: str | None, lines: list[dict], actor: str | None, stage: str | None = None,
+) -> int:
     """Devuelve material de una obra al almacén (suma al stock). No se puede devolver más de lo
     que la obra tiene (despachado − ya devuelto). `lines`: [{"material_id", "quantity", "note"?}].
     Todo o nada (un solo insert). Devuelve cuántos materiales se devolvieron."""
@@ -1055,7 +1112,7 @@ def create_return(project_site_id: str, returned_by: str | None, note: str | Non
         {
             "material_id": line["material_id"], "project_site_id": project_site_id, "kind": "entrada", "quantity": float(line["quantity"]),
             "note": " · ".join(x for x in [f"Devuelve {who}" if who else "Devolución de obra", base, line.get("note")] if x),
-            "actor": actor, "movement_type": "devolucion",
+            "actor": actor, "movement_type": "devolucion", **({"stage": stage.strip()} if (stage or "").strip() else {}),
         }
         for line in lines
     ]
@@ -1360,6 +1417,19 @@ def list_audit(limit: int = 300) -> pd.DataFrame:
 
 @st.cache_data(ttl=_CACHE_TTL, show_spinner=False)
 def dashboard_totals() -> dict:
+    """Contadores del dashboard. Usa la vista `dashboard_stats` (una sola fila); si aún no existe
+    (SQL de la Fase E pendiente), los calcula leyendo las tablas."""
+    try:
+        rows = get_client().table("dashboard_stats").select("*").limit(1).execute().data
+        if rows:
+            return {k: int(v or 0) for k, v in rows[0].items()}
+    except Exception as exc:
+        if not _is_missing(exc):
+            raise
+    return _dashboard_totals_slow()
+
+
+def _dashboard_totals_slow() -> dict:
     materials = list_materials()
     suppliers = list_suppliers()
     data = _select_all(lambda: get_client().table("supplier_materials").select("supplier_id,material_id,available").order("id"))

@@ -75,6 +75,10 @@ Vigencia de precios de proveedores (aviso de cotizaciones vencidas), plazo de en
 
 17 conjuntos descargables en Excel/PDF (incluye vales, historial de precios, presupuestos, conteos, recepciones, calificación e historial de cambios), reporte de obra en PDF, kardex por material y envío de órdenes y vales por correo (abre tu programa de correo con el mensaje escrito). Sin SQL nuevo. Detalle en el `CHANGELOG.md` (parche 050).
 
+## Rendimiento (Fase E)
+
+Los acumulados pesados (consumo por obra, contadores del dashboard) los calcula la base con las vistas de `db/migrations/043_fase_e.sql`; la app solo trae el resultado. Las lecturas se guardan 30 s en memoria (`MRP_CACHE_TTL` para cambiarlo) y el botón «Actualizar datos» del menú las renueva al instante.
+
 ## Arquitectura
 
 ### Formularios e interfaz (parche 030)

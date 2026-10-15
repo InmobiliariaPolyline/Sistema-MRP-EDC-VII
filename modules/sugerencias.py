@@ -20,7 +20,6 @@ import streamlit as st
 from db import repository as repo
 from modules import forms, ui
 from utils import pricing
-from utils.consumption import site_quantity
 
 OPEN_STATUSES = ("pendiente", "enviada", "parcial")
 COLUMNS = [
@@ -136,20 +135,18 @@ def compute_suggestions(
     orders: pd.DataFrame,
     items: pd.DataFrame,
     levels: pd.DataFrame,
-    movements: pd.DataFrame,
+    consumed: pd.DataFrame,
     offers: pd.DataFrame,
 ) -> pd.DataFrame:
     """Materiales con faltante > 0, con el proveedor más barato asignado (ver el docstring del módulo)."""
     if levels.empty:
         return pd.DataFrame(columns=COLUMNS)
 
-    dispatched: dict[tuple[str, str], float] = {}
-    if not movements.empty:
-        for row in movements[movements["project_site_id"].notna()].to_dict("records"):
-            amount = site_quantity(row)
-            if amount:
-                key = (row["project_site_id"], row["material_id"])
-                dispatched[key] = dispatched.get(key, 0.0) + amount
+    dispatched: dict[tuple[str, str], float] = {}  # `consumed`: consumo neto por obra, material y etapa (repo.site_consumption)
+    if not consumed.empty:
+        for row in consumed.to_dict("records"):
+            key = (row["project_site_id"], row["material_id"])
+            dispatched[key] = dispatched.get(key, 0.0) + _num(row["quantity"])
 
     demand: dict[str, float] = {}
     if not budgets.empty:
@@ -207,7 +204,7 @@ def current_suggestions() -> pd.DataFrame:
         repo.list_orders(),
         repo.list_order_items(),
         repo.stock_levels(),
-        repo.list_movements(limit=100000),
+        repo.site_consumption(),
         repo.list_offers(),
     )
 

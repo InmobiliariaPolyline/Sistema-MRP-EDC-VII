@@ -11,7 +11,7 @@ import streamlit as st
 
 from db import repository as repo
 from modules import attachments_ui, forms, ui
-from utils import consumption, kardex
+from utils import kardex
 from utils.mail import mailto_url
 from utils.reports import dispatch_pdf, dispatch_text, to_excel, to_pdf
 from utils.timeago import time_ago
@@ -67,11 +67,11 @@ def budget_status(site_id: str, material_id: str, extra: float, stage: str | Non
     Con `stage` (nombre de etapa) se compara solo con el presupuesto y los despachos de esa etapa."""
     budgets = repo.list_budgets(site_id)
     row = budgets[budgets["material_id"] == material_id] if not budgets.empty else budgets
-    moves = repo.list_movements(project_site_id=site_id, limit=100000)
+    used = repo.site_consumption(site_id, material_id)
     if stage:
         row = row[row["stage"].fillna("") == stage] if not row.empty else row
-        moves = moves[moves["stage"].fillna("") == stage] if not moves.empty else moves
-    sent = consumption.net_by_material(moves[moves["material_id"] == material_id]).get(material_id, 0.0) if not moves.empty else 0.0
+        used = used[used["stage"].fillna("") == stage] if not used.empty else used
+    sent = float(used["quantity"].astype(float).sum()) if not used.empty else 0.0
     if row.empty:
         return {"budgeted": False, "planned": 0.0, "sent": sent, "after": sent + extra}
     planned = float(row["planned_qty"].astype(float).sum())
@@ -318,17 +318,18 @@ def movement_dialog() -> None:
 
 def held_by_site(site_id: str) -> pd.DataFrame:
     """Material que una obra tiene en su poder: despachado menos devuelto (solo lo mayor que 0)."""
-    moves = repo.list_movements(project_site_id=site_id, limit=100000)
+    used = repo.site_consumption(site_id)
     columns = ["material_id", "material_name", "category", "unit", "held"]
-    if moves.empty:
+    if used.empty:
         return pd.DataFrame(columns=columns)
-    net = consumption.net_by_material(moves)
-    info = moves.drop_duplicates("material_id").set_index("material_id")
+    used = used.assign(quantity=used["quantity"].astype(float))
     rows = [
-        {"material_id": mid, "material_name": info.loc[mid, "material_name"], "category": info.loc[mid, "category"], "unit": info.loc[mid, "unit"], "held": qty}
-        for mid, qty in net.items() if qty > 1e-9
+        {"material_id": mid, "material_name": g.iloc[0]["material_name"], "category": g.iloc[0]["category"], "unit": g.iloc[0]["unit"], "held": float(g["quantity"].sum())}
+        for mid, g in used.groupby("material_id")
     ]
-    return pd.DataFrame(rows, columns=columns).sort_values(["category", "material_name"]).reset_index(drop=True)
+    held = pd.DataFrame(rows, columns=columns)
+    held = held[held["held"] > 1e-9]
+    return held.sort_values(["category", "material_name"]).reset_index(drop=True)
 
 
 def _clear_return_draft() -> None:
@@ -355,6 +356,12 @@ def return_dialog(default_site_id: str | None = None) -> None:
     site_id = sites.loc[sites["name"] == site_name, "id"].iloc[0]
     returned_by = st.text_input("Quién devuelve (opcional)", placeholder="Ej. Juan Pérez", max_chars=120, key="return_by")
     note = st.text_input("Nota (opcional)", placeholder="Ej. Sobró del vaciado de losa", max_chars=500, key="return_note")
+    stages = _site_stages(site_id)
+    stage = None
+    if stages:
+        pick = st.selectbox("Etapa de la que se devuelve (opcional)", ["Sin etapa", *stages], key="return_stage",
+                            help="Descuenta lo devuelto del consumo de esa etapa en el presupuesto de la obra.")
+        stage = None if pick == "Sin etapa" else pick
 
     held = held_by_site(site_id)
     forms.section("2. Qué se devuelve", "Escribe la cantidad en los materiales que vuelven; deja en 0 el resto.")
@@ -392,7 +399,7 @@ def return_dialog(default_site_id: str | None = None) -> None:
         if forms.errors(issues):
             return
         try:
-            repo.create_return(site_id, returned_by, note, [{"material_id": c["material_id"], "quantity": c["quantity"]} for c in chosen], ui.current_actor())
+            repo.create_return(site_id, returned_by, note, [{"material_id": c["material_id"], "quantity": c["quantity"]} for c in chosen], ui.current_actor(), stage)
         except ValueError as exc:
             st.error(f"No se pudo registrar la devolución: {exc}")
             return
