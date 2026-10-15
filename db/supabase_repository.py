@@ -13,7 +13,8 @@ from typing import Any
 import pandas as pd
 import streamlit as st
 
-from db.client import get_client
+from db.client import get_client, using_service_key
+from utils import attachments as attach_rules
 from utils import consumption, money
 
 _CACHE_TTL = 30  # segundos: solo evita relecturas repetidas al navegar, no es "tiempo real"
@@ -1094,6 +1095,92 @@ def list_count_lines(count_id: str) -> pd.DataFrame:
     return df.sort_values("material_name").reset_index(drop=True) if not df.empty else df
 
 
+def _storage():
+    """Depósito privado de adjuntos. Solo la clave de servicio puede usarlo (la pública no tiene permisos)."""
+    if not using_service_key():
+        raise ValueError(
+            "Los adjuntos necesitan la clave de servicio de Supabase (SUPABASE_SERVICE_KEY). Configúrala en los secrets de la app."
+        )
+    return get_client().storage
+
+
+def add_attachment(entity_type: str, entity_id: str, filename: str, data: bytes, uploaded_by: str | None = None) -> str:
+    """Guarda un documento adjunto (PDF o imagen, hasta 10 MB) de una orden, vale o conteo. Devuelve su id."""
+    safe_name, content_type = attach_rules.validate(filename, len(data))
+    path = attach_rules.storage_path(entity_type, entity_id, safe_name)
+    storage = _storage()
+    options = {"content-type": content_type, "upsert": "false"}
+    try:
+        storage.from_(attach_rules.BUCKET).upload(path, data, options)
+    except Exception as exc:
+        if "not found" not in str(exc).lower() and "404" not in str(exc):
+            raise _friendly(exc) from exc
+        try:  # el depósito aún no existe (SQL de la Fase B pendiente): la clave de servicio puede crearlo
+            storage.create_bucket(attach_rules.BUCKET, options={"public": False})
+            storage.from_(attach_rules.BUCKET).upload(path, data, options)
+        except Exception as inner:
+            raise _friendly(inner) from inner
+    try:
+        row = get_client().table("attachments").insert(
+            {
+                "entity_type": entity_type, "entity_id": entity_id, "filename": safe_name, "content_type": content_type,
+                "size_bytes": len(data), "storage_path": path, "uploaded_by": uploaded_by,
+            }
+        ).execute().data[0]
+    except Exception as exc:
+        try:
+            storage.from_(attach_rules.BUCKET).remove([path])  # no dejar el archivo huérfano
+        except Exception:
+            pass
+        if _is_missing(exc):
+            raise _phase_b(exc) from exc
+        raise _friendly(exc) from exc
+    list_attachments.clear()
+    return row["id"]
+
+
+@st.cache_data(ttl=_CACHE_TTL, show_spinner=False)
+def list_attachments(entity_type: str, entity_id: str) -> pd.DataFrame:
+    columns = ["id", "entity_type", "entity_id", "filename", "content_type", "size_bytes", "uploaded_by", "created_at"]
+    try:
+        data = (
+            get_client().table("attachments").select(",".join(columns)).eq("entity_type", entity_type).eq("entity_id", entity_id)
+            .order("created_at", desc=True).execute().data or []
+        )
+    except Exception as exc:
+        if _is_missing(exc):
+            return _df(columns=columns)
+        raise
+    return _df(data, columns=columns)
+
+
+def read_attachment(attachment_id: str) -> tuple[dict, bytes]:
+    """(datos del adjunto, contenido del archivo)."""
+    rows = get_client().table("attachments").select("id,filename,content_type,size_bytes,storage_path").eq("id", attachment_id).limit(1).execute().data
+    if not rows:
+        raise ValueError("El documento ya no existe.")
+    try:
+        content = _storage().from_(attach_rules.BUCKET).download(rows[0]["storage_path"])
+    except ValueError:
+        raise
+    except Exception as exc:
+        raise _friendly(exc) from exc
+    return rows[0], content
+
+
+def delete_attachment(attachment_id: str) -> None:
+    rows = get_client().table("attachments").select("storage_path").eq("id", attachment_id).limit(1).execute().data
+    if rows:
+        try:
+            _storage().from_(attach_rules.BUCKET).remove([rows[0]["storage_path"]])
+        except ValueError:
+            raise
+        except Exception:
+            pass  # si el archivo ya no estaba, igual se quita el registro
+    get_client().table("attachments").delete().eq("id", attachment_id).execute()
+    list_attachments.clear()
+
+
 @st.cache_data(ttl=_CACHE_TTL, show_spinner=False)
 def list_budgets(project_site_id: str | None = None) -> pd.DataFrame:
     def build():
@@ -1261,7 +1348,7 @@ def recent_activity(limit: int = 6) -> list[dict]:
 BACKUP_TABLES = [
     "materials", "suppliers", "supplier_materials", "users", "work_groups", "project_sites", "workers",
     "purchase_orders", "purchase_order_items", "order_receipts", "dispatch_vouchers", "inventory_counts", "inventory_count_lines", "stock_movements",
-    "site_budgets", "attendance", "audit_log", "price_history",
+    "site_budgets", "attendance", "audit_log", "price_history", "attachments",
 ]
 
 

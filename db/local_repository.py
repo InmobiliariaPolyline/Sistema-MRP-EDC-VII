@@ -16,6 +16,7 @@ from pathlib import Path
 
 import pandas as pd
 
+from utils import attachments as attach_rules
 from utils import consumption, money
 
 DB_PATH = Path(os.environ.get("MRP_LOCAL_DB") or Path(__file__).resolve().parent / "local.db")
@@ -184,6 +185,18 @@ def _init_db() -> None:
                 notes text,
                 actor text,
                 received_at text default (datetime('now'))
+            );
+
+            create table if not exists attachments (
+                id text primary key,
+                entity_type text not null,
+                entity_id text not null,
+                filename text not null,
+                content_type text,
+                size_bytes integer,
+                storage_path text not null unique,
+                uploaded_by text,
+                created_at text default (datetime('now'))
             );
 
             create table if not exists inventory_counts (
@@ -1050,6 +1063,60 @@ def list_count_lines(count_id: str) -> pd.DataFrame:
     return df.astype(object).where(pd.notnull(df), None)
 
 
+def _attachments_dir() -> Path:
+    return DB_PATH.parent / "attachments"
+
+
+def add_attachment(entity_type: str, entity_id: str, filename: str, data: bytes, uploaded_by: str | None = None) -> str:
+    """Guarda un documento adjunto (PDF o imagen, hasta 10 MB) de una orden, vale o conteo. Devuelve su id."""
+    safe_name, content_type = attach_rules.validate(filename, len(data))
+    path = attach_rules.storage_path(entity_type, entity_id, safe_name)
+    target = _attachments_dir() / path
+    target.parent.mkdir(parents=True, exist_ok=True)
+    target.write_bytes(data)
+    attachment_id = str(uuid.uuid4())
+    with _connect() as conn:
+        conn.execute(
+            "insert into attachments (id, entity_type, entity_id, filename, content_type, size_bytes, storage_path, uploaded_by) values (?, ?, ?, ?, ?, ?, ?, ?)",
+            (attachment_id, entity_type, entity_id, safe_name, content_type, len(data), path, uploaded_by),
+        )
+    return attachment_id
+
+
+def list_attachments(entity_type: str, entity_id: str) -> pd.DataFrame:
+    with _connect() as conn:
+        df = pd.read_sql_query(
+            "select id, entity_type, entity_id, filename, content_type, size_bytes, uploaded_by, created_at from attachments "
+            "where entity_type = ? and entity_id = ? order by created_at desc, rowid desc",
+            conn,
+            params=(entity_type, entity_id),
+        )
+    return df.astype(object).where(pd.notnull(df), None)
+
+
+def read_attachment(attachment_id: str) -> tuple[dict, bytes]:
+    """(datos del adjunto, contenido del archivo)."""
+    with _connect() as conn:
+        row = conn.execute(
+            "select id, filename, content_type, size_bytes, storage_path from attachments where id = ?", (attachment_id,)
+        ).fetchone()
+    if row is None:
+        raise ValueError("El documento ya no existe.")
+    meta = dict(zip(["id", "filename", "content_type", "size_bytes", "storage_path"], row))
+    file = _attachments_dir() / meta["storage_path"]
+    if not file.exists():
+        raise ValueError("No se encontró el archivo guardado de este documento.")
+    return meta, file.read_bytes()
+
+
+def delete_attachment(attachment_id: str) -> None:
+    with _connect() as conn:
+        row = conn.execute("select storage_path from attachments where id = ?", (attachment_id,)).fetchone()
+        conn.execute("delete from attachments where id = ?", (attachment_id,))
+    if row:
+        (_attachments_dir() / row[0]).unlink(missing_ok=True)
+
+
 def list_budgets(project_site_id: str | None = None) -> pd.DataFrame:
     query = """
         select b.id, b.project_site_id, b.material_id, m.category, m.name as material_name,
@@ -1210,7 +1277,7 @@ def recent_activity(limit: int = 6) -> list[dict]:
 BACKUP_TABLES = [
     "materials", "suppliers", "supplier_materials", "users", "work_groups", "project_sites", "workers",
     "purchase_orders", "purchase_order_items", "order_receipts", "dispatch_vouchers", "inventory_counts", "inventory_count_lines", "stock_movements",
-    "site_budgets", "attendance", "audit_log", "price_history",
+    "site_budgets", "attendance", "audit_log", "price_history", "attachments",
 ]
 
 

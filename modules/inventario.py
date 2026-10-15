@@ -10,7 +10,7 @@ import pandas as pd
 import streamlit as st
 
 from db import repository as repo
-from modules import forms, ui
+from modules import attachments_ui, forms, ui
 from utils import consumption
 from utils.reports import dispatch_pdf
 from utils.timeago import time_ago
@@ -224,6 +224,7 @@ def voucher_dialog(voucher: dict) -> None:
         "Descargar el vale en PDF", data=dispatch_pdf(voucher, lines), file_name=f"{voucher['code']}.pdf", mime="application/pdf",
         type="primary", width="stretch", icon=":material/picture_as_pdf:",
     )
+    attachments_ui.render("vale", voucher["id"], key=f"vale_{voucher['id']}")
 
 
 # ---------------------------------------------------------------------------
@@ -466,6 +467,7 @@ def count_detail_dialog(count: dict) -> None:
         ),
         hide_index=True, width="stretch",
     )
+    attachments_ui.render("conteo", count["id"], key=f"conteo_{count['id']}")
 
 
 # ---------------------------------------------------------------------------

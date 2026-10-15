@@ -6,6 +6,19 @@ Formato de cada parche: **Agregado** · **Corregido** · **Problemas y causa** �
 
 ---
 
+## Parche 044 — Documentos adjuntos · 2026-10-16
+Fase B, tercera parte.
+
+**Agregado**
+- **📎 Documentos adjuntos** en la orden de compra, en el vale de salida y en el conteo de inventario: foto o PDF de la factura, la guía de remisión, el vale firmado, etc. (PDF, PNG, JPG o WEBP; máximo 10 MB). Se pueden abrir, descargar y quitar. El archivo se lee de la base solo al pulsar «Abrir».
+- En Supabase los archivos van a un **depósito privado** (`adjuntos`) de Storage y la lista a la tabla `attachments`; solo se accede con la clave de servicio. Si el depósito no existe, la app lo crea la primera vez que se sube algo. Sin clave de servicio, la app lo avisa en vez de intentar subirlo. En local se guardan en `db/attachments/` (ignorado por git).
+- El nombre del archivo se limpia (sin rutas ni caracteres raros) y la ruta incluye un código único, así que dos archivos con el mismo nombre no se pisan.
+- La pantalla Respaldo aclara que el ZIP incluye la lista de adjuntos pero no los archivos.
+- Pruebas nuevas (7): reglas del archivo, ruta única y ciclo subir-leer-borrar.
+
+**Hay que hacer**
+- Tener configurada `SUPABASE_SERVICE_KEY` (ver parche 041) y correr `db/migrations/041_fase_b.sql` (crea la tabla `attachments`).
+
 ## Parche 043 — Fecha prometida, moneda, IGV y recepción contra documento · 2026-10-16
 Fase B, segunda parte.
 

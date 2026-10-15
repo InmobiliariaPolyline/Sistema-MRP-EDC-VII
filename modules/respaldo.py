@@ -19,7 +19,7 @@ def render() -> None:
         "Una copia completa de todo lo registrado (materiales, proveedores, órdenes, stock, vales, obras, asistencia…) para guardarla fuera del sistema.",
     )
 
-    forms.section("1. Genera el respaldo", "Se descarga un ZIP con un archivo CSV por tabla; se puede abrir con Excel.")
+    forms.section("1. Genera el respaldo", "Se descarga un ZIP con un archivo CSV por tabla; se puede abrir con Excel. Los documentos adjuntos (fotos y PDF) no van dentro del ZIP: solo se respalda su lista; los archivos viven en el depósito «adjuntos» de Supabase.")
     with st.container(border=True):
         encrypt = st.checkbox(
             "Proteger con contraseña (cifrado AES-256)", value=True, key="backup_encrypt",

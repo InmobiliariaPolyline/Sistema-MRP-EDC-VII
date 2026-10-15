@@ -37,6 +37,7 @@ GUIDES: dict[str, str] = {
 3. **📦 Registrar recepción:** anota lo que llegó; entra al stock del almacén. No se puede recibir más de lo pedido.
 3b. **Entrega, moneda e IGV (opcionales):** al crear o editar una orden puedes indicar la **fecha prometida de entrega** (si pasa y la orden sigue abierta, se marca como atrasada en la lista, en el detalle y en el dashboard), la **moneda** (soles o dólares, con su tipo de cambio) y si se **suma el IGV (18 %)** al total.
 3c. **Recepción contra documento:** al registrar una recepción anota el **N.º de guía o factura**, quién entregó y las **observaciones** (faltantes, daños). Cada recepción queda guardada en «Recepciones registradas» dentro de la orden.
+3d. **📎 Documentos adjuntos:** en el detalle de la orden sube la foto o el PDF de la factura, la guía de remisión o la cotización (hasta 10 MB; PDF, PNG, JPG o WEBP). «Abrir» los descarga o los muestra. También se pueden adjuntar al vale de salida firmado y al conteo de inventario. Necesita la clave de servicio de Supabase.
 4. **✏️ Editar orden:** corrige cantidades, precios, obra o notas mientras no haya recibido material.
 5. Una orden que ya recibió material **no se borra** (el stock quedaría descuadrado): si no continúa, cancélala.
 6. **Sugerencia de compra:** calcula qué falta pedir según los presupuestos de las obras, el stock y lo que ya viene en camino, y crea las órdenes agrupadas por el proveedor más barato.

@@ -14,7 +14,7 @@ import pandas as pd
 import streamlit as st
 
 from db import repository as repo
-from modules import forms, sugerencias, ui
+from modules import attachments_ui, forms, sugerencias, ui
 from utils import money
 from utils.reports import order_pdf, order_whatsapp_text
 from utils.timeago import age_days
@@ -889,6 +889,7 @@ def _render_detail(order_id: str) -> None:
             _render_reception(order, items)
 
     _render_receipts(order_id)
+    attachments_ui.render("orden", order_id)
 
     received_any = bool(not items.empty and (items["received_qty"].astype(float) > 0).any())
     b1, b2, b3, b4 = st.columns([3, 2.2, 2, 1.8])
