@@ -68,8 +68,8 @@ def _render_groups_panel() -> None:
             if not forms.errors(forms.validate({"Nombre de la cuadrilla": name.strip()})):
                 try:
                     repo.create_work_group(name.strip())
-                except Exception:
-                    st.error("No se pudo crear la cuadrilla. Tus datos se conservan; inténtalo de nuevo.")
+                except Exception as exc:
+                    ui.db_error(exc, "No se pudo crear la cuadrilla. Tus datos se conservan; inténtalo de nuevo.")
                 else:
                     st.session_state["_group_reset_pending"] = True
                     ui.flash(f"Cuadrilla «{name.strip()}» creada.")
@@ -196,8 +196,8 @@ def _render_sites_panel() -> None:
                 lon = geocode["lon"] if geocode else None
                 try:
                     repo.create_project_site(name.strip(), address.strip() or None, lat, lon)
-                except Exception:
-                    st.error("No se pudo guardar la obra. Tus datos se conservan; inténtalo de nuevo.")
+                except Exception as exc:
+                    ui.db_error(exc, "No se pudo guardar la obra. Tus datos se conservan; inténtalo de nuevo.")
                 else:
                     st.session_state["_site_reset_pending"] = True
                     ui.flash(f"Obra «{name.strip()}» guardada.")
@@ -353,8 +353,8 @@ def _new_worker_dialog() -> None:
             worker_id = repo.create_worker(
                 fields["full_name"], fields["document_id"], fields["phone"], fields["position"], fields["group_id"], fields["site_id"]
             )
-        except Exception:
-            st.error("No se pudo registrar al trabajador. Tus datos se conservan; inténtalo de nuevo.")
+        except Exception as exc:
+            ui.db_error(exc, "No se pudo registrar al trabajador. Tus datos se conservan; inténtalo de nuevo.")
             return
         if grant_access:
             try:
@@ -391,8 +391,8 @@ def _edit_worker_dialog(worker: dict) -> None:
             repo.update_worker(
                 worker["id"], fields["full_name"], fields["document_id"], fields["phone"], fields["position"], fields["group_id"], fields["site_id"]
             )
-        except Exception:
-            st.error("No se pudo actualizar al trabajador. Tus datos se conservan; inténtalo de nuevo.")
+        except Exception as exc:
+            ui.db_error(exc, "No se pudo actualizar al trabajador. Tus datos se conservan; inténtalo de nuevo.")
             return
         ui.flash(f"Trabajador «{fields['full_name']}» actualizado.")
         st.rerun()
@@ -419,8 +419,8 @@ def _grant_access_dialog(worker: dict) -> None:
             return
         try:
             repo.grant_worker_access(worker["id"], username, hash_password(password), worker["full_name"], role)
-        except Exception:
-            st.error("No se pudo crear el acceso. Revisa que el usuario siga disponible e inténtalo de nuevo.")
+        except Exception as exc:
+            ui.db_error(exc, "No se pudo crear el acceso. Revisa que el usuario siga disponible e inténtalo de nuevo.")
             return
         ui.flash(f"Acceso creado para {worker['full_name']}.", "🔑")
         st.rerun()

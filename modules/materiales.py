@@ -74,8 +74,8 @@ def _save(values: tuple[str, str, float | None, str, float], material_id: str | 
     # El límite se amplía al valor guardado para conservar materiales existentes.
     try:
         materials = repo.list_materials()
-    except Exception:
-        st.error("No se pudo comprobar el catálogo. Tus datos se conservan; inténtalo de nuevo.")
+    except Exception as exc:
+        ui.db_error(exc, "No se pudo comprobar el catálogo. Tus datos se conservan; inténtalo de nuevo.")
         return
     original = materials[materials["id"] == material_id] if material_id else materials.iloc[0:0]
     original_density = float(original.iloc[0]["density"] or 0) if not original.empty else 0.0
@@ -91,8 +91,8 @@ def _save(values: tuple[str, str, float | None, str, float], material_id: str | 
         return
     try:
         repo.upsert_material(category, name, density, metric_label, material_id, min_stock)
-    except Exception:
-        st.error("No se pudo guardar el material. Revisa que categoría y nombre no estén repetidos e inténtalo de nuevo.")
+    except Exception as exc:
+        ui.db_error(exc, "No se pudo guardar el material. Revisa que categoría y nombre no estén repetidos e inténtalo de nuevo.")
         return
     ui.flash(f"Material «{name}» guardado.")
     st.rerun()

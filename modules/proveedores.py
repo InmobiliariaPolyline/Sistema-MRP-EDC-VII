@@ -80,8 +80,8 @@ def _save(values: tuple, supplier_id: str | None) -> None:
         return
     try:
         repo.upsert_supplier(name, contact_name, phone, email, notes, supplier_id)
-    except Exception:
-        st.error("No se pudo guardar el proveedor. Tus datos se conservan; inténtalo de nuevo.")
+    except Exception as exc:
+        ui.db_error(exc, "No se pudo guardar el proveedor. Tus datos se conservan; inténtalo de nuevo.")
         return
     ui.flash(f"Proveedor «{name}» guardado.")
     st.rerun()
@@ -376,8 +376,8 @@ def _render_supplier_detail(supplier_id: str) -> None:
                             continue
                         try:
                             repo.set_supplier_material(supplier_id, mat["id"], offered, available, price or None)
-                        except Exception:
-                            st.error("No se pudo actualizar este material. Revisa la conexión e inténtalo de nuevo.")
+                        except Exception as exc:
+                            ui.db_error(exc, "No se pudo actualizar este material. Revisa la conexión e inténtalo de nuevo.")
                             continue
                         ui.flash(f"Catálogo actualizado: {mat['name']}.", log=False)
                         st.rerun()

@@ -228,6 +228,28 @@ def current_actor() -> str:
     return user.get("name") or user.get("username") or "Sistema"
 
 
+def db_error(exc: Exception, fallback: str) -> None:
+    """Muestra un error de base de datos con su causa real cuando se puede explicar.
+
+    Un `42501` («row-level security») significa que Supabase tiene RLS activo en esa tabla y
+    rechaza la escritura: se indica la tabla y el comando que lo arregla. Para cualquier otro
+    error se muestra el mensaje de siempre y, debajo, el detalle técnico para poder diagnosticarlo."""
+    code = str(getattr(exc, "code", "") or "")
+    detail = str(getattr(exc, "message", None) or exc)
+    if code == "42501" or "row-level security" in detail.lower():
+        match = re.search(r'table "([\w]+)"', detail)
+        table = match.group(1) if match else "la tabla"
+        st.error(
+            f"Supabase bloqueó el guardado: la tabla «{table}» tiene la seguridad por fila (RLS) activa. "
+            "Esto lo arregla el administrador de la base ejecutando en el SQL Editor de Supabase el archivo "
+            f"`db/migrations/037_disable_rls_all.sql` (o solo `alter table {table} disable row level security;`).",
+            icon=":material/lock:",
+        )
+    else:
+        st.error(fallback)
+    st.caption(f"Detalle técnico: {code + ' · ' if code else ''}{detail[:200]}")
+
+
 def log(summary: str) -> None:
     """Anota una acción en el historial sin mostrar aviso (para cuando la pantalla ya muestra el resultado)."""
     try:

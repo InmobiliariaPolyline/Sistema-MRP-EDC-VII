@@ -6,6 +6,22 @@ Formato de cada parche: **Agregado** · **Corregido** · **Problemas y causa** �
 
 ---
 
+## Parche 039 — No se podía registrar trabajadores (RLS activo en `workers`) · 2026-10-16
+**Corregido**
+- Al registrar un trabajador salía «No se pudo registrar al trabajador».
+- Registrar trabajadores (y, por la misma causa, cualquier escritura en esa tabla) quedaba bloqueado por Supabase.
+
+**Problemas y causa**
+- La tabla `workers` tenía **Row Level Security (RLS) activo sin políticas**, así que Supabase rechazaba toda escritura con el error `42501` («new row violates row-level security policy»). `db/schema.sql` nunca incluyó `disable row level security` para `workers` ni para las tablas base (`materials`, `suppliers`, `supplier_materials`, `users`, `work_groups`, `project_sites`); las demás ya estaban abiertas porque se desactivaron a mano en su día. Se comprobó escribiendo y borrando una fila de prueba en las 15 tablas: solo `workers` estaba bloqueada.
+- La app escondía la causa real detrás de un mensaje genérico, así que parecía un fallo sin explicación.
+
+**Agregado**
+- `db/migrations/037_disable_rls_all.sql`: desactiva RLS en todas las tablas de la app (idempotente). También quedó añadido al final de `db/schema.sql` para instalaciones nuevas.
+- Los errores de base de datos ahora muestran su causa: si es RLS, dicen qué tabla y qué comando corre el administrador; en los demás casos se agrega el detalle técnico debajo del mensaje.
+
+**Hay que hacer**
+- En Supabase → SQL Editor: `alter table workers disable row level security;` (o el archivo `037_disable_rls_all.sql`, que cubre todas las tablas).
+
 ## Parche 038 — Editar una orden permite agregar y quitar materiales · 2026-10-16
 **Agregado**
 - Al editar una orden (pendiente o enviada, mientras no haya recibido material) ahora se puede, en un solo guardado: **agregar** materiales del catálogo del proveedor (con su precio fijo), **cambiar la cantidad** de cada línea y **quitar** líneas. Obra y notas también.
