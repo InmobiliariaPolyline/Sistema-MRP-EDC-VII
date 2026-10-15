@@ -13,7 +13,7 @@ from db.client import using_service_key
 from db.repository import USING_LOCAL
 from modules import (
     asistencia, dashboard, historial, inventario, login, materiales, obras, ordenes, proveedores, reportes,
-    respaldo, security, trabajadores, ui,
+    respaldo, security, sistema, trabajadores, ui,
 )
 
 # (etiqueta en el menú, icono Material, función que dibuja el módulo, solo-admin)
@@ -29,6 +29,7 @@ _ROUTES = [
     ("Reportes", ":material/monitoring:", lambda user: reportes.render(), False),
     ("Historial", ":material/history:", lambda user: historial.render(), True),
     ("Respaldo", ":material/backup:", lambda user: respaldo.render(), True),
+    ("Sistema", ":material/info:", lambda user: sistema.render(), False),
 ]
 
 # secciones del menú, en el orden en que se muestran
@@ -37,6 +38,7 @@ _GROUPS = [
     ("Compras y almacén", ["Órdenes de compra", "Proveedores", "Materiales", "Inventario"]),
     ("Obra y personal", ["Obras", "Asistencia", "Trabajadores"]),
     ("Análisis", ["Reportes", "Historial", "Respaldo"]),
+    ("Sistema", ["Sistema"]),
 ]
 
 

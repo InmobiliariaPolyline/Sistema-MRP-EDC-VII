@@ -364,7 +364,7 @@ def _new_order_dialog() -> None:
                     column_config={"Total del pedido (sin IGV)": st.column_config.NumberColumn(format="%.2f")},
                 )
                 if mine is not None and cheapest_name != supplier_name:
-                    st.caption(f"Con {cheapest_name} ahorrarías {mine - cheapest_total:,.2f} en todo el pedido.")
+                    st.caption(f"Con {cheapest_name} el pedido completo costaría {mine - cheapest_total:,.2f} menos.")
 
     else:
         ui.empty_state("Tu pedido está vacío", "Selecciona un material y pulsa «Agregar al pedido». Después podrás crear la orden.", icon="🧾")

@@ -63,7 +63,7 @@ def progress_by_material(site_id: str, stage: str | None = None) -> pd.DataFrame
             {
                 "material_id": material_id, "Material": name, "Categoría": category, "Unidad": unit,
                 "Presupuesto": 0.0, "Pedido": 0.0, "Recibido": 0.0, "Despachado": 0.0,
-                "Presupuesto $": 0.0, "Gasto pedido $": 0.0, "Recibido $": 0.0, "Despachado $": 0.0,
+                "Presupuesto $": 0.0, "Pedido $": 0.0, "Recibido $": 0.0, "Despachado $": 0.0,
                 "budget_id": None, "planned_price": 0.0,
             },
         )
@@ -81,7 +81,7 @@ def progress_by_material(site_id: str, stage: str | None = None) -> pd.DataFrame
         s["Pedido"] += float(i["quantity"])
         s["Recibido"] += float(i["received_qty"])
         rate = rates.get(i["order_id"], 1.0)
-        s["Gasto pedido $"] += float(i["quantity"]) * float(i["unit_price"]) * rate
+        s["Pedido $"] += float(i["quantity"]) * float(i["unit_price"]) * rate
         s["Recibido $"] += float(i["received_qty"]) * float(i["unit_price"]) * rate
     for m in consumed.to_dict("records"):
         amount = float(m["quantity"] or 0)
@@ -91,12 +91,12 @@ def progress_by_material(site_id: str, stage: str | None = None) -> pd.DataFrame
         s["Despachado"] += amount
 
     for s in data.values():  # el despacho se valora al precio presupuestado (o al promedio pedido)
-        price = s["planned_price"] or (s["Gasto pedido $"] / s["Pedido"] if s["Pedido"] else 0.0)
+        price = s["planned_price"] or (s["Pedido $"] / s["Pedido"] if s["Pedido"] else 0.0)
         s["Despachado $"] = s["Despachado"] * price
 
     columns = [
         "material_id", "budget_id", "Material", "Categoría", "Unidad", "Presupuesto", "Pedido", "Recibido",
-        "Despachado", "Presupuesto $", "Gasto pedido $", "Recibido $", "Despachado $", "planned_price",
+        "Despachado", "Presupuesto $", "Pedido $", "Recibido $", "Despachado $", "planned_price",
     ]
     df = pd.DataFrame(list(data.values()))
     for col in columns:
@@ -222,7 +222,7 @@ def site_progress(df: pd.DataFrame) -> dict:
     if df.empty:
         return {"planned": 0.0, "ordered": 0.0, "pct_ordered": None, "pct_received": None, "pct_consumed": None}
     planned = float(df["Presupuesto $"].sum())
-    ordered = float(df["Gasto pedido $"].sum())
+    ordered = float(df["Pedido $"].sum())
     received = float(df["Recibido $"].sum())
     consumed_capped = float(df[["Despachado $", "Presupuesto $"]].min(axis=1).sum())
     return {
@@ -256,9 +256,9 @@ def render() -> None:
     ui.stat_grid(
         [
             ui.stat_card("🧮", f"{prog['planned']:,.0f}", "Presupuesto", "costo previsto de materiales"),
-            ui.stat_card("🧾", f"{prog['ordered']:,.0f}", "Pedido hasta hoy", pct, warn=prog["planned"] > 0 and prog["ordered"] > prog["planned"]),
-            ui.stat_card("⚖️", f"{prog['planned'] - prog['ordered']:,.0f}", "Disponible", "presupuesto − pedido"),
-            ui.stat_card("🚨", over, "Materiales excedidos", "pedido > presupuesto", warn=over > 0),
+            ui.stat_card("🧾", f"{prog['ordered']:,.0f}", "Comprado hasta hoy", pct, warn=prog["planned"] > 0 and prog["ordered"] > prog["planned"]),
+            ui.stat_card("⚖️", f"{prog['planned'] - prog['ordered']:,.0f}", "Saldo del presupuesto", "presupuesto − comprado"),
+            ui.stat_card("📐", over, "Sobre lo presupuestado", "materiales pedidos por encima de lo previsto", warn=over > 0),
         ]
     )
 
@@ -339,7 +339,7 @@ def _tab_materials(site: dict, df: pd.DataFrame) -> None:
     view = df.copy()
     view["Estado"] = view.apply(_state, axis=1)
     view["Despachado %"] = view.apply(lambda r: min(r["Despachado"] / r["Presupuesto"] * 100, 100) if r["Presupuesto"] else 0, axis=1)
-    shown = ["Material", "Unidad", "Presupuesto", "Pedido", "Recibido", "Despachado", "Despachado %", "Presupuesto $", "Gasto pedido $", "Estado"]
+    shown = ["Material", "Unidad", "Presupuesto", "Pedido", "Recibido", "Despachado", "Despachado %", "Presupuesto $", "Pedido $", "Estado"]
     if stage_view is not None:
         shown = ["Material", "Unidad", "Presupuesto", "Despachado", "Despachado %", "Presupuesto $", "Despachado $"]
     st.dataframe(
@@ -353,7 +353,7 @@ def _tab_materials(site: dict, df: pd.DataFrame) -> None:
             "Despachado": st.column_config.NumberColumn(format="%.2f"),
             "Despachado %": st.column_config.ProgressColumn(format="%.0f%%", min_value=0, max_value=100),
             "Presupuesto $": st.column_config.NumberColumn(format="%.2f"),
-            "Gasto pedido $": st.column_config.NumberColumn(format="%.2f"),
+            "Pedido $": st.column_config.NumberColumn(format="%.2f"),
             "Despachado $": st.column_config.NumberColumn(format="%.2f"),
         },
     )
@@ -435,7 +435,7 @@ def _state(row: pd.Series) -> str:
     if not row["Presupuesto"]:
         return "Fuera de presupuesto"
     if row["Pedido"] > row["Presupuesto"]:
-        return "🚨 Excede lo previsto"
+        return "Sobre lo presupuestado"
     if row["Pedido"] >= row["Presupuesto"]:
         return "✅ Completo"
     if row["Pedido"] == 0:

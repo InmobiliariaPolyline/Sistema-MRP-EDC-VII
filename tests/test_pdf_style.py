@@ -98,7 +98,7 @@ class DocumentTests(unittest.TestCase):
 
     def test_site_report_with_empty_data(self):
         site = {"name": "Obra vacía", "address": None}
-        empty = pd.DataFrame(columns=["Material", "Unidad", "Presupuesto", "Pedido", "Recibido", "Despachado", "Presupuesto $", "Gasto pedido $", "Recibido $", "Despachado $"])
+        empty = pd.DataFrame(columns=["Material", "Unidad", "Presupuesto", "Pedido", "Recibido", "Despachado", "Presupuesto $", "Pedido $", "Recibido $", "Despachado $"])
         pdf = reports.site_report_pdf(site, {"planned": 0.0, "ordered": 0.0, "pct_consumed": None}, empty, [], pd.DataFrame(columns=["code", "created_at", "stage", "requested_by", "lines_count"]), 0)
         self.assertTrue(pdf.startswith(b"%PDF"))
 

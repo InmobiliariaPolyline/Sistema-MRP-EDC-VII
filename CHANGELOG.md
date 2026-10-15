@@ -6,6 +6,19 @@ Formato de cada parche: **Agregado** · **Corregido** · **Problemas y causa** �
 
 ---
 
+## Parche 055 — El dinero es compra, no pérdida, y nuevo módulo Sistema · 2026-10-16
+
+**Aclaración del sistema:** el sistema no cobra ni paga nada (no usa tarjetas ni cuentas). Las compras las paga el administrador por fuera, con el RUC de la empresa; el sistema registra lo comprado para consulta y para tesorería.
+
+**Cambios**
+- **Lenguaje:** se quitó todo lo que sonaba a dinero perdido. «Gasto mensual / por categoría / por proveedor» pasó a «Compras por mes / por categoría / por proveedor» («En qué tipo de material se compra más» en lugar de «se va el dinero»); «Pedido hasta hoy» → «Comprado hasta hoy»; «Disponible» → «Saldo del presupuesto»; «Materiales excedidos» y «Excede lo previsto» → «Sobre lo presupuestado»; «ahorrarías» → «costaría menos». Lo que supera el presupuesto ya no se pinta de rojo: es un aviso ámbar de presupuesto, no una pérdida. La columna interna «Gasto pedido $» se llama ahora «Pedido $».
+- **Módulo Sistema** (último grupo del menú, visible para todos): versión desplegada, base de datos y seguridad (protegida / abierta / prueba), hora del sistema, para qué sirve, cómo fluye una compra (proveedor → orden → recepción → almacén → despacho), cuántos registros hay, las últimas novedades leídas del CHANGELOG y un resumen técnico para copiar al pedir soporte (sin contraseñas ni claves). Incluye la aclaración de que el pago se hace fuera del sistema.
+- Guías actualizadas.
+
+**Pruebas nuevas (4):** lectura del changelog, variantes del formato, resumen técnico sin secretos y flujo.
+
+**Hay que hacer:** nada (no hay SQL nuevo).
+
 ## Parche 054 — Nuevo diseño de los PDF · 2026-10-16
 
 Todos los PDF del sistema (orden de compra, vale de salida, reportes, reporte de obra y kardex) comparten ahora un mismo diseño con la identidad de la app (`utils/pdf_style.py`).

@@ -231,16 +231,16 @@ def site_report_pdf(site: dict, prog: dict, materials: pd.DataFrame, stages: lis
     consumed = prog.get("pct_consumed")
     over = int(((materials["Pedido"] > materials["Presupuesto"] + 1e-9) & (materials["Presupuesto"] > 0)).sum()) if not materials.empty else 0
     pdf.font(8, color=MUTED_TEXT)
-    pdf.cell(0, 5, "Importes en soles y sin IGV. Lo despachado se valora al precio presupuestado (o al promedio pedido).", new_x="LMARGIN", new_y="NEXT")
+    pdf.cell(0, 5, "Importes en soles y sin IGV. «Comprado» es lo pedido en las órdenes (se paga fuera del sistema). Lo despachado se valora al precio presupuestado (o al promedio pedido).", new_x="LMARGIN", new_y="NEXT")
     pdf.ln(1)
     pdf.kpis(
         [
             {"label": "Presupuesto", "value": f"S/ {planned:,.0f}", "sub": "costo previsto", "icon": "coin"},
-            {"label": "Pedido", "value": f"S/ {ordered:,.0f}", "sub": f"{ordered / planned * 100:.0f} % del presupuesto" if planned else "sin presupuesto", "icon": "order", "tone": "warn" if planned and ordered > planned else "info"},
+            {"label": "Comprado", "value": f"S/ {ordered:,.0f}", "sub": f"{ordered / planned * 100:.0f} % del presupuesto" if planned else "sin presupuesto", "icon": "order", "tone": "warn" if planned and ordered > planned else "info"},
             {"label": "Recibido", "value": f"S/ {received:,.0f}", "sub": "en almacén", "icon": "box", "tone": "teal"},
             {"label": "Despachado", "value": f"S/ {dispatched:,.0f}", "sub": "valorizado", "icon": "truck", "tone": "good"},
-            {"label": "Disponible", "value": f"S/ {planned - ordered:,.0f}", "sub": "presupuesto − pedido", "icon": "scale", "tone": "bad" if planned - ordered < 0 else "accent"},
-            {"label": "Avance", "value": f"{consumed * 100:.0f} %" if consumed is not None else "—", "sub": f"{over} material(es) excedido(s)" if over else "dentro de lo previsto", "icon": "chart", "fraction": consumed or 0, "tone": "bad" if over else "accent"},
+            {"label": "Saldo", "value": f"S/ {planned - ordered:,.0f}", "sub": "presupuesto − pedido", "icon": "scale", "tone": "warn" if planned - ordered < 0 else "accent"},
+            {"label": "Avance", "value": f"{consumed * 100:.0f} %" if consumed is not None else "—", "sub": f"{over} material(es) sobre lo presupuestado" if over else "dentro de lo previsto", "icon": "chart", "fraction": consumed or 0, "tone": "warn" if over else "accent"},
         ]
     )
 
@@ -254,7 +254,7 @@ def site_report_pdf(site: dict, prog: dict, materials: pd.DataFrame, stages: lis
             if not m["Presupuesto"]:
                 state, tone = "Fuera de presupuesto", "warn"
             elif m["Pedido"] > m["Presupuesto"] + 1e-9:
-                state, tone = "Excede lo previsto", "bad"
+                state, tone = "Sobre lo presupuestado", "warn"
             elif m["Despachado"] >= m["Presupuesto"] - 1e-9:
                 state, tone = "Completo", "good"
             elif m["Pedido"] == 0:
@@ -264,10 +264,10 @@ def site_report_pdf(site: dict, prog: dict, materials: pd.DataFrame, stages: lis
             tones[index] = {9: tone}
             rows.append(
                 [str(m["Material"]), str(m.get("Unidad") or ""), f"{m['Presupuesto']:,.2f}", f"{m['Pedido']:,.2f}", f"{m['Recibido']:,.2f}", f"{m['Despachado']:,.2f}",
-                 f"{m['Presupuesto $']:,.2f}", f"{m['Gasto pedido $']:,.2f}", f"{m['Despachado $']:,.2f}", state]
+                 f"{m['Presupuesto $']:,.2f}", f"{m['Pedido $']:,.2f}", f"{m['Despachado $']:,.2f}", state]
             )
         pdf.table(
-            ["Material", "Unidad", "Presup.", "Pedido", "Recibido", "Despach.", "Presup. S/", "Pedido S/", "Despach. S/", "Estado"], rows,
+            ["Material", "Unidad", "Presup.", "Pedido", "Recibido", "Despach.", "Presup. S/", "Comprado S/", "Despach. S/", "Estado"], rows,
             [4.2, 1.5, 1.3, 1.3, 1.3, 1.3, 1.6, 1.6, 1.6, 2.5], ["L", "L", "R", "R", "R", "R", "R", "R", "R", "L"], tones=tones, row_h=7.0,
         )
 

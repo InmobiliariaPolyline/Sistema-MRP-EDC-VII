@@ -170,7 +170,7 @@ def _bar_marker(color) -> dict:
 
 
 def _render_purchase_analytics(orders: pd.DataFrame) -> None:
-    """Gasto mensual, estado de las órdenes, gasto por categoría y por proveedor."""
+    """Compras por mes, estado de las órdenes, compras por categoría y por proveedor."""
     if orders.empty:
         return
     billable = _billable(orders)
@@ -178,7 +178,7 @@ def _render_purchase_analytics(orders: pd.DataFrame) -> None:
     c1, c2 = st.columns([5, 3])
     with c1:
         with st.container(border=True):
-            _panel("Compras", "Gasto mensual y órdenes", "Barras: monto comprado. Línea: cantidad de órdenes.")
+            _panel("Compras", "Compras por mes", "Barras: monto de las órdenes (en soles, con IGV). Línea: cantidad de órdenes. Se paga fuera del sistema.")
             _spend_combo(billable)
     with c2:
         with st.container(border=True):
@@ -188,11 +188,11 @@ def _render_purchase_analytics(orders: pd.DataFrame) -> None:
     c3, c4 = st.columns([1, 1])
     with c3:
         with st.container(border=True):
-            _panel("Compras", "Gasto por categoría", "En qué tipo de material se va el dinero.")
+            _panel("Compras", "Compras por categoría", "En qué tipo de material se compra más.")
             _category_treemap()
     with c4:
         with st.container(border=True):
-            _panel("Compras", "Gasto por proveedor", "Los seis proveedores con más compras.")
+            _panel("Compras", "Compras por proveedor", "Los seis proveedores con más compras.")
             _supplier_bars(billable)
 
 
@@ -307,7 +307,7 @@ def _site_progress_chart() -> None:
             {
                 "obra": site["name"],
                 "Presupuesto": float(df["Presupuesto $"].sum()),
-                "Pedido": float(df["Gasto pedido $"].sum()),
+                "Pedido": float(df["Pedido $"].sum()),
                 "Despachado": float(df["Despachado $"].sum()),
             }
         )

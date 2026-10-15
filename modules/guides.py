@@ -7,7 +7,7 @@ GUIDES: dict[str, str] = {
 **Para qué sirve:** una lectura rápida de cómo va todo.
 
 - **Tarjetas:** cuántos materiales, proveedores y órdenes abiertas hay.
-- **Gráficos:** gasto por mes, gasto por proveedor y órdenes por estado.
+- **Gráficos:** compras por mes, por categoría y por proveedor, y órdenes por estado. Son lo comprado (órdenes no canceladas): el pago se hace fuera del sistema.
 - **⏰ Alerta amarilla:** órdenes abiertas hace demasiado tiempo (el límite en días se cambia en *Órdenes de compra*).
 - **Mapa:** todas las obras con ubicación.
 
@@ -97,6 +97,12 @@ La pestaña *Resumen* cuenta asistencias y faltas de los últimos días.
 1. Crea **cuadrillas** y **obras** (en la obra puedes pegar el *enlace de Google Maps* para la ubicación exacta).
 2. **＋ Nuevo trabajador:** nombre, documento, teléfono, puesto, cuadrilla y obra.
 3. Si alguien debe entrar al sistema, dale acceso (usuario, contraseña y rol).
+""",
+    "Sistema": """
+**Para qué sirve:** ver en qué versión está el sistema, dónde guarda los datos, cuántos registros hay y las últimas novedades.
+
+- Al final hay un **resumen técnico** para copiar si necesitas pedir ayuda (no lleva contraseñas ni claves).
+- El sistema **no procesa pagos**: las compras se pagan fuera, con el RUC de la empresa; aquí solo queda el registro de lo comprado.
 """,
     "Respaldo de datos": """
 **Para qué sirve:** tener una copia de todo fuera del sistema, por si algo se borra por error.
