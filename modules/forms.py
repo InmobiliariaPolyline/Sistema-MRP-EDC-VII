@@ -118,10 +118,9 @@ def errors(issues: list[str]) -> bool:
 def header(title: str, description: str = "") -> None:
     st.markdown(
         f'<div class="mrp-form-intro"><div class="mrp-form-title">{html.escape(title)}</div>'
-        f'<div class="mrp-form-description">{html.escape(description)}</div></div>',
+        f'<div class="mrp-form-description">{html.escape(description)} <em>Los campos «opcional» pueden quedar vacíos.</em></div></div>',
         unsafe_allow_html=True,
     )
-    st.caption("Completa los campos indicados. Los que dicen «opcional» pueden quedar vacíos.")
 
 
 def section(title: str, description: str = "") -> None:

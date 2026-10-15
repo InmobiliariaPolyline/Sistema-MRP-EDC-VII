@@ -70,14 +70,26 @@ def paginate(df: pd.DataFrame, key: str) -> pd.DataFrame:
 
 
 def chart_theme(fig):
-    """Mantiene legibles también los gráficos, sin invertir el mapa."""
+    """Gráficos con la misma tipografía y colores que el resto de la interfaz."""
     dark = st.session_state.get("dark_mode", False)
+    text = "#EEF1FC" if dark else "#141A33"
+    muted = "#A7B2CE" if dark else "#5C6685"
+    grid = "rgba(167,178,206,.16)" if dark else "rgba(20,26,51,.07)"
     fig.update_layout(
         template="plotly_dark" if dark else "plotly_white",
-        font=dict(family="Inter, sans-serif", color="#F1F4FC" if dark else "#20263B", size=12),
+        font=dict(family="Inter, sans-serif", color=text, size=12),
         paper_bgcolor="rgba(0,0,0,0)", plot_bgcolor="rgba(0,0,0,0)",
+        hoverlabel=dict(bgcolor="#1B2442" if dark else "#FFFFFF", font=dict(family="Inter, sans-serif", color=text), bordercolor=grid),
     )
+    fig.update_xaxes(gridcolor=grid, zerolinecolor=grid, linecolor=grid, tickfont=dict(color=muted))
+    fig.update_yaxes(gridcolor=grid, zerolinecolor=grid, linecolor=grid, tickfont=dict(color=muted))
     return fig
+
+
+def guide_button(title: str) -> None:
+    """Botón «Cómo usar» de un módulo cuyo encabezado no es page_header."""
+    from modules.guides import GUIDES
+    _guide_popover(GUIDES.get(title))
 
 
 def _guide_popover(guide: str | None) -> None:
@@ -91,9 +103,28 @@ def tip(text: str) -> None:
     st.markdown(f'<div class="mrp-tip">💡 {html.escape(text)}</div>', unsafe_allow_html=True)
 
 
-def stat_card(icon: str, value, label: str, caption: str = "", warn: bool = False) -> str:
-    klass = "mrp-stat-card mrp-warn" if warn else "mrp-stat-card"
+def spark(values: list[float], color: str = "currentColor") -> str:
+    """Mini gráfico de línea (SVG) para una tarjeta de estadística."""
+    vals = [float(v) for v in values if v is not None]
+    if len(vals) < 2:
+        return ""
+    lo, hi = min(vals), max(vals)
+    span = (hi - lo) or 1.0
+    pts = [(i / (len(vals) - 1) * 100, 28 - (v - lo) / span * 24) for i, v in enumerate(vals)]
+    line = " ".join(f"{x:.1f},{y:.1f}" for x, y in pts)
+    area = f"0,32 {line} 100,32"
+    return (
+        f'<svg class="mrp-spark" viewBox="0 0 100 32" preserveAspectRatio="none" aria-hidden="true">'
+        f'<polygon points="{area}" fill="{color}" opacity=".12"/>'
+        f'<polyline points="{line}" fill="none" stroke="{color}" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" vector-effect="non-scaling-stroke"/></svg>'
+    )
+
+
+def stat_card(icon: str, value, label: str, caption: str = "", warn: bool = False, tone: str = "purple", trend: list[float] | None = None) -> str:
+    """Tarjeta de estadística. `tone`: purple, green, amber, blue, red o teal."""
+    klass = f"mrp-stat-card mrp-tone-{'amber' if warn else tone}"
     caption_html = f'<div class="mrp-stat-caption">{caption}</div>' if caption else ""
+    spark_html = spark(trend or [], "var(--tone)")
     return (
         f'<div class="{klass}">'
         f'<div class="mrp-stat-top">'
@@ -101,13 +132,48 @@ def stat_card(icon: str, value, label: str, caption: str = "", warn: bool = Fals
         f'<div class="mrp-icon-badge">{icon}</div>'
         f"</div>"
         f'<div class="mrp-stat-value">{value}</div>'
-        f"{caption_html}"
+        f"{caption_html}{spark_html}"
         f"</div>"
     )
 
 
 def stat_grid(cards: list[str]) -> None:
     st.markdown(f'<div class="mrp-stat-grid">{"".join(cards)}</div>', unsafe_allow_html=True)
+
+
+def hero(eyebrow: str, title: str, subtitle: str = "", chips: list[str] | None = None) -> None:
+    """Banner principal de una pantalla (se usa en el dashboard)."""
+    chips_html = "".join(f'<span class="mrp-hero-chip">{html.escape(c)}</span>' for c in (chips or []))
+    st.markdown(
+        f'<div class="mrp-hero"><div class="mrp-hero-eyebrow">{html.escape(eyebrow)}</div>'
+        f'<div class="mrp-hero-title">{html.escape(title)}</div>'
+        + (f'<div class="mrp-hero-sub">{html.escape(subtitle)}</div>' if subtitle else "")
+        + (f'<div class="mrp-hero-chips">{chips_html}</div>' if chips_html else "")
+        + "</div>",
+        unsafe_allow_html=True,
+    )
+
+
+def timeline_item(icon: str, name: str, sub: str, when: str = "", tone: str = "") -> str:
+    """Elemento de una línea de tiempo (actividad reciente)."""
+    when_html = f'<div class="mrp-timeline-when">{when}</div>' if when else ""
+    return (
+        '<div class="mrp-timeline-item">'
+        f'<div class="mrp-timeline-dot">{icon}</div>'
+        f'<div class="mrp-timeline-body"><div class="mrp-activity-name">{name}</div><div class="mrp-activity-sub">{sub}</div></div>'
+        f"{when_html}</div>"
+    )
+
+
+def meter(pct: float) -> str:
+    """Barra de avance (0-100)."""
+    pct = max(0.0, min(100.0, float(pct)))
+    return f'<div class="mrp-meter" role="progressbar" aria-valuenow="{pct:.0f}" aria-valuemin="0" aria-valuemax="100"><span style="width:{pct:.0f}%"></span></div>'
+
+
+def go(label: str) -> None:
+    """Navega a un módulo del menú (para botones de acceso rápido)."""
+    st.session_state["mrp_active_route"] = label
 
 
 def activity_item(name: str, sub: str, badge: str, when: str = "") -> str:

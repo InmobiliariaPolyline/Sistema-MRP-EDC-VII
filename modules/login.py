@@ -38,7 +38,9 @@ div[data-testid="stHorizontalBlock"]:has(.mrp-lp-brand) > div[data-testid="stCol
     padding: 0 !important;
 }
 div[data-testid="stHorizontalBlock"]:has(.mrp-lp-brand) > div[data-testid="stColumn"]:nth-of-type(1) {
-    background: linear-gradient(160deg, #241457 0%, #4B2FD1 60%, #6C5CE7 100%);
+    background: radial-gradient(520px 380px at 90% 8%, rgba(255,255,255,.20), transparent 62%),
+        radial-gradient(520px 420px at 0% 100%, rgba(34,211,238,.28), transparent 60%),
+        linear-gradient(155deg, #1B1050 0%, #3A24B8 55%, #6A52F5 100%);
     color: #EDEBFB;
     padding: 56px 48px !important;
     display: flex;
@@ -66,8 +68,8 @@ div[data-testid="stHorizontalBlock"]:has(.mrp-lp-brand) > div[data-testid="stCol
 }
 .mrp-lp-brand { display: flex; align-items: center; gap: 12px; }
 .mrp-lp-brand-badge {
-    width: 40px; height: 40px; border-radius: 10px;
-    background: rgba(255,255,255,0.12);
+    width: 42px; height: 42px; border-radius: 13px;
+    background: rgba(255,255,255,0.18); border: 1px solid rgba(255,255,255,0.22);
     display: flex; align-items: center; justify-content: center; font-size: 18px;
 }
 .mrp-lp-brand-name { font-weight: 800; letter-spacing: 0.04em; font-size: 14px; }
@@ -75,8 +77,16 @@ div[data-testid="stHorizontalBlock"]:has(.mrp-lp-brand) > div[data-testid="stCol
     font-size: 12px; font-weight: 700; letter-spacing: 0.1em; text-transform: uppercase;
     color: #C9C2F7; margin-bottom: 10px;
 }
-.mrp-lp-headline { font-size: 34px; font-weight: 800; line-height: 1.25; color: #FFFFFF; margin-bottom: 14px; }
+.mrp-lp-headline { font-size: 38px; letter-spacing: -1px; font-weight: 800; line-height: 1.25; color: #FFFFFF; margin-bottom: 14px; }
 .mrp-lp-copy { font-size: 14px; color: #D6D1F5; line-height: 1.5; max-width: 380px; }
+.mrp-lp-features { display: flex; flex-direction: column; gap: 10px; margin-top: 26px; max-width: 400px; }
+.mrp-lp-feature {
+    display: flex; align-items: center; gap: 12px; padding: 12px 14px; border-radius: 14px;
+    background: rgba(255,255,255,0.09); border: 1px solid rgba(255,255,255,0.14);
+    backdrop-filter: blur(8px); font-size: 13.5px; font-weight: 600; color: #FFFFFF;
+}
+.mrp-lp-feature-icon { width: 34px; height: 34px; border-radius: 10px; background: rgba(255,255,255,0.16); display: grid; place-items: center; font-size: 16px; flex-shrink: 0; }
+.mrp-lp-feature small { display: block; font-weight: 500; font-size: 12px; color: #D6D1F5; margin-top: 1px; }
 .mrp-lp-divider { border-top: 1px solid rgba(255,255,255,0.18); margin: 28px 0 20px 0; }
 .mrp-lp-stat-value { font-size: 32px; font-weight: 800; color: #FFFFFF; }
 .mrp-lp-stat-label { font-size: 13px; color: #C9C2F7; }
@@ -137,7 +147,9 @@ div[data-testid="stMainBlockContainer"] {
     display: flex;
     align-items: center;
     justify-content: center;
-    background: linear-gradient(160deg, #241457 0%, #4B2FD1 60%, #6C5CE7 100%);
+    background: radial-gradient(520px 380px at 80% 0%, rgba(255,255,255,.18), transparent 62%),
+        radial-gradient(520px 420px at 0% 100%, rgba(34,211,238,.25), transparent 60%),
+        linear-gradient(155deg, #1B1050 0%, #3A24B8 55%, #6A52F5 100%);
 }
 div[data-testid="stMainBlockContainer"] > div { width: 100%; max-width: 360px; }
 .mrp-boot-badge {
@@ -236,6 +248,11 @@ def _render_brand_panel() -> None:
         '<div class="mrp-lp-headline">Cada material, con<br/>un proveedor claro.</div>'
         '<div class="mrp-lp-copy">Consulta el catálogo, contacta proveedores y mantén '
         "la disponibilidad al día desde un solo panel.</div>"
+        '<div class="mrp-lp-features">'
+        '<div class="mrp-lp-feature"><div class="mrp-lp-feature-icon">🧱</div><div>Catálogo de materiales<small>Densidad, métrica y mejor precio</small></div></div>'
+        '<div class="mrp-lp-feature"><div class="mrp-lp-feature-icon">💬</div><div>Contacto directo<small>Llama o escribe por WhatsApp</small></div></div>'
+        '<div class="mrp-lp-feature"><div class="mrp-lp-feature-icon">🏗️</div><div>Compras y obras<small>Órdenes, stock, asistencia y avance</small></div></div>'
+        "</div>"
         "</div>"
         '<div>'
         '<div class="mrp-lp-divider"></div>'

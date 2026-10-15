@@ -1,5 +1,6 @@
-"""Panel principal: eyebrow + saludo, tarjetas de stats, actividad reciente
-y una dona de estado general de los proveedores."""
+"""Panel principal: banner de bienvenida con accesos rápidos, tarjetas de
+estadísticas, gráficos de compras, actividad reciente y mapa de obras."""
+import html
 from datetime import datetime, timedelta, timezone
 
 import pandas as pd
@@ -14,10 +15,17 @@ MESES = [
     "enero", "febrero", "marzo", "abril", "mayo", "junio",
     "julio", "agosto", "septiembre", "octubre", "noviembre", "diciembre",
 ]
+DIAS = ["lunes", "martes", "miércoles", "jueves", "viernes", "sábado", "domingo"]
+ACCENT, ACCENT_SOFT = "#7C66FF", "#B9AEFF"
+STATUS_COLORS = {"pendiente": "#F0A93B", "enviada": "#4C8DF6", "parcial": "#9A86FF", "recibida": "#2EB67D", "cancelada": "#E5636D"}
+
+
+def _now() -> datetime:
+    return datetime.now(timezone(timedelta(hours=-5)))
 
 
 def _saludo() -> str:
-    hora = datetime.now(timezone(timedelta(hours=-5))).hour
+    hora = _now().hour
     if hora < 12:
         return "Buenos días"
     if hora < 19:
@@ -26,20 +34,30 @@ def _saludo() -> str:
 
 
 def render(user: dict) -> None:
-    now = datetime.now(timezone(timedelta(hours=-5)))
-    ui.page_header(
-        f"Centro de control · {MESES[now.month - 1].upper()} DE {now.year}",
-        f"{_saludo()}, {user['name']}",
-        "Materiales, compras y obras: identifica qué necesita atención y consulta tus últimos movimientos.",
-    )
-
+    now = _now()
     totals = repo.dashboard_totals()
+    orders = repo.list_orders()
+    stale = ordenes.stale_orders(orders)
 
+    chips = [f"📅 {DIAS[now.weekday()].capitalize()} {now.day} de {MESES[now.month - 1]}"]
+    chips.append(f"🧾 {totals.get('orders_open', 0)} orden(es) abierta(s)")
+    if len(stale):
+        chips.append(f"⏰ {len(stale)} atrasada(s)")
+    ui.hero(
+        f"Centro de control · {MESES[now.month - 1].upper()} DE {now.year}",
+        f"{_saludo()}, {user['name'].split()[0]}",
+        "Materiales, compras y obras: identifica qué necesita atención y consulta tus últimos movimientos.",
+        chips,
+    )
+    ui.guide_button("Dashboard")
+    _render_quick_actions()
+
+    monthly = _monthly_spend(orders)
     ui.stat_grid(
         [
-            ui.stat_card("📦", totals["materials"], "Materiales", "en el catálogo"),
-            ui.stat_card("🏭", totals["suppliers"], "Proveedores", "registrados en total"),
-            ui.stat_card("✅", totals["suppliers_with_available"], "Con disponibilidad", "ofrecen algo hoy"),
+            ui.stat_card("📦", totals["materials"], "Materiales", "en el catálogo", tone="purple"),
+            ui.stat_card("🏭", totals["suppliers"], "Proveedores", "registrados en total", tone="blue"),
+            ui.stat_card("✅", totals["suppliers_with_available"], "Con disponibilidad", "ofrecen algo hoy", tone="green"),
             ui.stat_card(
                 "⚠️",
                 totals["materials_without_supplier"],
@@ -47,18 +65,16 @@ def render(user: dict) -> None:
                 "materiales por cotizar",
                 warn=totals["materials_without_supplier"] > 0,
             ),
-            ui.stat_card("🧾", totals.get("orders_open", 0), "Órdenes abiertas", "pendientes o enviadas"),
+            ui.stat_card("🧾", totals.get("orders_open", 0), "Órdenes abiertas", "pendientes, enviadas o parciales", tone="teal", trend=monthly),
         ]
     )
 
-    _render_alerts()
-    _render_order_charts()
+    _render_alerts(stale)
+    _render_order_charts(orders)
 
     col_left, col_right = st.columns([3, 2])
-
     with col_left:
         _render_activity()
-
     with col_right:
         _render_status_donut(totals)
 
@@ -66,75 +82,94 @@ def render(user: dict) -> None:
     _render_sites_map()
 
 
-def _render_alerts() -> None:
-    stale = ordenes.stale_orders(repo.list_orders())
+def _render_quick_actions() -> None:
+    """Accesos directos a lo que más se hace."""
+    actions = [
+        ("Nueva orden", ":material/add_shopping_cart:", "Órdenes de compra"),
+        ("Pasar lista", ":material/event_available:", "Asistencia"),
+        ("Ver inventario", ":material/inventory_2:", "Inventario"),
+        ("Ver obras", ":material/apartment:", "Obras"),
+    ]
+    cols = st.columns(len(actions))
+    for col, (label, icon, route) in zip(cols, actions):
+        col.button(label, icon=icon, key=f"quick_{route}", width="stretch", on_click=ui.go, args=(route,))
+
+
+def _monthly_spend(orders: pd.DataFrame) -> list[float]:
+    if orders.empty:
+        return []
+    billable = orders[orders["status"] != "cancelada"]
+    if billable.empty:
+        return []
+    grouped = billable.assign(mes=billable["created_at"].astype(str).str[:7], total=billable["total"].astype(float)).groupby("mes")["total"].sum()
+    return grouped.tail(8).tolist()
+
+
+def _render_alerts(stale: pd.DataFrame) -> None:
     if stale.empty:
         return
     detail = ", ".join(f"{r['code']} ({r['supplier_name']}, {int(r['age'])} d)" for r in stale.to_dict("records")[:5])
     st.warning(
-        f"⏰ {len(stale)} orden(es) abierta(s) hace más de {ordenes.alert_days()} días: {detail}. "
+        f"**{len(stale)} orden(es) abierta(s) hace más de {ordenes.alert_days()} días:** {detail}. "
         "Revísalas en Órdenes de compra.",
+        icon=":material/schedule:",
     )
 
 
-def _bar_layout(fig: go.Figure, height: int = 240) -> go.Figure:
-    fig.update_layout(
-        margin=dict(t=8, b=0, l=0, r=0),
-        height=height,
-        showlegend=False,
-        plot_bgcolor="rgba(0,0,0,0)",
-        paper_bgcolor="rgba(0,0,0,0)",
-        xaxis=dict(showgrid=False, type="category"),
-        yaxis=dict(gridcolor="rgba(17,24,39,0.08)"),
-    )
+def _bar_layout(fig: go.Figure, height: int = 250) -> go.Figure:
+    fig.update_layout(margin=dict(t=8, b=0, l=0, r=0), height=height, showlegend=False, bargap=0.38)
     return fig
 
 
-def _render_order_charts() -> None:
+def _empty_chart(message: str = "Aún no hay órdenes activas.") -> None:
+    st.markdown(f'<div class="mrp-activity-sub" style="padding:36px 0;text-align:center">{message}</div>', unsafe_allow_html=True)
+
+
+def _render_order_charts(orders: pd.DataFrame) -> None:
     """Gasto por mes, gasto por proveedor y órdenes por estado."""
-    orders = repo.list_orders()
     if orders.empty:
         return
     orders = orders.assign(total=orders["total"].astype(float))
     billable = orders[orders["status"] != "cancelada"]
+    bar_style = dict(cornerradius=10) if hasattr(go.bar.Marker, "cornerradius") else {}
 
     c1, c2, c3 = st.columns([3, 3, 2])
     with c1:
         with st.container(border=True):
             ui.panel_header("Compras", "Gasto por mes")
             if billable.empty:
-                st.caption("Sin órdenes activas.")
+                _empty_chart()
             else:
                 monthly = billable.assign(mes=billable["created_at"].astype(str).str[:7]).groupby("mes")["total"].sum().reset_index()
-                fig = go.Figure(go.Bar(x=monthly["mes"], y=monthly["total"], marker_color="#6C5CE7", hovertemplate="%{x}: %{y:,.2f}<extra></extra>"))
+                fig = go.Figure(go.Bar(x=monthly["mes"], y=monthly["total"], marker=dict(color=ACCENT, **bar_style), hovertemplate="%{x}: %{y:,.2f}<extra></extra>"))
+                fig.update_xaxes(type="category", showgrid=False)
                 st.plotly_chart(ui.chart_theme(_bar_layout(fig)), width="stretch", config={"displayModeBar": False})
     with c2:
         with st.container(border=True):
             ui.panel_header("Compras", "Gasto por proveedor")
             if billable.empty:
-                st.caption("Sin órdenes activas.")
+                _empty_chart()
             else:
                 by_sup = billable.groupby("supplier_name")["total"].sum().sort_values().tail(6).reset_index()
-                fig = go.Figure(go.Bar(x=by_sup["total"], y=by_sup["supplier_name"], orientation="h", marker_color="#8B7CF0", hovertemplate="%{y}: %{x:,.2f}<extra></extra>"))
-                fig = _bar_layout(fig)
-                fig.update_layout(xaxis=dict(gridcolor="rgba(17,24,39,0.08)", type="linear"), yaxis=dict(showgrid=False, type="category"))
-                st.plotly_chart(ui.chart_theme(fig), width="stretch", config={"displayModeBar": False})
+                fig = go.Figure(go.Bar(x=by_sup["total"], y=by_sup["supplier_name"], orientation="h", marker=dict(color=ACCENT_SOFT, **bar_style), hovertemplate="%{y}: %{x:,.2f}<extra></extra>"))
+                fig.update_yaxes(type="category", showgrid=False)
+                st.plotly_chart(ui.chart_theme(_bar_layout(fig)), width="stretch", config={"displayModeBar": False})
     with c3:
         with st.container(border=True):
             ui.panel_header("Compras", "Órdenes por estado")
             counts = orders.groupby("status").size()
             keys = [k for k in ordenes.STATUSES if k in counts.index]
-            palette = {"pendiente": "#E8A33D", "enviada": "#3B82F6", "parcial": "#8B7CF0", "recibida": "#2DAA6B", "cancelada": "#E05A5A"}
             fig = go.Figure(
                 go.Pie(
                     labels=[ordenes.STATUSES[k][0] for k in keys],
                     values=[int(counts[k]) for k in keys],
-                    hole=0.6,
-                    marker=dict(colors=[palette[k] for k in keys]),
+                    hole=0.66,
+                    marker=dict(colors=[STATUS_COLORS[k] for k in keys], line=dict(color="rgba(0,0,0,0)", width=0)),
                     textinfo="value",
+                    sort=False,
                 )
             )
-            fig.update_layout(margin=dict(t=0, b=0, l=0, r=0), height=240, showlegend=True, legend=dict(orientation="h", y=-0.1, font=dict(size=11)), paper_bgcolor="rgba(0,0,0,0)")
+            fig.update_layout(margin=dict(t=0, b=0, l=0, r=0), height=250, showlegend=True, legend=dict(orientation="h", y=-0.08, font=dict(size=11)))
             st.plotly_chart(ui.chart_theme(fig), width="stretch", config={"displayModeBar": False})
 
 
@@ -147,14 +182,14 @@ def _render_sites_map() -> None:
     with st.container(border=True):
         ui.panel_header("Ubicaciones", "Obras en el mapa")
         if sites.empty:
-            st.markdown('<div class="mrp-activity-sub">Todavía no hay obras registradas (se crean en Trabajadores → Obras / Proyectos).</div>', unsafe_allow_html=True)
+            ui.empty_state("Aún no hay obras", "Se crean en Trabajadores → Obras / Proyectos y aparecerán aquí con su ubicación.", "🏗️")
             return
 
         located = sites[sites["latitude"].notna() & sites["longitude"].notna()]
         map_col, list_col = st.columns([3, 2])
         with map_col:
             if located.empty:
-                st.caption("Ninguna obra tiene ubicación todavía: usa «Buscar dirección» al crearla.")
+                st.caption("Ninguna obra tiene ubicación todavía: pega el enlace de Google Maps al crearla.")
             else:
                 st.map(
                     pd.DataFrame({"lat": located["latitude"].astype(float), "lon": located["longitude"].astype(float)}),
@@ -166,8 +201,8 @@ def _render_sites_map() -> None:
                 n = int(counts.get(site["id"], 0))
                 rows.append(
                     ui.activity_item(
-                        site["name"],
-                        site["address"] or "Sin dirección",
+                        html.escape(site["name"]),
+                        html.escape(site["address"] or "Sin dirección"),
                         f"{n} trabajador{'es' if n != 1 else ''}",
                         "📍 en el mapa" if site.get("latitude") else "sin ubicación",
                     )
@@ -175,14 +210,41 @@ def _render_sites_map() -> None:
             st.markdown("".join(rows), unsafe_allow_html=True)
 
 
+def _icon_for(summary: str) -> str:
+    text = summary.lower()
+    for words, icon in [
+        (("eliminad",), "🗑️"), (("recepci", "stock", "movimiento", "consumo", "entrada", "salida"), "📦"),
+        (("orden",), "🧾"), (("proveedor",), "🏭"), (("material", "presupuesto"), "🧱"),
+        (("asistencia",), "📅"), (("trabajador", "obra", "cuadrilla", "acceso"), "👷"),
+    ]:
+        if any(w in text for w in words):
+            return icon
+    return "✨"
+
+
 def _render_activity() -> None:
-    items = repo.recent_activity(limit=6)
-    rows = [ui.activity_item(it["name"], it["sub"], it["kind"], time_ago(it["created_at"])) for it in items]
+    log = repo.list_audit(limit=6)
+    if not log.empty:
+        rows = [
+            ui.timeline_item(
+                _icon_for(e["summary"]),
+                html.escape(e["summary"]),
+                html.escape(e["actor"]),
+                time_ago(str(e["created_at"]).replace(" ", "T")),
+            )
+            for e in log.to_dict("records")
+        ]
+    else:
+        rows = [
+            ui.timeline_item("🧱" if it["kind"] == "Material" else "🏭", html.escape(it["name"]), html.escape(it["sub"]), time_ago(it["created_at"]))
+            for it in repo.recent_activity(limit=6)
+        ]
+    body = "".join(rows) if rows else '<div class="mrp-activity-sub">Todavía no hay actividad.</div>'
     st.markdown(
         '<div class="mrp-panel">'
         '<div class="mrp-eyebrow">Seguimiento</div>'
         '<div class="mrp-panel-title">Actividad reciente</div>'
-        f"{ui.activity_list(rows)}"
+        f"{body}"
         "</div>",
         unsafe_allow_html=True,
     )
@@ -193,14 +255,10 @@ def _render_status_donut(totals: dict) -> None:
     sin_disponible = max(totals["suppliers"] - con_disponible, 0)
 
     with st.container(border=True):
-        st.markdown(
-            '<div class="mrp-eyebrow">Lectura del portafolio</div>'
-            '<div class="mrp-panel-title">Estado de proveedores</div>',
-            unsafe_allow_html=True,
-        )
+        ui.panel_header("Lectura del portafolio", "Estado de proveedores")
 
         if totals["suppliers"] == 0:
-            st.markdown('<div class="mrp-activity-sub">Todavía no hay proveedores registrados.</div>', unsafe_allow_html=True)
+            ui.empty_state("Sin proveedores", "Registra tu primer proveedor para ver su disponibilidad aquí.", "🏭")
             return
 
         pct = round(100 * con_disponible / totals["suppliers"])
@@ -208,19 +266,20 @@ def _render_status_donut(totals: dict) -> None:
             data=[
                 go.Pie(
                     values=[con_disponible, sin_disponible],
-                    hole=0.72,
-                    marker=dict(colors=["#6C5CE7", "#E9E9F2"]),
+                    hole=0.74,
+                    marker=dict(colors=[ACCENT, "rgba(150,160,190,.25)"], line=dict(color="rgba(0,0,0,0)", width=0)),
                     textinfo="none",
                     hoverinfo="label+value",
                     labels=["Con disponibilidad", "Sin disponibilidad"],
+                    sort=False,
                 )
             ]
         )
         fig.update_layout(
             showlegend=False,
             margin=dict(t=0, b=0, l=0, r=0),
-            height=200,
-            annotations=[dict(text=f"<b>{pct}%</b><br><span style='font-size:11px'>con stock</span>", showarrow=False, font=dict(size=20))],
+            height=210,
+            annotations=[dict(text=f"<b>{pct}%</b><br><span style='font-size:11px'>con stock</span>", showarrow=False, font=dict(size=24))],
         )
         st.plotly_chart(ui.chart_theme(fig), width="stretch", config={"displayModeBar": False})
 
