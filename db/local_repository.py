@@ -1025,3 +1025,25 @@ def recent_activity(limit: int = 6) -> list[dict]:
     ]
     items.sort(key=lambda it: it["created_at"] or "", reverse=True)
     return items[:limit]
+# Tablas de la app, en orden de dependencia (para respaldos y restauración).
+BACKUP_TABLES = [
+    "materials", "suppliers", "supplier_materials", "users", "work_groups", "project_sites", "workers",
+    "purchase_orders", "purchase_order_items", "dispatch_vouchers", "stock_movements",
+    "site_budgets", "attendance", "audit_log", "price_history",
+]
+
+
+def set_user_password(user_id: str, password_hash: str) -> None:
+    with _connect() as conn:
+        conn.execute("update users set password_hash = ?, updated_at = datetime('now') where id = ?", (password_hash, user_id))
+
+
+def dump_tables() -> dict[str, pd.DataFrame]:
+    """Todas las tablas de la app, completas, para el respaldo."""
+    out: dict[str, pd.DataFrame] = {}
+    with _connect() as conn:
+        existing = {r[0] for r in conn.execute("select name from sqlite_master where type = 'table'").fetchall()}
+        for table in BACKUP_TABLES:
+            if table in existing:
+                out[table] = pd.read_sql_query(f"select * from {table}", conn)
+    return out

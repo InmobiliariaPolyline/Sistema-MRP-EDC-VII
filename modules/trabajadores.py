@@ -10,7 +10,7 @@ import streamlit as st
 
 from db import repository as repo
 from db.auth import hash_password
-from modules import forms, ui
+from modules import forms, ui, security
 from utils.geocode import google_maps_search_url, parse_coordinates, search_address
 
 ROLES = ["operador", "admin"]
@@ -453,10 +453,8 @@ def _access_errors(username: str, password: str, role: str) -> list[str]:
     errors = forms.validate({"Usuario": username})
     if not password or not password.strip():
         errors.append("Contraseña: completa este campo obligatorio.")
-    elif len(password) < 6:
-        errors.append("Contraseña: utiliza al menos 6 caracteres.")
-    elif len(password.encode("utf-8")) > 72:
-        errors.append("Contraseña: es demasiado larga; utiliza menos caracteres.")
+    else:
+        errors.extend(security.password_issues(password, username))
     if role not in ROLES:
         errors.append("Rol de acceso: selecciona operador o admin.")
     if not errors:

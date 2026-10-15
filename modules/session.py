@@ -28,7 +28,7 @@ LOGGED_OUT_KEY = "_logged_out"
 
 
 def _secret() -> bytes:
-    for name in ("SESSION_SECRET", "SUPABASE_KEY"):
+    for name in ("SESSION_SECRET", "SUPABASE_SERVICE_KEY", "SUPABASE_KEY"):
         value = os.getenv(name)
         if not value:
             try:
@@ -100,5 +100,8 @@ def flush_cookie() -> None:
         script = f"window.parent.document.cookie = '{COOKIE}=; max-age=0; path=/; SameSite=Lax';"
     else:
         token = action.split(":", 1)[1]
-        script = f"window.parent.document.cookie = '{COOKIE}={token}; max-age={TTL_SECONDS}; path=/; SameSite=Lax';"
+        script = (
+            f"const secure = window.parent.location.protocol === 'https:' ? '; Secure' : '';"
+            f"window.parent.document.cookie = '{COOKIE}={token}; max-age={TTL_SECONDS}; path=/; SameSite=Lax' + secure;"
+        )
     st.iframe(f"<script>{script}</script>", height=1, tab_index=-1)

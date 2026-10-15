@@ -1,10 +1,13 @@
-streamlit>=1.56,<2
-supabase>=2.6
-pandas>=2.2
-python-dotenv>=1.0
-bcrypt>=4.1
-streamlit-option-menu>=0.4
-plotly>=5.20
-requests>=2.31
-openpyxl>=3.1
-fpdf2>=2.7
+# Versiones exactas probadas (parche 041). Actualízalas a propósito, no por sorpresa:
+#   pip install -U <paquete>  →  correr los tests  →  anotar aquí la nueva versión.
+streamlit==1.66.0
+supabase==2.32.0
+pandas==3.0.6
+numpy==2.5.4
+python-dotenv==1.2.4
+bcrypt==5.0.0
+plotly==7.1.0
+requests==2.34.2
+openpyxl==3.1.5
+fpdf2==2.8.9
+pyzipper==0.3.6

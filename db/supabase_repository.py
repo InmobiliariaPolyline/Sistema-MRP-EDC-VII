@@ -1057,3 +1057,28 @@ def recent_activity(limit: int = 6) -> list[dict]:
     ]
     items.sort(key=lambda it: it["created_at"] or "", reverse=True)
     return items[:limit]
+# Tablas de la app, en orden de dependencia (para respaldos y restauración).
+BACKUP_TABLES = [
+    "materials", "suppliers", "supplier_materials", "users", "work_groups", "project_sites", "workers",
+    "purchase_orders", "purchase_order_items", "dispatch_vouchers", "stock_movements",
+    "site_budgets", "attendance", "audit_log", "price_history",
+]
+
+
+def set_user_password(user_id: str, password_hash: str) -> None:
+    get_client().table("users").update({"password_hash": password_hash}).eq("id", user_id).execute()
+
+
+def dump_tables() -> dict[str, pd.DataFrame]:
+    """Todas las tablas de la app, completas (por páginas), para el respaldo."""
+    client = get_client()
+    out: dict[str, pd.DataFrame] = {}
+    for table in BACKUP_TABLES:
+        try:
+            rows = _select_all(lambda t=table: client.table(t).select("*").order("id"))
+        except Exception as exc:
+            if _is_missing(exc):
+                continue  # tabla de un parche cuyo SQL aún no se corrió
+            raise
+        out[table] = pd.DataFrame(rows)
+    return out

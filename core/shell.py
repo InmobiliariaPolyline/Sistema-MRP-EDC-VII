@@ -9,10 +9,11 @@ import html
 import streamlit as st
 
 from core.version import APP_VERSION
+from db.client import using_service_key
 from db.repository import USING_LOCAL
 from modules import (
     asistencia, dashboard, historial, inventario, login, materiales, obras, ordenes, proveedores, reportes,
-    trabajadores, ui,
+    respaldo, security, trabajadores, ui,
 )
 
 # (etiqueta en el menú, icono Material, función que dibuja el módulo, solo-admin)
@@ -27,6 +28,7 @@ _ROUTES = [
     ("Trabajadores", ":material/engineering:", lambda user: trabajadores.render(user), True),
     ("Reportes", ":material/monitoring:", lambda user: reportes.render(), False),
     ("Historial", ":material/history:", lambda user: historial.render(), True),
+    ("Respaldo", ":material/backup:", lambda user: respaldo.render(), True),
 ]
 
 # secciones del menú, en el orden en que se muestran
@@ -34,7 +36,7 @@ _GROUPS = [
     ("Resumen", ["Dashboard"]),
     ("Compras y almacén", ["Órdenes de compra", "Proveedores", "Materiales", "Inventario"]),
     ("Obra y personal", ["Obras", "Asistencia", "Trabajadores"]),
-    ("Análisis", ["Reportes", "Historial"]),
+    ("Análisis", ["Reportes", "Historial", "Respaldo"]),
 ]
 
 
@@ -43,6 +45,13 @@ def render(user: dict) -> None:
     ui.show_flash()
     if USING_LOCAL:
         st.sidebar.info("Modo de prueba: los datos se guardan en este equipo.", icon=":material/science:")
+
+    if not USING_LOCAL and not using_service_key():
+        st.sidebar.warning(
+            "La base está en **modo abierto**: cualquiera con la clave pública podría leer o cambiar los datos. "
+            "Configura SUPABASE_SERVICE_KEY y cierra la base (db/migrations/040_cerrar_base.sql).",
+            icon=":material/lock_open:",
+        )
 
     routes = {r[0]: r for r in _ROUTES if user["role"] == "admin" or not r[3]}
 
@@ -65,6 +74,8 @@ def render(user: dict) -> None:
                         on_click=_select_route, args=(label,),
                     )
         st.divider()
+        if st.button("Mi cuenta", icon=":material/manage_accounts:", width="stretch", help="Cambia tu contraseña."):
+            security.account_dialog(user)
         st.toggle("Modo oscuro", key="dark_mode", help="Cambia entre el tema claro y el oscuro.")
         if st.button("Cerrar sesión", icon=":material/logout:", width="stretch"):
             login.logout()

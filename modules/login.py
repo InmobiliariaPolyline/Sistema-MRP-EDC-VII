@@ -9,7 +9,7 @@ import streamlit as st
 from db import repository as repo
 from db.auth import hash_password, verify_password
 from db.repository import USING_LOCAL
-from modules import forms, session, ui
+from modules import forms, security, session, ui
 
 SESSION_KEY = "auth_user"
 BOOTED_KEY = "_mrp_booted"
@@ -302,10 +302,19 @@ def _render_login() -> None:
     if forms.errors(issues):
         return
 
+    wait = security.lock_remaining(username)
+    if wait:
+        st.error(f"Demasiados intentos fallidos. Espera {security.minutes(wait)} para volver a intentarlo.", icon=":material/lock_clock:")
+        return
     user = repo.get_user_by_username(username.strip())
     if not user or not user.get("active", True) or not verify_password(password, user["password_hash"]):
-        st.error("Usuario o contraseña incorrectos.")
+        left, locked = security.register_failure(username)
+        if locked:
+            st.error(f"Demasiados intentos fallidos. Acceso bloqueado {security.minutes(locked)}.", icon=":material/lock_clock:")
+        else:
+            st.error(f"Usuario o contraseña incorrectos. Te quedan {left} intento(s).")
         return
+    security.register_success(username)
 
     st.session_state[SESSION_KEY] = {
         "id": user["id"],
@@ -338,10 +347,7 @@ def _render_bootstrap() -> None:
     issues = forms.validate({"Nombre completo": name, "Usuario": username})
     if password != password2:
         issues.append("Repetir contraseña: ambas contraseñas deben coincidir.")
-    if len(password) < 6:
-        issues.append("Contraseña: escribe al menos 6 caracteres.")
-    if len(password.encode("utf-8")) > 72:
-        issues.append("Contraseña: es demasiado larga. Utiliza como máximo 72 bytes (las tildes pueden ocupar más de uno).")
+    issues += security.password_issues(password, username)
     if forms.errors(issues):
         return
 

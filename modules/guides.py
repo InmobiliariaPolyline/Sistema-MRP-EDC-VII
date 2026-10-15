@@ -83,6 +83,16 @@ La pestaña *Resumen* cuenta asistencias y faltas de los últimos días.
 2. **＋ Nuevo trabajador:** nombre, documento, teléfono, puesto, cuadrilla y obra.
 3. Si alguien debe entrar al sistema, dale acceso (usuario, contraseña y rol).
 """,
+    "Respaldo de datos": """
+**Para qué sirve:** tener una copia de todo fuera del sistema, por si algo se borra por error.
+
+1. Marca **Proteger con contraseña** (recomendado) y escribe una contraseña que guardes aparte.
+2. **Generar respaldo** y luego **Descargar** el ZIP: trae un archivo por tabla y se abre con Excel (si no lo cifraste).
+3. Guárdalo fuera de este equipo (disco externo o nube).
+4. Para restaurar se usa `scripts/restore_backup.py` (está explicado en la misma pantalla).
+
+También puede hacerse solo cada semana desde GitHub (ver la sección 3 de la pantalla).
+""",
     "Historial de cambios": """
 **Para qué sirve:** auditoría: quién creó, editó, recibió o eliminó algo, y cuándo.
 

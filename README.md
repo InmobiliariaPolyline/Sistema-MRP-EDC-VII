@@ -56,6 +56,13 @@ adelante.
 
 El historial completo de parches, correcciones, problemas encontrados y pendientes está en [CHANGELOG.md](CHANGELOG.md).
 
+## Seguridad y respaldos
+
+- **Dos claves de Supabase.** La app usa `SUPABASE_SERVICE_KEY` (service_role, solo en el servidor) si está configurada; si no, la pública (modo abierto). Con la clave de servicio se puede **cerrar la base** (`db/migrations/040_cerrar_base.sql`) para que la clave pública no lea ni escriba nada. Orden: configurar la clave → reiniciar → ejecutar el script → `python scripts/check_security.py`. Para deshacerlo: `040b_reabrir_base_emergencia.sql`.
+- **Acceso:** bloqueo de 15 min tras 5 contraseñas incorrectas, contraseñas de al menos 8 caracteres con letras y números, y «Mi cuenta» para cambiarla. Define `SESSION_SECRET` para firmar la cookie de sesión.
+- **Respaldo:** pantalla *Respaldo* (ZIP con un CSV por tabla, cifrado AES-256 opcional), `python scripts/backup.py` y restauración con `python scripts/restore_backup.py`. El flujo de GitHub *Respaldo semanal* lo hace solo (repositorio privado y secretos `SUPABASE_URL`, `SUPABASE_SERVICE_KEY`, `BACKUP_PASSWORD`).
+- **Pruebas:** `pip install -r requirements-dev.txt` y `python -m unittest discover -s tests`. GitHub Actions las corre en cada subida.
+
 ## Arquitectura
 
 ### Formularios e interfaz (parche 030)

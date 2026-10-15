@@ -6,6 +6,33 @@ Formato de cada parche: **Agregado** · **Corregido** · **Problemas y causa** �
 
 ---
 
+## Parche 041 — Seguridad, respaldos, versiones fijas y revisión automática · 2026-10-16
+Primera fase del plan de mejoras (lo necesario antes de usar datos reales).
+
+**Agregado**
+- **Clave de servicio y base cerrada.** La app usa `SUPABASE_SERVICE_KEY` (service_role, solo en el servidor) si existe; si no, la pública como hasta ahora. El script `db/migrations/040_cerrar_base.sql` activa RLS sin políticas y quita todos los permisos a la clave pública (tablas, vista, secuencia y funciones). `040b_reabrir_base_emergencia.sql` lo deshace. `python scripts/check_security.py` comprueba tabla por tabla si la clave pública puede escribir. Mientras la base esté abierta, la app lo avisa en el menú lateral.
+- **Bloqueo por intentos fallidos:** 5 contraseñas incorrectas seguidas bloquean al usuario 15 minutos (también para nombres que no existen, para no revelar cuáles hay). Muestra los intentos que quedan.
+- **Política de contraseñas** (al menos 8 caracteres, letras y números, no común, distinta del usuario) para el primer administrador, accesos nuevos y cambios.
+- **«Mi cuenta»** (menú lateral): cambio de contraseña con la actual.
+- **Cookie de sesión** firmada con `SESSION_SECRET` (o la clave de servicio) y con atributo `Secure` bajo HTTPS. `SESSION_SECRET` ya está en los ejemplos de configuración.
+- **Respaldo** (pantalla nueva, solo administrador): descarga un ZIP con un CSV por tabla, cifrado con AES-256 si se pone contraseña. `scripts/backup.py` hace lo mismo por línea de comandos y `scripts/restore_backup.py` restaura (upsert por `id`, repetible, no borra).
+- **Respaldo semanal automático** en GitHub Actions (`.github/workflows/backup.yml`): ZIP cifrado guardado 30 días; no corre sin `BACKUP_PASSWORD`.
+- **Versiones fijas** en `requirements.txt` (streamlit 1.66.0, pandas 3.0.6, etc.) y `requirements-dev.txt` para desarrollo. Se quitó la librería `streamlit-option-menu`, que ya no se usaba.
+- **Revisión automática** (`.github/workflows/tests.yml`): corre las pruebas en cada subida a `main` y en cada pull request.
+- **Pruebas nuevas** (59 en total): bloqueo y contraseñas, respaldo (ZIP, cifrado, tablas vacías, ciclo completo) y validación de sintaxis de todos los scripts SQL con el analizador real de Postgres (`pglast`).
+
+**Problemas y causa**
+- Con la base abierta, quien consiga la clave pública puede leer y escribir todo, incluida la tabla `users` (hashes de contraseña). Se comprobó con `check_security.py`: las 15 tablas y las 2 funciones eran accesibles.
+- Probando el respaldo con datos reales apareció un fallo: una tabla vacía se guardaba como archivo sin columnas y no se podía leer. Corregido y con prueba.
+
+**Hay que hacer (en este orden)**
+1. Supabase → Project Settings → API: copiar la clave **service_role**.
+2. Guardarla como `SUPABASE_SERVICE_KEY` en Streamlit Cloud (Manage app → Settings → Secrets) y en el `.env` local. Agregar también `SESSION_SECRET` (texto largo y aleatorio).
+3. Reiniciar la app y comprobar que funciona.
+4. **Solo entonces** ejecutar `db/migrations/040_cerrar_base.sql` en el SQL Editor. Si se ejecuta antes del paso 2 la app deja de funcionar (se arregla con `040b_reabrir_base_emergencia.sql`).
+5. Comprobar con `python scripts/check_security.py` (debe decir «Base cerrada»).
+6. Opcional: secretos del repositorio `SUPABASE_URL`, `SUPABASE_SERVICE_KEY` y `BACKUP_PASSWORD` para el respaldo semanal (repositorio privado).
+
 ## Parche 040 — Error al hacer un despacho (vacíos que llegaban como NaN) · 2026-10-16
 **Corregido**
 - Después de despachar, la pantalla de Inventario mostraba «No se pudo completar esta operación» (`TypeError: sequence item 3: expected str instance, float found`).

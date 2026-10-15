@@ -1,0 +1,3 @@
+-r requirements.txt
+# Solo para desarrollo y revisión automática
+pglast==8.6
