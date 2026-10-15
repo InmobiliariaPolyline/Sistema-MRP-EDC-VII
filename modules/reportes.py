@@ -8,6 +8,7 @@ import streamlit as st
 from db import repository as repo
 from modules import forms, inventario, ui
 from modules.ordenes import STATUSES
+from modules.proveedores import supplier_ratings
 from utils.reports import to_excel, to_pdf
 
 
@@ -104,8 +105,96 @@ def _stock() -> pd.DataFrame:
 def _movements() -> pd.DataFrame:
     df = _pick(
         repo.list_movements(limit=5000),
-        {"created_at": "Fecha", "material_name": "Material", "kind": "Tipo", "quantity": "Cantidad", "site_name": "Obra", "order_code": "Orden", "actor": "Registró", "note": "Nota"},
+        {
+            "created_at": "Fecha", "material_name": "Material", "kind": "Tipo", "movement_type": "Motivo", "quantity": "Cantidad",
+            "site_name": "Obra", "stage": "Etapa", "voucher_code": "Vale", "order_code": "Orden", "count_code": "Conteo", "actor": "Registró", "note": "Nota",
+        },
     )
+    df["Fecha"] = df["Fecha"].map(lambda v: str(v)[:16].replace("T", " ") if v is not None and v == v else "")
+    df["Motivo"] = df["Motivo"].map(lambda v: inventario.TYPE_LABELS.get(v, (v or "",))[0] if v == v else "")
+    return df
+
+
+def _vouchers() -> pd.DataFrame:
+    df = _pick(
+        repo.list_dispatches(limit=5000),
+        {"code": "Vale", "created_at": "Fecha", "site_name": "Obra", "stage": "Etapa", "requested_by": "Solicitó", "actor": "Registró", "lines_count": "Materiales", "note": "Nota"},
+    )
+    df["Fecha"] = df["Fecha"].map(lambda v: str(v)[:16].replace("T", " ") if v is not None and v == v else "")
+    return df
+
+
+def _voucher_lines() -> pd.DataFrame:
+    moves = repo.list_movements(limit=20000)
+    moves = moves[moves["voucher_code"].notna()] if not moves.empty else moves
+    df = _pick(
+        moves,
+        {"voucher_code": "Vale", "created_at": "Fecha", "site_name": "Obra", "stage": "Etapa", "material_name": "Material", "unit": "Unidad", "quantity": "Cantidad", "requested_by": "Solicitó"},
+    )
+    df["Fecha"] = df["Fecha"].map(lambda v: str(v)[:16].replace("T", " ") if v is not None and v == v else "")
+    return df.sort_values(["Vale", "Material"]).reset_index(drop=True) if not df.empty else df
+
+
+def _price_history() -> pd.DataFrame:
+    df = _pick(
+        repo.list_price_history(limit=5000),
+        {"recorded_at": "Fecha", "supplier_name": "Proveedor", "material_name": "Material", "price": "Precio", "source": "Origen"},
+    )
+    df["Fecha"] = df["Fecha"].map(lambda v: str(v)[:16].replace("T", " ") if v is not None and v == v else "")
+    return df
+
+
+def _budgets() -> pd.DataFrame:
+    budgets = repo.list_budgets()
+    sites = repo.list_project_sites().set_index("id")["name"].to_dict() if not budgets.empty else {}
+    if not budgets.empty:
+        budgets = budgets.assign(
+            site_name=budgets["project_site_id"].map(sites),
+            amount=budgets["planned_qty"].astype(float) * budgets["planned_unit_price"].astype(float),
+        )
+    return _pick(
+        budgets,
+        {
+            "site_name": "Obra", "stage": "Etapa", "category": "Categoría", "material_name": "Material", "unit": "Unidad",
+            "planned_qty": "Cantidad prevista", "planned_unit_price": "Precio unit. estimado", "amount": "Importe previsto",
+        },
+    )
+
+
+def _counts() -> pd.DataFrame:
+    df = _pick(
+        repo.list_inventory_counts(limit=1000),
+        {"code": "Conteo", "created_at": "Fecha", "actor": "Registró", "lines_count": "Materiales contados", "adjusted_count": "Con ajuste", "note": "Nota"},
+    )
+    df["Fecha"] = df["Fecha"].map(lambda v: str(v)[:16].replace("T", " ") if v is not None and v == v else "")
+    return df
+
+
+def _receipts() -> pd.DataFrame:
+    receipts = repo.list_receipts()
+    codes = repo.list_orders().set_index("id")["code"].to_dict() if not receipts.empty else {}
+    if not receipts.empty:
+        receipts = receipts.assign(order_code=receipts["order_id"].map(codes))
+    df = _pick(
+        receipts,
+        {"received_at": "Fecha", "order_code": "Orden", "document_ref": "Guía o factura", "delivered_by": "Entregó", "notes": "Observaciones", "actor": "Registró"},
+    )
+    df["Fecha"] = df["Fecha"].map(lambda v: str(v)[:16].replace("T", " ") if v is not None and v == v else "")
+    return df
+
+
+def _ratings() -> pd.DataFrame:
+    return _pick(
+        supplier_ratings(),
+        {
+            "supplier_name": "Proveedor", "orders": "Órdenes", "timed": "Con fecha prometida", "on_time": "A tiempo", "on_time_pct": "% a tiempo",
+            "avg_delay_days": "Atraso promedio (días)", "fill_pct": "% cantidades completas", "score": "Nota", "label": "Calificación",
+        },
+    ).round(1)
+
+
+def _audit() -> pd.DataFrame:
+    df = _pick(repo.list_audit(limit=3000), {"created_at": "Fecha", "actor": "Usuario", "summary": "Acción"})
     df["Fecha"] = df["Fecha"].map(lambda v: str(v)[:16].replace("T", " ") if v is not None and v == v else "")
     return df
 
@@ -128,7 +217,19 @@ DATASETS = {
     "Stock actual": _stock,
     "Movimientos de inventario": _movements,
     "Asistencia (últimos 90 días)": _attendance,
+    "Vales de salida": _vouchers,
+    "Detalle de vales de salida": _voucher_lines,
+    "Historial de precios": _price_history,
+    "Presupuestos de obra": _budgets,
+    "Conteos de inventario": _counts,
+    "Recepciones de órdenes": _receipts,
+    "Calificación de proveedores": _ratings,
+    "Historial de cambios": _audit,
 }
+BASIC = [
+    "Materiales", "Proveedores", "Catálogo y precios por proveedor", "Trabajadores", "Órdenes de compra", "Detalle de órdenes",
+    "Stock actual", "Movimientos de inventario", "Asistencia (últimos 90 días)",
+]
 
 
 @st.cache_data(ttl=300, max_entries=8, show_spinner=False)
@@ -139,6 +240,10 @@ def _excel_file(frames: dict) -> bytes:
 @st.cache_data(ttl=300, max_entries=8, show_spinner=False)
 def _pdf_file(frames: dict) -> bytes:
     return to_pdf("Reporte Sistema MRP", frames)
+
+
+def _choose_basic() -> None:
+    st.session_state["report_datasets"] = list(BASIC)
 
 
 def _choose_all() -> None:
@@ -161,11 +266,12 @@ def render() -> None:
         selected = st.multiselect(
             "Datos a incluir",
             list(DATASETS),
-            default=list(DATASETS),
+            default=list(BASIC),
             key="report_datasets",
-            help="Puedes quitar conjuntos con la × y añadirlos desde el desplegable.",
+            help="Puedes quitar conjuntos con la × y añadirlos desde el desplegable. Vales, historial de precios, presupuestos, conteos, recepciones, calificación e historial de cambios se agregan desde aquí.",
         )
-        all_col, none_col = st.columns(2)
+        basic_col, all_col, none_col = st.columns(3)
+        basic_col.button("Los básicos", on_click=_choose_basic, width="stretch")
         all_col.button("Seleccionar todo", on_click=_choose_all, width="stretch")
         none_col.button("Limpiar selección", on_click=_choose_none, width="stretch")
 

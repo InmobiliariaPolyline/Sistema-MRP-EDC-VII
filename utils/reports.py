@@ -265,3 +265,120 @@ def dispatch_pdf(voucher: dict, lines: pd.DataFrame) -> bytes:
     pdf.cell(95, 5, _latin1("Entrega (almacén)"))
     pdf.cell(0, 5, _latin1("Recibe (" + (voucher.get("requested_by") or "solicitante") + ")"), new_x="LMARGIN", new_y="NEXT")
     return bytes(pdf.output())
+
+
+def dispatch_text(voucher: dict, lines: pd.DataFrame) -> str:
+    """Texto del vale de salida para el cuerpo de un correo o mensaje."""
+    out = [f"Vale de salida {voucher['code']} · {str(voucher['created_at'])[:10]}", f"Obra: {voucher.get('site_name')}"]
+    if voucher.get("stage"):
+        out.append(f"Etapa: {voucher['stage']}")
+    if voucher.get("requested_by"):
+        out.append(f"Solicitado por: {voucher['requested_by']}")
+    out.append("")
+    for row in lines.to_dict("records"):
+        unit = f" {row['unit']}" if row.get("unit") else ""
+        out.append(f"- {row['material_name']}: {float(row['quantity']):g}{unit}")
+    if voucher.get("note"):
+        out += ["", f"Nota: {voucher['note']}"]
+    return "\n".join(out)
+
+
+def site_report_pdf(site: dict, prog: dict, materials: pd.DataFrame, stages: list[dict], vouchers: pd.DataFrame, workers: int) -> bytes:
+    """Reporte imprimible de una obra: costo previsto frente a lo pedido, recibido y despachado, por material y por etapa.
+
+    `materials`: tabla de `obras.progress_by_material`; `stages`: [{"stage", "budget", "dispatched"}] (en soles);
+    `vouchers`: vales de la obra. Los importes van en soles y sin IGV."""
+    pdf = FPDF(orientation="L", unit="mm", format="A4")
+    pdf.set_auto_page_break(auto=True, margin=14)
+    pdf.add_page()
+    usable = pdf.w - pdf.l_margin - pdf.r_margin
+
+    pdf.set_font("Helvetica", "B", 18)
+    pdf.cell(0, 10, _latin1(f"Reporte de obra: {site['name']}"), new_x="LMARGIN", new_y="NEXT")
+    pdf.set_font("Helvetica", "", 9)
+    pdf.set_text_color(110, 110, 110)
+    pdf.cell(0, 6, _latin1(f"{site.get('address') or 'sin direccion registrada'}   -   Generado el {datetime.now():%d/%m/%Y %H:%M}"), new_x="LMARGIN", new_y="NEXT")
+    pdf.set_text_color(0, 0, 0)
+    pdf.ln(3)
+
+    def heading(text: str) -> None:
+        pdf.set_font("Helvetica", "B", 12)
+        pdf.cell(0, 8, _latin1(text), new_x="LMARGIN", new_y="NEXT")
+
+    def table(columns: list[str], rows: list[list[str]], weights: list[float], right_from: int = 1) -> None:
+        widths = [w / sum(weights) * usable for w in weights]
+
+        def head() -> None:
+            pdf.set_font("Helvetica", "B", 8)
+            pdf.set_fill_color(239, 236, 253)
+            for i, (col, w) in enumerate(zip(columns, widths)):
+                pdf.cell(w, 7, _latin1(col), border=1, fill=True, align="R" if i >= right_from else "L")
+            pdf.ln()
+
+        head()
+        pdf.set_font("Helvetica", "", 8)
+        for row in rows:
+            if pdf.get_y() > pdf.h - 20:
+                pdf.add_page()
+                head()
+                pdf.set_font("Helvetica", "", 8)
+            for i, (value, w) in enumerate(zip(row, widths)):
+                limit = max(int(w / 1.7), 4)
+                text = _latin1(value)
+                pdf.cell(w, 6, text if len(text) <= limit else text[: limit - 1] + "~", border=1, align="R" if i >= right_from else "L")
+            pdf.ln()
+        pdf.ln(3)
+
+    def pct(value) -> str:
+        return "-" if value is None else f"{value * 100:.0f} %"
+
+    planned, ordered = float(prog.get("planned") or 0), float(prog.get("ordered") or 0)
+    received = float(materials["Recibido $"].sum()) if not materials.empty else 0.0
+    dispatched = float(materials["Despachado $"].sum()) if not materials.empty else 0.0
+    heading("Resumen (S/, sin IGV)")
+    table(
+        ["Presupuesto", "Pedido", "Recibido", "Despachado (valorizado)", "Disponible (presupuesto - pedido)", "Avance de despacho", "Trabajadores", "Vales"],
+        [[f"{planned:,.2f}", f"{ordered:,.2f}", f"{received:,.2f}", f"{dispatched:,.2f}", f"{planned - ordered:,.2f}", pct(prog.get("pct_consumed")), str(workers), str(len(vouchers))]],
+        [1, 1, 1, 1.4, 1.8, 1.2, 1, 0.7], right_from=0,
+    )
+
+    heading(f"Materiales ({len(materials)})")
+    if materials.empty:
+        pdf.set_font("Helvetica", "I", 10)
+        pdf.cell(0, 7, "Sin materiales presupuestados ni movimientos.", new_x="LMARGIN", new_y="NEXT")
+    else:
+        rows = [
+            [
+                str(m["Material"]), str(m.get("Unidad") or ""), f"{m['Presupuesto']:,.2f}", f"{m['Pedido']:,.2f}", f"{m['Recibido']:,.2f}",
+                f"{m['Despachado']:,.2f}", f"{m['Presupuesto $']:,.2f}", f"{m['Gasto pedido $']:,.2f}", f"{m['Despachado $']:,.2f}",
+                ("Fuera de presupuesto" if not m["Presupuesto"] else ("EXCEDE" if m["Pedido"] > m["Presupuesto"] + 1e-9 else "")),
+            ]
+            for m in materials.to_dict("records")
+        ]
+        table(
+            ["Material", "Unidad", "Presup.", "Pedido", "Recibido", "Despach.", "Presup. S/", "Pedido S/", "Despach. S/", "Estado"],
+            rows, [4, 1.6, 1.2, 1.2, 1.2, 1.2, 1.5, 1.5, 1.5, 2.2], right_from=2,
+        )
+
+    if stages:
+        heading("Por etapa")
+        table(
+            ["Etapa", "Presupuesto S/", "Despachado S/", "Avance"],
+            [[st_["stage"] or "Sin etapa", f"{st_['budget']:,.2f}", f"{st_['dispatched']:,.2f}", pct(min(st_["dispatched"] / st_["budget"], 1.0) if st_["budget"] else None)] for st_ in stages],
+            [4, 2, 2, 1.5],
+        )
+
+    heading(f"Vales de salida ({len(vouchers)})")
+    if vouchers.empty:
+        pdf.set_font("Helvetica", "I", 10)
+        pdf.cell(0, 7, "Aun no se despacho material a esta obra.", new_x="LMARGIN", new_y="NEXT")
+    else:
+        table(
+            ["Vale", "Fecha", "Etapa", "Solicitado por", "Materiales"],
+            [
+                [str(v["code"]), str(v["created_at"])[:10], str(v.get("stage") or ""), str(v.get("requested_by") or ""), str(int(v["lines_count"]))]
+                for v in vouchers.to_dict("records")
+            ],
+            [1.5, 1.5, 2, 3, 1.2], right_from=4,
+        )
+    return bytes(pdf.output())

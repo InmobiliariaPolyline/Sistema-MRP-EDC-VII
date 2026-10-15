@@ -11,8 +11,9 @@ import streamlit as st
 
 from db import repository as repo
 from modules import attachments_ui, forms, ui
-from utils import consumption
-from utils.reports import dispatch_pdf
+from utils import consumption, kardex
+from utils.mail import mailto_url
+from utils.reports import dispatch_pdf, dispatch_text, to_excel, to_pdf
 from utils.timeago import time_ago
 
 ENTRY = "Entrada (ajuste / compra directa)"
@@ -241,6 +242,11 @@ def voucher_dialog(voucher: dict) -> None:
     st.download_button(
         "Descargar el vale en PDF", data=dispatch_pdf(voucher, lines), file_name=f"{voucher['code']}.pdf", mime="application/pdf",
         type="primary", width="stretch", icon=":material/picture_as_pdf:",
+    )
+    st.link_button(
+        "Enviar por correo", mailto_url(None, f"Vale de salida {voucher['code']} - {voucher['site_name']}", dispatch_text(voucher, lines)),
+        width="stretch", icon=":material/mail:",
+        help="Abre tu programa de correo con el mensaje escrito; adjunta el PDF descargado.",
     )
     attachments_ui.render("vale", voucher["id"], key=f"vale_{voucher['id']}")
 
@@ -525,13 +531,15 @@ def render() -> None:
         ]
     )
 
-    tab_stock, tab_vouchers, tab_counts, tab_moves = st.tabs(["Stock actual", "Vales de salida", "Conteos", "Movimientos"])
+    tab_stock, tab_vouchers, tab_counts, tab_kardex, tab_moves = st.tabs(["Stock actual", "Vales de salida", "Conteos", "Kardex", "Movimientos"])
     with tab_stock:
         _render_stock(stock)
     with tab_vouchers:
         _render_vouchers()
     with tab_counts:
         _render_counts()
+    with tab_kardex:
+        _render_kardex()
     with tab_moves:
         _render_movements()
 
@@ -595,6 +603,38 @@ def _render_vouchers() -> None:
             with c3:
                 if st.button("Ver / PDF", key=f"voucher_open_{row['id']}", width="stretch"):
                     voucher_dialog(row)
+
+
+def _render_kardex() -> None:
+    """Todas las entradas y salidas de un material con el saldo después de cada una."""
+    levels = repo.stock_levels()
+    used = levels[levels["entradas"].astype(float) + levels["salidas"].astype(float) > 0] if not levels.empty else levels
+    if used.empty:
+        ui.empty_state("Aún no hay movimientos", "El kardex aparece cuando un material tiene entradas o salidas.", "📒")
+        return
+    options = {f"{r['category']} · {r['material_name']}": r for r in used.sort_values(["category", "material_name"]).to_dict("records")}
+    choice = st.selectbox("Material", list(options), key="kardex_material", help="Solo aparecen materiales con movimientos.")
+    material = options[choice]
+    moves = repo.list_movements(limit=100000, material_id=material["material_id"])
+    table = kardex.build(moves, lambda movement_type, kind: TYPE_LABELS.get(movement_type, ("Entrada" if kind == "entrada" else "Salida",))[0])
+    unit = material.get("unit") or ""
+    c1, c2, c3 = st.columns(3)
+    c1.metric("Entradas", f"{float(table['Entrada'].fillna(0).sum()):g} {unit}")
+    c2.metric("Salidas", f"{float(table['Salida'].fillna(0).sum()):g} {unit}")
+    final = float(table["Saldo"].iloc[-1]) if not table.empty else 0.0
+    c3.metric("Saldo", f"{final:g} {unit}")
+    if abs(final - float(material["stock"])) > 1e-6:
+        st.warning(f"El saldo del kardex ({final:g}) no coincide con el stock actual ({float(material['stock']):g}). Revisa los movimientos.", icon=":material/warning:")
+    st.dataframe(
+        table, hide_index=True, width="stretch",
+        column_config={c: st.column_config.NumberColumn(format="%g") for c in ("Entrada", "Salida", "Saldo")},
+    )
+    name = f"kardex_{material['material_name']}".replace(" ", "_")[:60]
+    d1, d2, _ = st.columns([2, 2, 3])
+    d1.download_button("⬇ Excel", data=to_excel({"Kardex": table}), file_name=f"{name}.xlsx", width="stretch",
+                       mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet", key="kardex_xlsx")
+    d2.download_button("⬇ PDF", data=to_pdf(f"Kardex: {material['material_name']}", {f"{material['material_name']} ({unit})": table}), file_name=f"{name}.pdf",
+                       mime="application/pdf", width="stretch", key="kardex_pdf")
 
 
 def _render_counts() -> None:

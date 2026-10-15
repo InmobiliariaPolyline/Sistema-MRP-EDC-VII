@@ -814,7 +814,8 @@ def add_movement(
 
 
 @st.cache_data(ttl=_CACHE_TTL, show_spinner=False)
-def list_movements(project_site_id: str | None = None, limit: int = 500) -> pd.DataFrame:
+def list_movements(project_site_id: str | None = None, limit: int = 500, material_id: str | None = None) -> pd.DataFrame:
+    """Movimientos de stock, el más reciente primero. Se pueden filtrar por obra y/o por material."""
     columns = [
         "id", "material_id", "material_name", "category", "unit", "project_site_id", "site_name",
         "kind", "quantity", "note", "order_code", "actor", "created_at", "movement_type", "voucher_code", "requested_by", "count_code", "stage",
@@ -822,8 +823,10 @@ def list_movements(project_site_id: str | None = None, limit: int = 500) -> pd.D
 
     def fetch(select: str):
         def build():
-            query = get_client().table("stock_movements").select(select).order("created_at", desc=True).order("id")
-            return query.eq("project_site_id", project_site_id) if project_site_id else query
+            query = get_client().table("stock_movements").select(select).order("created_at", desc=True).order("id", desc=True)
+            if project_site_id:
+                query = query.eq("project_site_id", project_site_id)
+            return query.eq("material_id", material_id) if material_id else query
 
         return _select_all(build, limit=limit)
 

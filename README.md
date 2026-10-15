@@ -71,6 +71,10 @@ Devoluciones de obra al almacén, toma de inventario físico (conteos con motivo
 
 Vigencia de precios de proveedores (aviso de cotizaciones vencidas), plazo de entrega y monto mínimo de compra por proveedor (la sugerencia de compra calcula la llegada y propone completar pedidos), registro automático de cuándo se envió una orden y calificación de proveedores por plazos y cantidades. SQL en `db/migrations/042_fase_c.sql`. Detalle en el `CHANGELOG.md` (parche 049).
 
+## Reportes (Fase D)
+
+17 conjuntos descargables en Excel/PDF (incluye vales, historial de precios, presupuestos, conteos, recepciones, calificación e historial de cambios), reporte de obra en PDF, kardex por material y envío de órdenes y vales por correo (abre tu programa de correo con el mensaje escrito). Sin SQL nuevo. Detalle en el `CHANGELOG.md` (parche 050).
+
 ## Arquitectura
 
 ### Formularios e interfaz (parche 030)

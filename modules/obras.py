@@ -9,6 +9,7 @@ import streamlit as st
 from db import repository as repo
 from modules import forms, inventario, materiales, ui
 from utils.consumption import site_quantity
+from utils.reports import site_report_pdf
 from utils.geocode import google_maps_search_url
 
 SITE_KEY = "obras_site"
@@ -181,6 +182,31 @@ def _budget_dialog(site_id: str, site_name: str) -> None:
         st.rerun()
 
 
+def site_report_stages(site_id: str) -> list[dict]:
+    """Presupuesto y despachado (en soles) de cada etapa de la obra, para el reporte. Vacío si la obra no usa etapas."""
+    stages = site_stages(site_id)
+    if not stages:
+        return []
+    out = []
+    for stage in [*stages, ""]:
+        df = progress_by_material(site_id, stage)
+        budget = float(df["Presupuesto $"].sum()) if not df.empty else 0.0
+        dispatched = float(df["Despachado $"].sum()) if not df.empty else 0.0
+        if stage == "" and not budget and not dispatched:
+            continue
+        out.append({"stage": stage, "budget": budget, "dispatched": dispatched})
+    return out
+
+
+def site_report(site: dict, df: pd.DataFrame, prog: dict) -> bytes:
+    """PDF de la obra: resumen, materiales, etapas y vales."""
+    vouchers = repo.list_dispatches(limit=1000)
+    vouchers = vouchers[vouchers["project_site_id"] == site["id"]] if not vouchers.empty else vouchers
+    workers = repo.list_workers()
+    n_workers = int((workers["project_site_id"] == site["id"]).sum()) if not workers.empty else 0
+    return site_report_pdf(site, prog, df, site_report_stages(site["id"]), vouchers, n_workers)
+
+
 def site_progress(df: pd.DataFrame) -> dict:
     """Porcentajes de avance de una obra (ponderados por costo)."""
     if df.empty:
@@ -226,6 +252,11 @@ def render() -> None:
         ]
     )
 
+    st.download_button(
+        "📄 Reporte de la obra (PDF)", data=site_report(site, df, prog), file_name=f"reporte_obra_{site_name.replace(' ', '_')}.pdf",
+        mime="application/pdf", key=f"site_report_{site_id}",
+        help="Presupuesto frente a lo pedido, recibido y despachado, por material y por etapa, con los vales de salida. Listo para imprimir.",
+    )
     tab_info, tab_materials, tab_workers, tab_progress = st.tabs(["📍 Información", "📦 Materiales", "👷 Trabajadores", "📈 Progreso"])
     with tab_info:
         _tab_info(site)

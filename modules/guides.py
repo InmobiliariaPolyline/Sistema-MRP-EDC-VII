@@ -38,6 +38,7 @@ GUIDES: dict[str, str] = {
 1. **＋ Nueva orden:** proveedor, obra destino (opcional) y materiales con su cantidad. El **precio unitario es el del catálogo del proveedor y no se puede cambiar en la orden** (solo sube el total al pedir más); si hay que cambiarlo, edítalo en Proveedores → Catálogo. **💡 Comparar cotizaciones** te dice si otro proveedor es más barato; si eliges obra, avisa cuando el pedido supera su presupuesto.
 2. **Estados:** Pendiente → Enviada → Recibida (o Parcial si llegó solo una parte).
 3. **📦 Registrar recepción:** anota lo que llegó; entra al stock del almacén. No se puede recibir más de lo pedido.
+3a0. **✉️ Correo:** abre tu programa de correo con el pedido escrito y el correo del proveedor; adjunta el PDF descargado y envía (no se manda nada desde el servidor). Igual que WhatsApp, marca la orden como enviada.
 3a. **Envío al proveedor:** al abrir **💬 Enviar por WhatsApp** una orden pendiente pasa sola a «enviada» y queda anotada la fecha y hora (también con «Marcar como enviada»).
 3b. **Entrega, moneda e IGV (opcionales):** al crear o editar una orden puedes indicar la **fecha prometida de entrega** (si pasa y la orden sigue abierta, se marca como atrasada en la lista, en el detalle y en el dashboard), la **moneda** (soles o dólares, con su tipo de cambio) y si se **suma el IGV (18 %)** al total.
 3c. **Recepción contra documento:** al registrar una recepción anota el **N.º de guía o factura**, quién entregó y las **observaciones** (faltantes, daños). Cada recepción queda guardada en «Recepciones registradas» dentro de la orden.
@@ -55,7 +56,8 @@ GUIDES: dict[str, str] = {
 - **Devolver de una obra:** lo que sobra en una obra vuelve al almacén y suma al stock. Solo se puede devolver lo que la obra recibió (despachado menos devuelto); también está en la pestaña Materiales de cada obra.
 - **Toma de inventario:** cuenta lo que hay en estantería, categoría por categoría. Escribe lo contado (lo que dejes vacío no se toca), anota el motivo de cada diferencia y se ajusta el stock. Cada conteo queda guardado en la pestaña **Conteos**.
 - **Entrada, merma o devolución a proveedor:** para dar de baja material dañado o prestado, o devolver al proveedor lo que llegó mal.
-- No se puede sacar más de lo que hay. La pestaña **Vales de salida** guarda todos los vales para reimprimirlos.
+- No se puede sacar más de lo que hay. La pestaña **Vales de salida** guarda todos los vales para reimprimirlos y enviarlos por correo.
+- **Kardex:** elige un material y verás todas sus entradas y salidas en orden con el saldo después de cada una; si no coincide con el stock actual, avisa.
 
 *Ejemplo:* Juan Pérez pide 4 m³ de concreto para Torre Central → Despachar a obra → Torre Central, Juan Pérez, Concreto 4 → Registrar → descargar el vale.
 """,
@@ -84,8 +86,10 @@ La pestaña *Resumen* cuenta asistencias y faltas de los últimos días.
     "Reportes": """
 **Para qué sirve:** sacar la información del sistema a Excel o PDF.
 
-1. Elige qué conjuntos de datos incluir.
+1. Elige qué conjuntos de datos incluir. «Los básicos» trae lo de siempre; además puedes agregar **vales de salida** (y su detalle), **historial de precios**, **presupuestos de obra** (con etapa), **conteos de inventario**, **recepciones de órdenes**, **calificación de proveedores** e **historial de cambios**.
 2. Descarga **Excel** (una hoja por conjunto) o **PDF**.
+3. El **reporte de una obra** (presupuesto frente a lo pedido, recibido y despachado, por material y por etapa, con sus vales) se descarga en PDF desde **Obras**, botón «📄 Reporte de la obra».
+4. El **kardex** de un material (cada entrada y salida con el saldo) está en **Inventario → Kardex**, con descarga en Excel y PDF.
 """,
     "Trabajadores": """
 **Para qué sirve:** el personal de obra.

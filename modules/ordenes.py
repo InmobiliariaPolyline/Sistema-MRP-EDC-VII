@@ -16,6 +16,7 @@ import streamlit as st
 from db import repository as repo
 from modules import attachments_ui, forms, sugerencias, ui
 from utils import money, pricing
+from utils.mail import mailto_url
 from utils.reports import order_pdf, order_whatsapp_text
 from utils.timeago import age_days
 
@@ -947,7 +948,7 @@ def _render_detail(order_id: str) -> None:
             _edit_order_dialog(order, items)
 
     if not items.empty:
-        d1, d2, d3, _ = st.columns([2, 2.6, 2.2, 1])
+        d1, d2, d4, d3, _ = st.columns([1.7, 2.4, 1.9, 1.9, 0.6])
         d1.download_button(
             "📄 PDF",
             data=order_pdf(order, items, supplier),
@@ -963,6 +964,14 @@ def _render_detail(order_id: str) -> None:
             on_click=_mark_sent_from_link,
             args=(order_id, order["code"], status),
             help="Abre WhatsApp con el pedido y, si la orden estaba pendiente, la marca como enviada con la hora." if status == "pendiente" else None,
+        )
+        d4.link_button(
+            "✉️ Correo",
+            mailto_url((supplier or {}).get("email"), f"Pedido {order['code']}", order_whatsapp_text(order, items)),
+            width="stretch",
+            on_click=_mark_sent_from_link,
+            args=(order_id, order["code"], status),
+            help="Abre tu programa de correo con el pedido escrito (adjunta el PDF descargado). Si la orden estaba pendiente, la marca como enviada.",
         )
         if d3.button("⧉ Duplicar", width="stretch", help="Crea una orden nueva con estos mismos materiales"):
             _duplicate(order, items)

@@ -6,6 +6,19 @@ Formato de cada parche: **Agregado** · **Corregido** · **Problemas y causa** �
 
 ---
 
+## Parche 050 — Fase D: reportes, reporte de obra, kardex y correo · 2026-10-16
+
+**Agregado**
+- **Reportes con 8 conjuntos nuevos** (ahora 17): vales de salida, detalle de vales, historial de precios, presupuestos de obra (con etapa e importe), conteos de inventario, recepciones de órdenes (guía, quién entregó, observaciones), calificación de proveedores e historial de cambios. Por defecto siguen marcados los 9 de siempre («Los básicos»); el resto se agrega a gusto. Movimientos de inventario ahora trae motivo, vale, etapa y conteo.
+- **Reporte de obra en PDF** (Obras → «📄 Reporte de la obra»): resumen (presupuesto, pedido, recibido, despachado valorizado, disponible, avance), tabla por material con su estado (EXCEDE / fuera de presupuesto), tabla por etapa y lista de vales. Importes en soles y sin IGV; horizontal, listo para imprimir.
+- **Kardex por material** (Inventario → Kardex): cada entrada y salida en orden cronológico con documento (orden, vale o conteo), detalle y **saldo corrido**; avisa si el saldo no coincide con el stock actual. Descarga en Excel y PDF.
+- **Envío por correo** de órdenes y de vales de salida: el botón abre tu programa de correo con destinatario (el del proveedor), asunto y texto ya escritos; se adjunta el PDF descargado. No se envía nada desde el servidor ni se guardan contraseñas. En la orden también marca la orden pendiente como enviada, igual que WhatsApp.
+- `list_movements` acepta filtrar por material (además de obra), y ordena empates de forma estable.
+
+**Pruebas nuevas (9):** kardex (saldo, orden, etiquetas, vacíos y NaN), enlaces de correo (codificación y recorte), los 17 conjuntos de Reportes con exportación a Excel y PDF, reporte de obra con y sin datos, texto del vale y coincidencia del kardex con el stock.
+
+**Hay que hacer:** nada (no hay SQL nuevo).
+
 ## Parche 049 — Fase C: compras y precios (vigencia, plazos, envío y calificación) · 2026-10-16
 
 **Parche 047 · Vigencia de precios**

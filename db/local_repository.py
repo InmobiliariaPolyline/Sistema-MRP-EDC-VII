@@ -884,7 +884,8 @@ def add_movement(
         )
 
 
-def list_movements(project_site_id: str | None = None, limit: int = 500) -> pd.DataFrame:
+def list_movements(project_site_id: str | None = None, limit: int = 500, material_id: str | None = None) -> pd.DataFrame:
+    """Movimientos de stock, el más reciente primero. Se pueden filtrar por obra y/o por material."""
     query = """
         select sm.id, sm.material_id, m.name as material_name, m.category, m.metric_label as unit,
                sm.project_site_id, ps.name as site_name, sm.kind, sm.quantity, sm.note,
@@ -897,10 +898,15 @@ def list_movements(project_site_id: str | None = None, limit: int = 500) -> pd.D
         left join dispatch_vouchers v on v.id = sm.voucher_id
         left join inventory_counts ic on ic.id = sm.count_id
     """
-    params: tuple = ()
+    conditions, params = [], ()
     if project_site_id:
-        query += " where sm.project_site_id = ?"
-        params = (project_site_id,)
+        conditions.append("sm.project_site_id = ?")
+        params += (project_site_id,)
+    if material_id:
+        conditions.append("sm.material_id = ?")
+        params += (material_id,)
+    if conditions:
+        query += " where " + " and ".join(conditions)
     query += " order by sm.created_at desc, sm.rowid desc limit ?"
     with _connect() as conn:
         df = pd.read_sql_query(query, conn, params=params + (limit,))
