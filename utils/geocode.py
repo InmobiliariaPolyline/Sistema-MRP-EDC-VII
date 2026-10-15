@@ -84,12 +84,6 @@ def search_address(query: str, limit: int = 5) -> list[dict]:
     return candidates
 
 
-def geocode_address(query: str) -> dict | None:
-    """Primer candidato de `search_address` (compatibilidad)."""
-    found = search_address(query, limit=1)
-    return found[0] if found else None
-
-
 def google_maps_search_url(address: str = "", coords: tuple[float, float] | None = None) -> str:
     """Enlace a Google Maps. Con coordenadas abre exactamente ese punto; si no,
     busca la dirección escrita."""

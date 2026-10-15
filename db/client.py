@@ -42,7 +42,7 @@ def _key() -> str | None:
 
 @st.cache_resource
 def get_client():
-    from supabase import Client, create_client  # import diferido: no hace falta si se usa el modo local
+    from supabase import create_client  # import diferido: no hace falta si se usa el modo local
 
     url = _get_setting("SUPABASE_URL")
     key = _key()

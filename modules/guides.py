@@ -109,6 +109,8 @@ La pestaña *Resumen* cuenta asistencias y faltas de los últimos días.
 También puede hacerse solo cada semana desde GitHub (ver la sección 3 de la pantalla).
 """,
     "Historial de cambios": """
+**Valor anterior y nuevo:** cuando se edita un material, un proveedor, un precio del catálogo, una orden (incluidas sus líneas), el estado de una orden o el presupuesto de una obra, el historial anota qué cambió: «Precio: 10 → 12». Abre «Ver los cambios» para ver la tabla antes/después, o marca «Solo ediciones con detalle» para filtrarlas.
+
 **Para qué sirve:** auditoría: quién creó, editó, recibió o eliminó algo, y cuándo.
 
 Usa el buscador o filtra por persona. Solo lo ven los administradores.

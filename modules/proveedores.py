@@ -8,12 +8,16 @@ import streamlit as st
 
 from db import repository as repo
 from modules import forms, ui
-from utils import pricelist, pricing, ratings
+from utils import audit, pricelist, pricing, ratings
 
 SELECTED_KEY = "selected_supplier_id"
 ALL_CATALOG = "Todos los materiales"
 CATALOG_STATES = [ALL_CATALOG, "Ofrecidos", "Disponibles", "Sin precio", "Precio vencido", "No ofrecidos"]
 PRICE_AGE_KEY = "price_max_age"
+SUPPLIER_LABELS = {
+    "name": "Nombre", "contact_name": "Contacto", "phone": "Teléfono", "email": "Correo", "notes": "Notas",
+    "lead_time_days": "Plazo de entrega (días)", "min_order_amount": "Mínimo de compra",
+}
 PRICE_MAX = 10000000.0
 
 
@@ -103,7 +107,7 @@ def _supplier_form(supplier: dict | None) -> tuple:
     )
 
 
-def _save(values: tuple, supplier_id: str | None) -> None:
+def _save(values: tuple, supplier_id: str | None, before: dict | None = None) -> None:
     name, contact_name, phone, email, notes, lead_time, min_order = values
     if forms.errors(forms.validate({
         "Nombre del proveedor": name,
@@ -118,7 +122,15 @@ def _save(values: tuple, supplier_id: str | None) -> None:
     except Exception as exc:
         ui.db_error(exc, "No se pudo guardar el proveedor. Tus datos se conservan; inténtalo de nuevo.")
         return
-    ui.flash(f"Proveedor «{name}» guardado.")
+    if before:
+        after = {"name": name, "contact_name": contact_name, "phone": phone, "email": email, "notes": notes,
+                 "lead_time_days": lead_time, "min_order_amount": min_order}
+        changes = audit.diff(before, after, SUPPLIER_LABELS)
+        ui.log_change(f"Proveedor «{name}» editado", "proveedor", supplier_id, changes, icon="✏️")
+        if not changes:
+            ui.flash(f"Proveedor «{name}» guardado (sin cambios).", log=False)
+    else:
+        ui.flash(f"Proveedor «{name}» guardado.")
     st.rerun()
 
 
@@ -157,7 +169,7 @@ def _supplier_dialog_form(supplier: dict | None) -> None:
             if notes:
                 st.caption(notes)
     if save:
-        _save(values, supplier["id"] if supplier else None)
+        _save(values, supplier["id"] if supplier else None, supplier)
 
 
 def _delete_supplier(supplier_id: str, name: str) -> None:
@@ -432,7 +444,12 @@ def _render_supplier_detail(supplier_id: str) -> None:
                         except Exception as exc:
                             ui.db_error(exc, "No se pudo actualizar este material. Revisa la conexión e inténtalo de nuevo.")
                             continue
-                        ui.flash(f"Catálogo actualizado: {mat['name']}.", log=False)
+                        changes = audit.diff(
+                            {"offered": bool(mat["offered"]), "available": bool(mat["available"]), "price": stored_price if mat["offered"] else None},
+                            {"offered": offered, "available": available if offered else None, "price": price if offered else None},
+                            {"offered": "Lo ofrece", "available": "Disponible", "price": "Precio"},
+                        )
+                        ui.log_change(f"Catálogo de «{supplier['name']}»: {mat['name']}", "catalogo", f"{supplier_id}:{mat['id']}", changes, icon="🏷️", flash_message=True)
                         st.rerun()
 
 

@@ -17,6 +17,7 @@ from pathlib import Path
 import pandas as pd
 
 from utils import attachments as attach_rules
+from utils import audit
 from utils import consumption, money
 
 DB_PATH = Path(os.environ.get("MRP_LOCAL_DB") or Path(__file__).resolve().parent / "local.db")
@@ -236,6 +237,9 @@ def _init_db() -> None:
             ("stock_movements", "receipt_id", "text references order_receipts(id) on delete set null"),
             ("stock_movements", "stage", "text"),
             ("dispatch_vouchers", "stage", "text"),
+            ("audit_log", "entity_type", "text"),
+            ("audit_log", "entity_id", "text"),
+            ("audit_log", "changes", "text"),
             ("suppliers", "lead_time_days", "integer"),
             ("suppliers", "min_order_amount", "real"),
             ("purchase_orders", "sent_at", "text"),
@@ -516,16 +520,6 @@ def create_user(username: str, password_hash: str, name: str, role: str) -> None
             "insert into users (id, username, password_hash, name, role) values (?, ?, ?, ?, ?)",
             (str(uuid.uuid4()), username, password_hash, name, role),
         )
-
-
-def set_user_active(user_id: str, active: bool) -> None:
-    with _connect() as conn:
-        conn.execute("update users set active = ?, updated_at = datetime('now') where id = ?", (int(active), user_id))
-
-
-def delete_user(user_id: str) -> None:
-    with _connect() as conn:
-        conn.execute("delete from users where id = ?", (user_id,))
 
 
 # ---------------------------------------------------------------------------
@@ -1274,18 +1268,25 @@ def set_attendance(worker_id: str, project_site_id: str | None, work_date: str, 
 # Historial de cambios
 # ---------------------------------------------------------------------------
 
-def log_action(actor: str, summary: str) -> None:
+def log_action(
+    actor: str, summary: str, entity_type: str | None = None, entity_id: str | None = None, changes: list[dict] | None = None,
+) -> None:
+    """Anota una acción en el historial. `changes`: [{"field", "before", "after"}] (ver utils/audit.py)."""
     with _connect() as conn:
-        conn.execute("insert into audit_log (id, actor, summary) values (?, ?, ?)", (str(uuid.uuid4()), actor, summary))
+        conn.execute(
+            "insert into audit_log (id, actor, summary, entity_type, entity_id, changes) values (?, ?, ?, ?, ?, ?)",
+            (str(uuid.uuid4()), actor, summary, entity_type, entity_id, audit.to_json(changes)),
+        )
 
 
 def list_audit(limit: int = 300) -> pd.DataFrame:
     with _connect() as conn:
         df = pd.read_sql_query(
-            "select id, actor, summary, created_at from audit_log order by created_at desc, rowid desc limit ?",
+            "select id, actor, summary, created_at, entity_type, entity_id, changes from audit_log order by created_at desc, rowid desc limit ?",
             conn,
             params=(limit,),
         )
+    df["changes"] = df["changes"].map(audit.from_json)
     return df.astype(object).where(pd.notnull(df), None)
 
 

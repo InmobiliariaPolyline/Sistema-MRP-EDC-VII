@@ -13,6 +13,7 @@ from db import repository as repo
 from modules.guides import guide_for
 
 from modules import ui_styles
+from utils import audit as audit_text
 
 
 def inject() -> None:
@@ -166,12 +167,6 @@ def timeline_item(icon: str, name: str, sub: str, when: str = "", tone: str = ""
     )
 
 
-def meter(pct: float) -> str:
-    """Barra de avance (0-100)."""
-    pct = max(0.0, min(100.0, float(pct)))
-    return f'<div class="mrp-meter" role="progressbar" aria-valuenow="{pct:.0f}" aria-valuemin="0" aria-valuemax="100"><span style="width:{pct:.0f}%"></span></div>'
-
-
 def go(label: str) -> None:
     """Navega a un módulo del menú (para botones de acceso rápido)."""
     st.session_state["mrp_active_route"] = label
@@ -187,10 +182,6 @@ def activity_item(name: str, sub: str, badge: str, when: str = "") -> str:
         f"</div>"
         "</div>"
     )
-
-
-def activity_list(items: list[str]) -> str:
-    return "".join(items) if items else '<div class="mrp-activity-sub">Todavía no hay actividad.</div>'
 
 
 def panel_header(eyebrow: str, title: str) -> None:
@@ -254,6 +245,23 @@ def log(summary: str) -> None:
     """Anota una acción en el historial sin mostrar aviso (para cuando la pantalla ya muestra el resultado)."""
     try:
         repo.log_action(current_actor(), summary)
+    except Exception:  # el historial nunca debe romper la acción en sí
+        pass
+
+
+def log_change(
+    summary: str, entity_type: str, entity_id: str | None, changes: list[dict], icon: str | None = None, flash_message: bool = False,
+) -> None:
+    """Anota en el historial una edición con lo que cambió (antes → después). Si no cambió nada, no anota.
+    El texto del resumen ya incluye los cambios, así que se lee igual aunque no exista el detalle estructurado.
+    Con `icon` además deja un aviso en pantalla (toast) con el resumen."""
+    if not changes:
+        return
+    text = f"{summary} ({audit_text.describe(changes)})"
+    if icon or flash_message:
+        st.session_state["_flash"] = (summary, icon or "✏️")
+    try:
+        repo.log_action(current_actor(), text, entity_type, entity_id, changes)
     except Exception:  # el historial nunca debe romper la acción en sí
         pass
 

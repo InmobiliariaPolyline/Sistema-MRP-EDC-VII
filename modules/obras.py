@@ -9,6 +9,7 @@ import streamlit as st
 from db import repository as repo
 from modules import forms, inventario, materiales, ui
 from utils.reports import site_report_pdf
+from utils import audit
 from utils.geocode import google_maps_search_url
 
 SITE_KEY = "obras_site"
@@ -177,7 +178,17 @@ def _budget_dialog(site_id: str, site_name: str) -> None:
             st.error(f"No se pudo guardar el presupuesto: {exc}")
             return
         _clear_budget_draft(site_id)
-        ui.flash(f"Presupuesto de «{site_name}»{f' · {stage}' if stage else ''}: {material['name']} × {qty:g}.", "🧮")
+        summary = f"Presupuesto de «{site_name}»{f' · {stage}' if stage else ''}: {material['name']}"
+        if current.empty:
+            ui.flash(f"{summary} × {qty:g}.", "🧮")
+        else:
+            changes = audit.diff(
+                {"qty": float(current.iloc[0]["planned_qty"]), "price": float(current.iloc[0]["planned_unit_price"])},
+                {"qty": qty, "price": price}, {"qty": "Cantidad prevista", "price": "Precio estimado"},
+            )
+            ui.log_change(summary, "presupuesto", str(current.iloc[0]["id"]), changes, icon="🧮")
+            if not changes:
+                ui.flash(f"{summary}: sin cambios.", "🧮", log=False)
         st.rerun()
 
 

@@ -1,5 +1,5 @@
 -- =============================================================================
--- ESQUEMA COMPLETO para una instalación NUEVA (incluye hasta la Fase E).
+-- ESQUEMA COMPLETO para una instalación NUEVA (incluye hasta la Fase F).
 -- No lo vuelvas a correr sobre una base que ya tiene datos y está cerrada: reabriría los
 -- permisos. Para una base existente usa solo los scripts de db/migrations/ que falten.
 -- Para cerrar la base después: db/migrations/040_cerrar_base.sql (ver el README).
@@ -915,5 +915,25 @@ begin
     end if;
   end loop;
 end $$;
+
+notify pgrst, 'reload schema';
+
+
+-- =============================================================================
+-- Fase F — Historial de cambios con valor anterior y nuevo
+--
+-- Cómo usarlo: copia TODO este archivo en el SQL Editor de Supabase y pulsa Run.
+-- Es idempotente y no toca datos (solo agrega columnas a audit_log).
+--
+--   audit_log.entity_type   qué se cambió: material, proveedor, orden, presupuesto…
+--   audit_log.entity_id     id del registro cambiado
+--   audit_log.changes       lista de cambios [{"field": "...", "before": "...", "after": "..."}]
+-- =============================================================================
+
+alter table audit_log add column if not exists entity_type text;
+alter table audit_log add column if not exists entity_id text;
+alter table audit_log add column if not exists changes jsonb;
+
+create index if not exists idx_audit_entity on audit_log(entity_type, entity_id);
 
 notify pgrst, 'reload schema';

@@ -15,7 +15,7 @@ import streamlit as st
 
 from db import repository as repo
 from modules import attachments_ui, forms, sugerencias, ui
-from utils import money, pricing
+from utils import audit, money, pricing
 from utils.mail import mailto_url
 from utils.reports import order_pdf, order_whatsapp_text
 from utils.timeago import age_days
@@ -565,8 +565,19 @@ def _edit_order_dialog(order: dict, items: pd.DataFrame) -> None:
             st.error(str(exc))
             return
         _clear_edit_draft(oid)
+        changes = audit.diff(
+            {"site": order.get("site_name"), "notes": order.get("notes"), "expected": order.get("expected_date"),
+             "currency": order.get("currency") or money.BASE, "igv": float(order.get("tax_rate") or 0)},
+            {"site": None if site_choice == NO_SITE else site_choice, "notes": notes.strip() or None, "expected": terms["expected_date"],
+             "currency": terms["currency"], "igv": float(terms["tax_rate"])},
+            {"site": "Obra destino", "notes": "Notas", "expected": "Fecha prometida", "currency": "Moneda", "igv": "IGV"},
+        ) + audit.diff_lines(items.to_dict("records"), new_items)
         reminder = " Reenvía el pedido actualizado al proveedor." if order["status"] == "enviada" else ""
-        ui.flash(f"Orden {order['code']} actualizada.{reminder}", "✏️")
+        if changes:
+            ui.log_change(f"Orden {order['code']} editada", "orden", oid, changes, icon="✏️")
+            st.session_state["_flash"] = (f"Orden {order['code']} actualizada.{reminder}", "✏️")
+        else:
+            ui.flash(f"Orden {order['code']}: sin cambios.{reminder}", "✏️", log=False)
         st.rerun()
 
 
@@ -723,8 +734,14 @@ def _sent_text(value) -> str:
 
 
 def _change_status(order_id: str, code: str, status: str) -> None:
+    before = repo.list_orders()
+    before = before[before["id"] == order_id]
+    old = before.iloc[0]["status"] if not before.empty else None
     repo.set_order_status(order_id, status)
-    ui.flash(f"Orden {code}: {STATUSES[status][0].lower()}.", "🔄")
+    ui.log_change(
+        f"Orden {code}: {STATUSES[status][0].lower()}", "orden", order_id,
+        [{"field": "Estado", "before": STATUSES.get(old, (old,))[0] if old else None, "after": STATUSES[status][0]}], icon="🔄",
+    )
     st.rerun()
 
 

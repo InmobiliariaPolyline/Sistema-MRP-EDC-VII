@@ -6,6 +6,28 @@ Formato de cada parche: **Agregado** · **Corregido** · **Problemas y causa** �
 
 ---
 
+## Parche 053 — Fase F: historial con antes y después, pruebas SQL reales y limpieza · 2026-10-16
+
+**Parche 052 · Pruebas contra un Postgres real**
+- Nuevo `tests/sql/` con **14 pruebas que corren los scripts y las funciones SQL en un Postgres 18 de verdad** (PGlite, Postgres compilado a WebAssembly; solo necesita Node). Cubren: todos los scripts en orden y repetidos, `receive_order` (parcial, completa, tope, orden cancelada o inexistente, todo o nada, documento), `create_dispatch` (vale, etapa, numeración, sin stock no deja nada), los triggers (stock nunca negativo, no borrar órdenes con recepción, historial de precios), las vistas (`stock_levels`, `site_consumption`, `dashboard_stats`), las restricciones nuevas, y el **cierre de la base** (`040`: la clave pública no ve nada, la de servicio sí; lo que se agrega después nace cerrado; `040b` lo deshace). `tests/test_sql_runtime.py` las lanza desde Python y GitHub Actions las corre en cada subida.
+- **Problema real que encontraron:** volver a correr `036_despacho_mrp.sql` después de la Fase B re-creaba las funciones `receive_order` y `create_dispatch` con su firma antigua y quedaban **dos versiones** de cada una (la API no sabría cuál llamar). Además reabría `price_history` y `dispatch_vouchers` en una base cerrada. Ahora 036 elimina la versión antigua si existe la nueva y respeta una base cerrada.
+- `db/schema.sql` ahora es el **esquema completo hasta la Fase F** para instalaciones nuevas (con un aviso de no volver a correrlo sobre una base cerrada con datos).
+
+**Parche 053 · Historial con valor anterior y nuevo**
+- Las ediciones de **materiales, proveedores, precios/disponibilidad del catálogo, órdenes (campos y líneas), estado de las órdenes y presupuestos de obra** anotan **qué cambió**: «Stock mínimo: 5 → 8», «Cemento (cantidad): 10 → 12», «Estado: Pendiente → Enviada». Si no cambió nada, no se anota. El texto del resumen ya incluye el detalle, y además se guarda de forma estructurada (`entity_type`, `entity_id`, `changes`).
+- Pantalla Historial: cada edición con detalle tiene «Ver los N cambio(s)» con la tabla Campo / Antes / Después, y un filtro «Solo ediciones con detalle».
+- El respaldo guarda esa columna como JSON válido y se puede restaurar.
+
+**Limpieza**
+- Eliminado código sin uso: `set_user_active` y `delete_user` (ambos repositorios), `ui.meter`, `ui.activity_list`, `geocode_address`, un import sin usar y un parámetro sobrante.
+- `streamlit-option-menu` ya se había quitado en el parche 041.
+
+**Pruebas nuevas (23):** diferencias y descripción de cambios, texto/JSON del historial, columnas en una base local antigua y respaldo; 14 pruebas SQL en Postgres real (corren dentro de la suite de Python si hay Node).
+
+**Hay que hacer**
+- Correr `db/migrations/044_fase_f.sql` en Supabase (agrega tres columnas a `audit_log`). Antes de eso el historial sigue funcionando con el detalle dentro del texto del resumen.
+- Para correr las pruebas SQL en tu equipo: `cd tests/sql && npm ci` (opcional; en GitHub se hace solo).
+
 ## Parche 051 — Fase E: rendimiento · 2026-10-16
 
 **Problema:** tres pantallas (la ficha de una obra, el despacho/devolución y la sugerencia de compra) traían **todos** los movimientos de stock (hasta 100 000 filas, en peticiones de 1 000) y los sumaban en Python cada vez que se abrían. Funcionaba con pocos datos, pero se pondría lento con el uso.

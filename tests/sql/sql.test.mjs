@@ -11,7 +11,7 @@ import { pgcrypto } from "@electric-sql/pglite/contrib/pgcrypto";
 const DB_DIR = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../../db");
 const read = (f) => fs.readFileSync(path.join(DB_DIR, f), "utf8");
 const BASE = ["schema.sql", "migrations/036_despacho_mrp.sql"];
-const PHASES = ["migrations/041_fase_b.sql", "migrations/042_fase_c.sql", "migrations/043_fase_e.sql"];
+const PHASES = ["migrations/041_fase_b.sql", "migrations/042_fase_c.sql", "migrations/043_fase_e.sql", "migrations/044_fase_f.sql"];
 const CLOSE = "migrations/040_cerrar_base.sql";
 
 /** Base nueva con los roles de Supabase y los scripts indicados (en ese orden). */
@@ -261,4 +261,14 @@ test("restricciones de las órdenes y presupuestos por etapa", async () => {
   await db.query("insert into site_budgets (project_site_id, material_id, planned_qty, stage) values ($1, $2, 5, 'B')", [ids.site, ids.cement]);
   await assert.rejects(db.query("insert into site_budgets (project_site_id, material_id, planned_qty, stage) values ($1, $2, 1, 'A')", [ids.site, ids.cement]), /duplicate key/);
   await assert.rejects(db.query("insert into stock_movements (material_id, kind, quantity) values ($1, 'entrada', 0)", [ids.cement]), /qty_chk/);
+});
+
+test("audit_log guarda el detalle de los cambios (antes → después) como jsonb", async () => {
+  const db = await build();
+  const changes = [{ field: "Precio", before: "10", after: "12" }];
+  await db.query("insert into audit_log (actor, summary, entity_type, entity_id, changes) values ('admin', 'x', 'catalogo', 's:m', $1::jsonb)", [JSON.stringify(changes)]);
+  await db.query("insert into audit_log (actor, summary) values ('admin', 'sin detalle')");
+  const rows = (await db.query("select summary, entity_type, changes from audit_log order by summary")).rows;
+  assert.deepEqual(rows.find((r) => r.summary === "x").changes, changes);
+  assert.equal(rows.find((r) => r.summary === "sin detalle").changes, null);
 });

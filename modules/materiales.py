@@ -7,10 +7,13 @@ import streamlit as st
 
 from db import repository as repo
 from modules import forms, inventario, ui
-from utils import units
+from utils import audit, units
 
 ALL_CATEGORIES = "Todas las categorías"
 OTHER_METRIC = "➕ Otra métrica…"
+MATERIAL_LABELS = {
+    "category": "Categoría", "name": "Nombre", "density": "Densidad", "metric_label": "Métrica de cómputo", "min_stock": "Stock mínimo",
+}
 DENSITY_MAX = float(forms.RULES["Densidad (kg/m³, opcional)"]["num"]["max"])
 
 
@@ -106,7 +109,17 @@ def _save(values: tuple[str, str, float | None, str, float], material_id: str | 
     except Exception as exc:
         ui.db_error(exc, "No se pudo guardar el material. Revisa que categoría y nombre no estén repetidos e inténtalo de nuevo.")
         return
-    ui.flash(f"Material «{name}» guardado.")
+    if material_id and not original.empty:
+        changes = audit.diff(
+            original.iloc[0].to_dict(),
+            {"category": category, "name": name, "density": density, "metric_label": metric_label, "min_stock": min_stock},
+            MATERIAL_LABELS,
+        )
+        ui.log_change(f"Material «{name}» editado", "material", material_id, changes, icon="✏️")
+        if not changes:
+            ui.flash(f"Material «{name}» guardado (sin cambios).", log=False)
+    else:
+        ui.flash(f"Material «{name}» guardado.")
     st.rerun()
 
 

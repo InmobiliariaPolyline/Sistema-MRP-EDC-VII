@@ -8,6 +8,7 @@ demora perceptible al navegar). Cada función que escribe limpia el caché
 de las lecturas que dejó desactualizadas."""
 from __future__ import annotations
 
+import json
 import os
 from typing import Any
 
@@ -16,6 +17,7 @@ import streamlit as st
 
 from db.client import get_client, using_service_key
 from utils import attachments as attach_rules
+from utils import audit
 from utils import consumption, money
 
 _CACHE_TTL = int(os.environ.get("MRP_CACHE_TTL") or 30)  # segundos: solo evita relecturas repetidas al navegar, no es "tiempo real"
@@ -327,14 +329,6 @@ def create_user(username: str, password_hash: str, name: str, role: str) -> None
     get_client().table("users").insert(
         {"username": username, "password_hash": password_hash, "name": name, "role": role}
     ).execute()
-
-
-def set_user_active(user_id: str, active: bool) -> None:
-    get_client().table("users").update({"active": active}).eq("id", user_id).execute()
-
-
-def delete_user(user_id: str) -> None:
-    get_client().table("users").delete().eq("id", user_id).execute()
 
 
 # ---------------------------------------------------------------------------
@@ -1400,15 +1394,31 @@ def set_attendance(worker_id: str, project_site_id: str | None, work_date: str, 
 # Historial de cambios
 # ---------------------------------------------------------------------------
 
-def log_action(actor: str, summary: str) -> None:
-    get_client().table("audit_log").insert({"actor": actor, "summary": summary}).execute()
+def log_action(
+    actor: str, summary: str, entity_type: str | None = None, entity_id: str | None = None, changes: list[dict] | None = None,
+) -> None:
+    """Anota una acción en el historial. `changes`: [{"field", "before", "after"}] (ver utils/audit.py).
+    Sin el SQL de la Fase F el detalle estructurado no se puede guardar, pero el resumen ya lo incluye en texto."""
+    table = get_client().table("audit_log")
+    payload = {"actor": actor, "summary": summary}
+    if entity_type or entity_id or changes:
+        try:
+            table.insert({**payload, "entity_type": entity_type, "entity_id": entity_id, "changes": changes or None}).execute()
+            list_audit.clear()
+            return
+        except Exception as exc:
+            if not _is_missing(exc):
+                raise
+    table.insert(payload).execute()
     list_audit.clear()
 
 
 @st.cache_data(ttl=_CACHE_TTL, show_spinner=False)
 def list_audit(limit: int = 300) -> pd.DataFrame:
     res = get_client().table("audit_log").select("*").order("created_at", desc=True).limit(limit).execute()
-    return _df(res.data or [], columns=["id", "actor", "summary", "created_at"])
+    df = _df(res.data or [], columns=["id", "actor", "summary", "created_at", "entity_type", "entity_id", "changes"])
+    df["changes"] = df["changes"].map(audit.from_json).astype(object)
+    return df
 
 
 # ---------------------------------------------------------------------------
@@ -1500,5 +1510,9 @@ def dump_tables() -> dict[str, pd.DataFrame]:
             if _is_missing(exc):
                 continue  # tabla de un parche cuyo SQL aún no se corrió
             raise
-        out[table] = pd.DataFrame(rows)
+        frame = pd.DataFrame(rows)
+        for col in frame.columns:  # columnas jsonb: JSON válido en el CSV, para poder restaurarlas
+            if frame[col].map(lambda v: isinstance(v, (dict, list))).any():
+                frame[col] = frame[col].map(lambda v: json.dumps(v, ensure_ascii=False) if isinstance(v, (dict, list)) else v)
+        out[table] = frame
     return out

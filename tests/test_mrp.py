@@ -1,5 +1,4 @@
 """Sugerencia de compra e importación de listas de precios (funciones puras)."""
-import io
 import unittest
 
 import pandas as pd

@@ -79,6 +79,10 @@ Vigencia de precios de proveedores (aviso de cotizaciones vencidas), plazo de en
 
 Los acumulados pesados (consumo por obra, contadores del dashboard) los calcula la base con las vistas de `db/migrations/043_fase_e.sql`; la app solo trae el resultado. Las lecturas se guardan 30 s en memoria (`MRP_CACHE_TTL` para cambiarlo) y el botón «Actualizar datos» del menú las renueva al instante.
 
+## Pruebas y mantenimiento (Fase F)
+
+`python -m unittest discover -s tests` corre todas las pruebas. Las de SQL usan un Postgres real (PGlite) vía Node: `cd tests/sql && npm ci` una vez. El historial de cambios guarda el valor anterior y el nuevo de las ediciones (`db/migrations/044_fase_f.sql`). `db/schema.sql` es el esquema completo para instalaciones nuevas.
+
 ## Arquitectura
 
 ### Formularios e interfaz (parche 030)
