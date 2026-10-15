@@ -137,7 +137,7 @@ le pertenecen a ningún módulo en particular.
    `work_groups`, `project_sites`, `workers`, `purchase_orders`,
    `purchase_order_items`, `stock_movements`, `site_budgets`, `attendance`
    `audit_log`, `price_history` y `dispatch_vouchers`). Si actualizas un proyecto existente, corre solo
-   las migraciones de `db/migrations/` que falten (la última: `036_despacho_mrp.sql`). Si alguna queda con Row Level Security activado,
+   las migraciones de `db/migrations/` que falten (la última: `043_fase_e.sql`; una instalación nueva ya las trae todas en `schema.sql`). Si alguna queda con Row Level Security activado,
    la app no podrá escribir en ella: el propio `schema.sql` trae los
    `alter table ... disable row level security`.
 2. Instala las dependencias:

@@ -16,5 +16,13 @@ jobs:
           cache: pip
           cache-dependency-path: requirements-dev.txt
       - run: pip install -r requirements-dev.txt
+      # Postgres real (PGlite) para probar los scripts y funciones SQL: tests/test_sql_runtime.py
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: npm
+          cache-dependency-path: tests/sql/package-lock.json
+      - run: npm ci
+        working-directory: tests/sql
       # Sin credenciales de Supabase: las pruebas usan la base local (SQLite) en un archivo temporal.
       - run: python -m unittest discover -s tests -v

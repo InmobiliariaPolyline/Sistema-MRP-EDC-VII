@@ -264,14 +264,38 @@ end $$;
 -- -----------------------------------------------------------------------------
 -- 7. Permisos y RLS (la app usa la clave pública: sin esto no puede leer/escribir)
 -- -----------------------------------------------------------------------------
-alter table price_history disable row level security;
-alter table dispatch_vouchers disable row level security;
+do $$
+declare
+  closed boolean := coalesce((select relrowsecurity from pg_class where oid = 'public.materials'::regclass), false);
+begin
+  if closed then   -- la base ya está cerrada (040_cerrar_base.sql): lo que crea este script nace cerrado
+    alter table price_history enable row level security;
+    alter table dispatch_vouchers enable row level security;
+    revoke all on price_history, dispatch_vouchers from anon, authenticated;
+    revoke all on stock_levels from anon, authenticated;
+    revoke all on sequence voucher_seq from anon, authenticated;
+  else
+    alter table price_history disable row level security;
+    alter table dispatch_vouchers disable row level security;
+    grant select, insert, update, delete on price_history, dispatch_vouchers to anon, authenticated;
+    grant select on stock_levels to anon, authenticated;
+    grant usage, select on sequence voucher_seq to anon, authenticated;
+    grant execute on function receive_order(uuid, jsonb, text) to anon, authenticated;
+    grant execute on function create_dispatch(uuid, uuid, text, text, text, jsonb) to anon, authenticated;
+  end if;
+end $$;
 
-grant select, insert, update, delete on price_history, dispatch_vouchers to anon, authenticated;
-grant select on stock_levels to anon, authenticated;
-grant usage, select on sequence voucher_seq to anon, authenticated;
-grant execute on function receive_order(uuid, jsonb, text) to anon, authenticated;
-grant execute on function create_dispatch(uuid, uuid, text, text, text, jsonb) to anon, authenticated;
+-- Si ya se corrió la Fase B (041_fase_b.sql) esas dos funciones tienen una versión nueva con más parámetros:
+-- se elimina la versión antigua que acaba de volver a crearse para que no queden dos (PostgREST no sabría cuál llamar).
+do $$
+begin
+  if exists (select 1 from pg_proc where proname = 'receive_order' and pronamespace = 'public'::regnamespace and pronargs > 3) then
+    drop function if exists receive_order(uuid, jsonb, text);
+  end if;
+  if exists (select 1 from pg_proc where proname = 'create_dispatch' and pronamespace = 'public'::regnamespace and pronargs > 6) then
+    drop function if exists create_dispatch(uuid, uuid, text, text, text, jsonb);
+  end if;
+end $$;
 
 -- Hace que PostgREST (la API de Supabase) vea ya las funciones y la vista nuevas.
 notify pgrst, 'reload schema';

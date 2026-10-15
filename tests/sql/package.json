@@ -1,0 +1,8 @@
+{
+  "name": "mrp-sql-tests",
+  "private": true,
+  "type": "module",
+  "description": "Pruebas de los scripts y funciones SQL contra un Postgres real (PGlite, Postgres compilado a WebAssembly)",
+  "scripts": { "test": "node --test" },
+  "dependencies": { "@electric-sql/pglite": "0.5.10" }
+}
