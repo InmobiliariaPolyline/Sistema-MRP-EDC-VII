@@ -61,15 +61,19 @@ def stock_state(row: dict) -> tuple[str, str]:
     return f"{stock:g} en stock", "green"
 
 
-def budget_status(site_id: str, material_id: str, extra: float) -> dict | None:
-    """Presupuesto de un material en una obra frente a lo ya despachado y lo que se quiere despachar."""
+def budget_status(site_id: str, material_id: str, extra: float, stage: str | None = None) -> dict | None:
+    """Presupuesto de un material en una obra frente a lo ya despachado y lo que se quiere despachar.
+    Con `stage` (nombre de etapa) se compara solo con el presupuesto y los despachos de esa etapa."""
     budgets = repo.list_budgets(site_id)
     row = budgets[budgets["material_id"] == material_id] if not budgets.empty else budgets
     moves = repo.list_movements(project_site_id=site_id, limit=100000)
+    if stage:
+        row = row[row["stage"].fillna("") == stage] if not row.empty else row
+        moves = moves[moves["stage"].fillna("") == stage] if not moves.empty else moves
     sent = consumption.net_by_material(moves[moves["material_id"] == material_id]).get(material_id, 0.0) if not moves.empty else 0.0
     if row.empty:
         return {"budgeted": False, "planned": 0.0, "sent": sent, "after": sent + extra}
-    planned = float(row.iloc[0]["planned_qty"])
+    planned = float(row["planned_qty"].astype(float).sum())
     return {"budgeted": True, "planned": planned, "sent": sent, "after": sent + extra, "over": sent + extra > planned + 1e-9}
 
 
@@ -80,8 +84,14 @@ def budget_status(site_id: str, material_id: str, extra: float) -> dict | None:
 def _clear_dispatch_draft() -> None:
     st.session_state.pop(LINES_KEY, None)
     st.session_state.pop(DONE_KEY, None)
-    for key in ("dispatch_site", "dispatch_person", "dispatch_other", "dispatch_note", "dispatch_material", "dispatch_qty"):
+    for key in ("dispatch_site", "dispatch_person", "dispatch_other", "dispatch_note", "dispatch_material", "dispatch_qty", "dispatch_stage"):
         st.session_state.pop(key, None)
+
+
+def _site_stages(site_id: str) -> list[str]:
+    """Etapas con presupuesto en una obra (para elegir la etapa de un despacho)."""
+    budgets = repo.list_budgets(site_id)
+    return sorted({str(x) for x in budgets["stage"] if x}) if not budgets.empty and "stage" in budgets.columns else []
 
 
 def _show_dispatch_result(code: str) -> None:
@@ -144,6 +154,12 @@ def dispatch_dialog(default_site_id: str | None = None) -> None:
         requested_by = st.text_input("Nombre del solicitante", placeholder="Ej. Juan Pérez", max_chars=forms.RULES["Nombre del solicitante"]["max"], key="dispatch_other")
     elif not workers.empty:
         worker_id = workers.loc[workers["full_name"] == person, "id"].iloc[0]
+    stages = _site_stages(site_id)
+    stage = None
+    if stages:
+        pick = st.selectbox("Etapa de la obra (opcional)", ["Sin etapa", *stages], key="dispatch_stage",
+                            help="Para controlar lo despachado contra el presupuesto de esa etapa.")
+        stage = None if pick == "Sin etapa" else pick
     note = st.text_input("Nota del vale (opcional)", placeholder="Ej. Para el vaciado de losa del piso 3", max_chars=500, key="dispatch_note")
 
     forms.section("2. Materiales", "Solo aparecen materiales con stock. Puedes agregar varios al mismo vale.")
@@ -154,7 +170,7 @@ def dispatch_dialog(default_site_id: str | None = None) -> None:
     remaining = float(material["stock"]) - in_vale
     qty = st.number_input(f"Cantidad ({material['unit'] or 'unid.'})", min_value=0.0, value=1.0, step=1.0, key="dispatch_qty",
                           help=f"Disponible para este vale: {remaining:g}.")
-    info = budget_status(site_id, material["material_id"], in_vale + qty)
+    info = budget_status(site_id, material["material_id"], in_vale + qty, stage)
     if info and not info["budgeted"]:
         st.info("Este material no está en el presupuesto de la obra: el despacho se puede hacer, pero quedará fuera de presupuesto.", icon=":material/info:")
     elif info and info.get("over"):
@@ -198,11 +214,11 @@ def dispatch_dialog(default_site_id: str | None = None) -> None:
         if forms.errors(issues):
             return
         try:
-            code = repo.create_dispatch(site_id, worker_id, (requested_by or "").strip() or None, note.strip() or None, lines, ui.current_actor())
+            code = repo.create_dispatch(site_id, worker_id, (requested_by or "").strip() or None, note.strip() or None, lines, ui.current_actor(), stage)
         except ValueError as exc:
             st.error(f"No se pudo registrar el despacho: {exc}")
             return
-        ui.log(f"Despacho {code} a «{site_name}» ({len(lines)} material(es)) solicitado por {requested_by or 'sin indicar'}.")
+        ui.log(f"Despacho {code} a «{site_name}»{f' · etapa {stage}' if stage else ''} ({len(lines)} material(es)) solicitado por {requested_by or 'sin indicar'}.")
         st.session_state[LINES_KEY] = []
         st.session_state[DONE_KEY] = code
         st.rerun(scope="fragment")
@@ -214,6 +230,8 @@ def voucher_dialog(voucher: dict) -> None:
     st.markdown(f"**{voucher['code']}** · {voucher['site_name']}")
     st.caption(f"{str(voucher['created_at'])[:16].replace('T', ' ')} · registrado por {voucher.get('actor') or 'sistema'}")
     st.write(f"**Solicitado por:** {voucher.get('requested_by') or 'sin indicar'}")
+    if voucher.get("stage"):
+        st.write(f"**Etapa de la obra:** {voucher['stage']}")
     if voucher.get("note"):
         st.write(f"**Nota:** {voucher['note']}")
     st.dataframe(

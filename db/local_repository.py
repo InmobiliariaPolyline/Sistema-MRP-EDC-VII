@@ -140,9 +140,10 @@ def _init_db() -> None:
                 material_id text not null references materials(id) on delete cascade,
                 planned_qty real not null default 0,
                 planned_unit_price real not null default 0,
+                stage text not null default '',
                 created_at text default (datetime('now')),
                 updated_at text default (datetime('now')),
-                unique (project_site_id, material_id)
+                unique (project_site_id, material_id, stage)
             );
 
             create table if not exists attendance (
@@ -233,6 +234,8 @@ def _init_db() -> None:
             ("stock_movements", "movement_type", "text"),
             ("stock_movements", "count_id", "text references inventory_counts(id) on delete set null"),
             ("stock_movements", "receipt_id", "text references order_receipts(id) on delete set null"),
+            ("stock_movements", "stage", "text"),
+            ("dispatch_vouchers", "stage", "text"),
             ("purchase_orders", "expected_date", "text"),
             ("purchase_orders", "currency", "text not null default 'PEN'"),
             ("purchase_orders", "exchange_rate", "real not null default 1"),
@@ -241,6 +244,26 @@ def _init_db() -> None:
             cols = [r[1] for r in conn.execute(f"pragma table_info({table})").fetchall()]
             if column not in cols:
                 conn.execute(f"alter table {table} add column {column} {ddl}")
+        if "stage" not in [r[1] for r in conn.execute("pragma table_info(site_budgets)").fetchall()]:
+            conn.executescript(
+                """
+                alter table site_budgets rename to site_budgets_old;
+                create table site_budgets (
+                    id text primary key,
+                    project_site_id text not null references project_sites(id) on delete cascade,
+                    material_id text not null references materials(id) on delete cascade,
+                    planned_qty real not null default 0,
+                    planned_unit_price real not null default 0,
+                    stage text not null default '',
+                    created_at text default (datetime('now')),
+                    updated_at text default (datetime('now')),
+                    unique (project_site_id, material_id, stage)
+                );
+                insert into site_budgets (id, project_site_id, material_id, planned_qty, planned_unit_price, created_at, updated_at)
+                    select id, project_site_id, material_id, planned_qty, planned_unit_price, created_at, updated_at from site_budgets_old;
+                drop table site_budgets_old;
+                """
+            )
 
 
 @contextmanager
@@ -855,7 +878,7 @@ def list_movements(project_site_id: str | None = None, limit: int = 500) -> pd.D
         select sm.id, sm.material_id, m.name as material_name, m.category, m.metric_label as unit,
                sm.project_site_id, ps.name as site_name, sm.kind, sm.quantity, sm.note,
                o.code as order_code, sm.actor, sm.created_at, sm.movement_type,
-               v.code as voucher_code, v.requested_by, ic.code as count_code
+               v.code as voucher_code, v.requested_by, ic.code as count_code, sm.stage
         from stock_movements sm
         join materials m on m.id = sm.material_id
         left join project_sites ps on ps.id = sm.project_site_id
@@ -892,8 +915,9 @@ def stock_levels() -> pd.DataFrame:
 
 def create_dispatch(
     project_site_id: str, worker_id: str | None, requested_by: str | None, note: str | None, lines: list[dict], actor: str | None,
+    stage: str | None = None,
 ) -> str:
-    """Despacha material del almacén a una obra con su vale de salida (VS-0001...).
+    """Despacha material del almacén a una obra con su vale de salida (VS-0001...). `stage`: etapa de la obra (opcional).
     `lines`: [{"material_id", "quantity", "note"?}]. Todo o nada: si algún material no
     alcanza, no se registra nada. Devuelve el código del vale."""
     if not lines:
@@ -917,13 +941,13 @@ def create_dispatch(
         code = f"VS-{number:04d}"
         voucher_id = str(uuid.uuid4())
         conn.execute(
-            "insert into dispatch_vouchers (id, code, project_site_id, site_name, worker_id, requested_by, note, actor) values (?, ?, ?, ?, ?, ?, ?, ?)",
-            (voucher_id, code, project_site_id, site[0], worker_id, (requested_by or "").strip() or None, (note or "").strip() or None, actor),
+            "insert into dispatch_vouchers (id, code, project_site_id, site_name, worker_id, requested_by, note, actor, stage) values (?, ?, ?, ?, ?, ?, ?, ?, ?)",
+            (voucher_id, code, project_site_id, site[0], worker_id, (requested_by or "").strip() or None, (note or "").strip() or None, actor, (stage or "").strip() or None),
         )
         for line in lines:
             conn.execute(
-                "insert into stock_movements (id, material_id, project_site_id, kind, quantity, note, actor, voucher_id, movement_type) values (?, ?, ?, 'salida', ?, ?, ?, ?, 'despacho')",
-                (str(uuid.uuid4()), line["material_id"], project_site_id, line["quantity"], line.get("note") or f"Despacho {code}", actor, voucher_id),
+                "insert into stock_movements (id, material_id, project_site_id, kind, quantity, note, actor, voucher_id, movement_type, stage) values (?, ?, ?, 'salida', ?, ?, ?, ?, 'despacho', ?)",
+                (str(uuid.uuid4()), line["material_id"], project_site_id, line["quantity"], line.get("note") or f"Despacho {code}", actor, voucher_id, (stage or "").strip() or None),
             )
     return code
 
@@ -932,7 +956,7 @@ def list_dispatches(limit: int = 200) -> pd.DataFrame:
     with _connect() as conn:
         df = pd.read_sql_query(
             """
-            select v.id, v.code, v.project_site_id, v.site_name, v.worker_id, v.requested_by, v.note, v.actor, v.created_at,
+            select v.id, v.code, v.project_site_id, v.site_name, v.worker_id, v.requested_by, v.note, v.actor, v.created_at, v.stage,
                    (select count(*) from stock_movements s where s.voucher_id = v.id) as lines_count
             from dispatch_vouchers v order by v.created_at desc, v.rowid desc limit ?
             """,
@@ -1120,7 +1144,7 @@ def delete_attachment(attachment_id: str) -> None:
 def list_budgets(project_site_id: str | None = None) -> pd.DataFrame:
     query = """
         select b.id, b.project_site_id, b.material_id, m.category, m.name as material_name,
-               m.metric_label as unit, b.planned_qty, b.planned_unit_price
+               m.metric_label as unit, b.planned_qty, b.planned_unit_price, b.stage
         from site_budgets b join materials m on m.id = b.material_id
     """
     params: tuple = ()
@@ -1133,10 +1157,13 @@ def list_budgets(project_site_id: str | None = None) -> pd.DataFrame:
     return df.astype(object).where(pd.notnull(df), None)
 
 
-def set_budget(project_site_id: str, material_id: str, planned_qty: float, planned_unit_price: float) -> None:
+def set_budget(project_site_id: str, material_id: str, planned_qty: float, planned_unit_price: float, stage: str = "") -> None:
+    """Cantidad y precio previstos de un material en una obra. `stage`: etapa de la obra (vacío = sin etapa);
+    el mismo material puede presupuestarse en varias etapas."""
+    stage = (stage or "").strip()
     with _connect() as conn:
         existing = conn.execute(
-            "select id from site_budgets where project_site_id = ? and material_id = ?", (project_site_id, material_id)
+            "select id from site_budgets where project_site_id = ? and material_id = ? and stage = ?", (project_site_id, material_id, stage)
         ).fetchone()
         if existing:
             conn.execute(
@@ -1145,8 +1172,8 @@ def set_budget(project_site_id: str, material_id: str, planned_qty: float, plann
             )
         else:
             conn.execute(
-                "insert into site_budgets (id, project_site_id, material_id, planned_qty, planned_unit_price) values (?, ?, ?, ?, ?)",
-                (str(uuid.uuid4()), project_site_id, material_id, planned_qty, planned_unit_price),
+                "insert into site_budgets (id, project_site_id, material_id, planned_qty, planned_unit_price, stage) values (?, ?, ?, ?, ?, ?)",
+                (str(uuid.uuid4()), project_site_id, material_id, planned_qty, planned_unit_price, stage),
             )
 
 

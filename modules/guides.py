@@ -64,6 +64,8 @@ GUIDES: dict[str, str] = {
 - **Progreso:** porcentajes de pedido, recepción y despacho.
 
 Primero define el presupuesto con **＋ Material al presupuesto** (cantidad prevista y precio estimado).
+
+**Por etapas:** en el mismo formulario puedes indicar la **etapa** (cimentación, estructura, acabados…). El mismo material puede presupuestarse en varias etapas. Cuando la obra tiene etapas, la pestaña Materiales deja elegir una para ver su presupuesto frente a lo despachado en esa etapa, y al despachar material puedes indicar a qué etapa corresponde.
 """,
     "Asistencia": """
 **Para qué sirve:** llevar quién fue a qué obra cada día.

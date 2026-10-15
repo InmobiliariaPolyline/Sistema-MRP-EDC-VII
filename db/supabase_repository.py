@@ -778,7 +778,7 @@ def add_movement(
 def list_movements(project_site_id: str | None = None, limit: int = 500) -> pd.DataFrame:
     columns = [
         "id", "material_id", "material_name", "category", "unit", "project_site_id", "site_name",
-        "kind", "quantity", "note", "order_code", "actor", "created_at", "movement_type", "voucher_code", "requested_by", "count_code",
+        "kind", "quantity", "note", "order_code", "actor", "created_at", "movement_type", "voucher_code", "requested_by", "count_code", "stage",
     ]
 
     def fetch(select: str):
@@ -825,6 +825,7 @@ def list_movements(project_site_id: str | None = None, limit: int = 500) -> pd.D
                 "voucher_code": voucher.get("code"),
                 "requested_by": voucher.get("requested_by"),
                 "count_code": count.get("code"),
+                "stage": row.get("stage"),
             }
         )
     return _df(rows, columns=columns)
@@ -868,8 +869,9 @@ def stock_levels() -> pd.DataFrame:
 
 def create_dispatch(
     project_site_id: str, worker_id: str | None, requested_by: str | None, note: str | None, lines: list[dict], actor: str | None,
+    stage: str | None = None,
 ) -> str:
-    """Despacha material del almacén a una obra con su vale de salida (VS-0001...).
+    """Despacha material del almacén a una obra con su vale de salida (VS-0001...). `stage`: etapa de la obra (opcional).
     `lines`: [{"material_id", "quantity", "note"?}]. Todo o nada: si algún material no
     alcanza, no se registra nada. Devuelve el código del vale."""
     if not lines:
@@ -892,6 +894,9 @@ def create_dispatch(
         "p_site": project_site_id, "p_worker": worker_id, "p_requested_by": requested_by, "p_note": note, "p_actor": actor,
         "p_lines": [{"material_id": l["material_id"], "quantity": float(l["quantity"]), "note": l.get("note") or ""} for l in lines],
     }
+    stage = (stage or "").strip() or None
+    if stage:
+        params["p_stage"] = stage
     try:
         res = client.rpc("create_dispatch", params).execute()
         _invalidate_stock()
@@ -910,28 +915,39 @@ def create_dispatch(
         raise ValueError("Falta correr el SQL del parche 036 en Supabase (db/migrations/036_despacho_mrp.sql).") from exc
     number = max([int(c.split("-")[1]) for c in codes if c.startswith("VS-") and c.split("-")[1].isdigit()] or [0]) + 1
     code = f"VS-{number:04d}"
-    voucher = client.table("dispatch_vouchers").insert(
-        {
-            "code": code, "project_site_id": project_site_id, "site_name": site[0]["name"], "worker_id": worker_id,
-            "requested_by": (requested_by or "").strip() or None, "note": (note or "").strip() or None, "actor": actor,
-        }
-    ).execute().data[0]
-    client.table("stock_movements").insert(
-        [
-            {
-                "material_id": l["material_id"], "project_site_id": project_site_id, "kind": "salida", "quantity": float(l["quantity"]),
-                "note": l.get("note") or f"Despacho {code}", "actor": actor, "voucher_id": voucher["id"], "movement_type": "despacho",
-            }
-            for l in lines
-        ]
-    ).execute()
+    voucher_row = {
+        "code": code, "project_site_id": project_site_id, "site_name": site[0]["name"], "worker_id": worker_id,
+        "requested_by": (requested_by or "").strip() or None, "note": (note or "").strip() or None, "actor": actor,
+    }
+    if stage:
+        voucher_row["stage"] = stage
+    try:
+        voucher = client.table("dispatch_vouchers").insert(voucher_row).execute().data[0]
+    except Exception as exc:
+        if stage and _is_missing(exc):
+            raise _phase_b(exc) from exc
+        raise _friendly(exc) from exc
+    try:
+        client.table("stock_movements").insert(
+            [
+                {
+                    "material_id": l["material_id"], "project_site_id": project_site_id, "kind": "salida", "quantity": float(l["quantity"]),
+                    "note": l.get("note") or f"Despacho {code}", "actor": actor, "voucher_id": voucher["id"], "movement_type": "despacho",
+                    **({"stage": stage} if stage else {}),
+                }
+                for l in lines
+            ]
+        ).execute()
+    except Exception as exc:
+        client.table("dispatch_vouchers").delete().eq("id", voucher["id"]).execute()  # no dejar un vale sin movimientos
+        raise _friendly(exc) from exc
     _invalidate_stock()
     return code
 
 
 @st.cache_data(ttl=_CACHE_TTL, show_spinner=False)
 def list_dispatches(limit: int = 200) -> pd.DataFrame:
-    columns = ["id", "code", "project_site_id", "site_name", "worker_id", "requested_by", "note", "actor", "created_at", "lines_count"]
+    columns = ["id", "code", "project_site_id", "site_name", "worker_id", "requested_by", "note", "actor", "created_at", "stage", "lines_count"]
     try:
         data = get_client().table("dispatch_vouchers").select("*, stock_movements(id)").order("created_at", desc=True).limit(limit).execute().data or []
     except Exception as exc:
@@ -1200,23 +1216,28 @@ def list_budgets(project_site_id: str | None = None) -> pd.DataFrame:
                 "unit": material.get("metric_label"),
                 "planned_qty": float(row["planned_qty"]),
                 "planned_unit_price": float(row["planned_unit_price"]),
+                "stage": row.get("stage") or "",
             }
         )
-    columns = ["id", "project_site_id", "material_id", "category", "material_name", "unit", "planned_qty", "planned_unit_price"]
+    columns = ["id", "project_site_id", "material_id", "category", "material_name", "unit", "planned_qty", "planned_unit_price", "stage"]
     df = _df(rows, columns=columns)
-    return df.sort_values(["category", "material_name"]).reset_index(drop=True) if not df.empty else df
+    return df.sort_values(["stage", "category", "material_name"]).reset_index(drop=True) if not df.empty else df
 
 
-def set_budget(project_site_id: str, material_id: str, planned_qty: float, planned_unit_price: float) -> None:
-    get_client().table("site_budgets").upsert(
-        {
-            "project_site_id": project_site_id,
-            "material_id": material_id,
-            "planned_qty": planned_qty,
-            "planned_unit_price": planned_unit_price,
-        },
-        on_conflict="project_site_id,material_id",
-    ).execute()
+def set_budget(project_site_id: str, material_id: str, planned_qty: float, planned_unit_price: float, stage: str = "") -> None:
+    """Cantidad y precio previstos de un material en una obra. `stage`: etapa de la obra (vacío = sin etapa);
+    el mismo material puede presupuestarse en varias etapas."""
+    stage = (stage or "").strip()
+    row = {"project_site_id": project_site_id, "material_id": material_id, "planned_qty": planned_qty, "planned_unit_price": planned_unit_price}
+    table = get_client().table("site_budgets")
+    try:
+        table.upsert({**row, "stage": stage}, on_conflict="project_site_id,material_id,stage").execute()
+    except Exception as exc:
+        if not _is_missing(exc) and "42P10" not in f"{getattr(exc, 'code', '')} {exc}":
+            raise _friendly(exc) from exc
+        if stage:  # sin el SQL de la Fase B no existe la columna de etapa
+            raise _phase_b(exc) from exc
+        table.upsert(row, on_conflict="project_site_id,material_id").execute()
     list_budgets.clear()
 
 

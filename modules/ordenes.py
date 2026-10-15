@@ -397,7 +397,7 @@ def _budget_warning(site_id: str, site_name: str, lines: list[dict], total: floa
         for row in items[items["order_id"].isin(ids)].to_dict("records"):
             if row.get("material_id"):
                 already[row["material_id"]] = already.get(row["material_id"], 0.0) + float(row["quantity"])
-    planned_qty = budgets.set_index("material_id")["planned_qty"].astype(float).to_dict()
+    planned_qty = budgets.assign(planned_qty=budgets["planned_qty"].astype(float)).groupby("material_id")["planned_qty"].sum().to_dict()
     over = [
         f"{line['material_name']} ({already.get(line['material_id'], 0) + line['quantity']:g} de {planned_qty[line['material_id']]:g})"
         for line in lines

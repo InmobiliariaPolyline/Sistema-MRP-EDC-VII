@@ -73,10 +73,14 @@ def compute_suggestions(
 
     demand: dict[str, float] = {}
     if not budgets.empty:
+        planned: dict[tuple[str, str], float] = {}  # un material puede estar presupuestado en varias etapas de la misma obra
         for row in budgets.to_dict("records"):
-            left = _num(row["planned_qty"]) - dispatched.get((row["project_site_id"], row["material_id"]), 0.0)
+            key = (row["project_site_id"], row["material_id"])
+            planned[key] = planned.get(key, 0.0) + _num(row["planned_qty"])
+        for key, qty in planned.items():
+            left = qty - dispatched.get(key, 0.0)
             if left > 0:
-                demand[row["material_id"]] = demand.get(row["material_id"], 0.0) + left
+                demand[key[1]] = demand.get(key[1], 0.0) + left
 
     incoming: dict[str, float] = {}
     if not items.empty and not orders.empty:

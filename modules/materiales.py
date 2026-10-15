@@ -193,7 +193,7 @@ def info_dialog(material_id: str) -> None:
     else:
         sites = repo.list_project_sites().set_index("id")["name"].to_dict()
         for b in budgets.to_dict("records"):
-            st.write(f"• {sites.get(b['project_site_id'], 'Obra')}: {float(b['planned_qty']):g} previstos × {float(b['planned_unit_price']):,.2f}")
+            st.write(f"• {sites.get(b['project_site_id'], 'Obra')}{' · ' + b['stage'] if b.get('stage') else ''}: {float(b['planned_qty']):g} previstos × {float(b['planned_unit_price']):,.2f}")
     if st.button("Cerrar ficha", key=f"close_material_{material_id}", width="stretch"):
         st.rerun()
 

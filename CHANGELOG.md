@@ -6,6 +6,25 @@ Formato de cada parche: **Agregado** · **Corregido** · **Problemas y causa** �
 
 ---
 
+## Parche 045 — Presupuesto por etapas de obra · 2026-10-16
+Fase B, cuarta parte.
+
+**Agregado**
+- **Etapas en el presupuesto:** al añadir un material al presupuesto de una obra se puede elegir su etapa (o crear una nueva). El mismo material puede estar en varias etapas de la misma obra; guardar de nuevo en la misma etapa reemplaza su cantidad y precio.
+- **Despacho por etapa:** el vale y sus movimientos guardan la etapa (opcional). El aviso de presupuesto al despachar compara contra la etapa elegida.
+- **Pestaña Materiales de la obra:** con etapas aparece un selector («Todas las etapas», «Sin etapa» o una etapa) que muestra el presupuesto y lo despachado de esa etapa. Las órdenes de compra no se asignan a etapas, así que la vista por etapa omite Pedido y Recibido.
+- «Quitar del presupuesto» lista ahora cada partida con su etapa; la ficha del material muestra la etapa en «Obras donde se usa».
+- El detalle del vale muestra su etapa.
+
+**Corregido**
+- El gasto pedido de una obra ahora se calcula en **soles y sin IGV** (precio × tipo de cambio), coherente con las órdenes en dólares de la Fase B.
+- La sugerencia de compra y el aviso de cantidad de las órdenes sumaban mal si un material estaba presupuestado dos veces en la misma obra; ahora agrupan por obra y material.
+- Las bases locales de prueba antiguas se actualizan solas (se reconstruye `site_budgets` conservando los datos).
+
+**Hay que hacer**
+- Correr `db/migrations/041_fase_b.sql` (cambia la restricción única de `site_budgets` y reemplaza `create_dispatch`). Antes del SQL, el presupuesto y el despacho sin etapa siguen funcionando; con etapa avisa que falta el SQL.
+- Pruebas nuevas (6): etapas, progreso por etapa, vale con etapa, sugerencias sin doble resta y actualización de una base local antigua.
+
 ## Parche 044 — Documentos adjuntos · 2026-10-16
 Fase B, tercera parte.
 

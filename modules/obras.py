@@ -12,6 +12,9 @@ from utils.consumption import site_quantity
 from utils.geocode import google_maps_search_url
 
 SITE_KEY = "obras_site"
+NEW_STAGE = "➕ Nueva etapa…"
+NO_STAGE = "Sin etapa"
+ALL_STAGES = "Todas las etapas"
 
 
 def _clear_budget_draft(site_id: str) -> None:
@@ -25,14 +28,31 @@ def _delete_budget(budget_id: str, material_name: str, site_name: str) -> None:
     ui.flash(f"«{material_name}» quitado del presupuesto de {site_name}.", "🗑️")
 
 
-def progress_by_material(site_id: str) -> pd.DataFrame:
-    """Por material: presupuestado, pedido, recibido, despachado y gasto, para una obra."""
+def site_stages(site_id: str) -> list[str]:
+    """Etapas con presupuesto en la obra (sin contar «sin etapa»), en orden alfabético."""
     budgets = repo.list_budgets(site_id)
+    return sorted({str(x) for x in budgets["stage"] if x}) if not budgets.empty and "stage" in budgets.columns else []
+
+
+def progress_by_material(site_id: str, stage: str | None = None) -> pd.DataFrame:
+    """Por material: presupuestado, pedido, recibido, despachado y gasto, para una obra.
+
+    `stage=None` suma todas las etapas. Con una etapa (o "" = sin etapa) solo cuentan el presupuesto y los
+    despachos de esa etapa: las órdenes de compra no se asignan a etapas, así que Pedido y Recibido quedan en 0.
+    Los importes de las órdenes van en soles y sin IGV."""
+    budgets = repo.list_budgets(site_id)
+    if stage is not None and not budgets.empty:
+        budgets = budgets[budgets["stage"].fillna("") == stage]
     orders = repo.list_orders()
     orders = orders[(orders["project_site_id"] == site_id) & (orders["status"] != "cancelada")] if not orders.empty else orders
     items = repo.list_order_items()
     items = items[items["order_id"].isin(orders["id"])] if not orders.empty and not items.empty else items.iloc[0:0]
+    if stage is not None:
+        items = items.iloc[0:0]
+    rates = dict(zip(orders["id"], orders["exchange_rate"].astype(float))) if not orders.empty else {}
     consumed = repo.list_movements(project_site_id=site_id, limit=100000)
+    if stage is not None and not consumed.empty:
+        consumed = consumed[consumed["stage"].fillna("") == stage]
 
     data: dict[str, dict] = {}
 
@@ -49,18 +69,19 @@ def progress_by_material(site_id: str) -> pd.DataFrame:
 
     for b in budgets.to_dict("records"):
         s = slot(b["material_id"], b["material_name"], b["category"], b["unit"])
-        s["Presupuesto"] = float(b["planned_qty"])
-        s["Presupuesto $"] = float(b["planned_qty"]) * float(b["planned_unit_price"])
+        s["Presupuesto"] += float(b["planned_qty"])
+        s["Presupuesto $"] += float(b["planned_qty"]) * float(b["planned_unit_price"])
         s["budget_id"] = b["id"]
-        s["planned_price"] = float(b["planned_unit_price"])
+        s["planned_price"] = s["Presupuesto $"] / s["Presupuesto"] if s["Presupuesto"] else float(b["planned_unit_price"])
     for i in items.to_dict("records"):
         if not i.get("material_id"):
             continue
         s = slot(i["material_id"], i["material_name"], None, i.get("unit"))
         s["Pedido"] += float(i["quantity"])
         s["Recibido"] += float(i["received_qty"])
-        s["Gasto pedido $"] += float(i["quantity"]) * float(i["unit_price"])
-        s["Recibido $"] += float(i["received_qty"]) * float(i["unit_price"])
+        rate = rates.get(i["order_id"], 1.0)
+        s["Gasto pedido $"] += float(i["quantity"]) * float(i["unit_price"]) * rate
+        s["Recibido $"] += float(i["received_qty"]) * float(i["unit_price"]) * rate
     for m in consumed.to_dict("records"):
         amount = site_quantity(m)
         if not amount:
@@ -101,7 +122,18 @@ def _budget_dialog(site_id: str, site_name: str) -> None:
     material = options[choice]
 
     budgets = repo.list_budgets(site_id)
-    current = budgets[budgets["material_id"] == material["id"]]
+    stages = site_stages(site_id)
+    stage_options = [NO_STAGE, *stages, NEW_STAGE]
+    stage_pick = st.selectbox(
+        "Etapa de la obra (opcional)", stage_options, key=f"budget_{site_id}_stage",
+        help="Para presupuestar por fases (cimentación, estructura, acabados…). El mismo material puede estar en varias etapas.",
+    )
+    stage = ""
+    if stage_pick == NEW_STAGE:
+        stage = st.text_input("Nombre de la etapa nueva", placeholder="Ej. Cimentación", max_chars=60, key=f"budget_{site_id}_stage_new").strip()
+    elif stage_pick != NO_STAGE:
+        stage = stage_pick
+    current = budgets[(budgets["material_id"] == material["id"]) & (budgets["stage"].fillna("") == stage)]
     planned_qty = float(current.iloc[0]["planned_qty"]) if not current.empty else 0.0
     if not current.empty:
         suggested = float(current.iloc[0]["planned_unit_price"])
@@ -114,9 +146,10 @@ def _budget_dialog(site_id: str, site_name: str) -> None:
     forms.section("2. Cantidad y precio", "Usa la unidad del material. El precio puede quedar en 0 si aún no tienes una estimación.")
     c1, c2 = st.columns(2)
     qty_label = f"Cantidad prevista ({material['metric_label'] or 'unid.'})"
-    qty = c1.number_input(qty_label, min_value=0.0, value=planned_qty, step=1.0, key=f"budget_{site_id}_qty_{material['id']}",
+    skey = stage_pick if stage_pick != NEW_STAGE else f"new_{stage}"
+    qty = c1.number_input(qty_label, min_value=0.0, value=planned_qty, step=1.0, key=f"budget_{site_id}_qty_{material['id']}_{skey}",
                           help="Cantidad total que esperas usar en esta obra; debe ser mayor que 0 y puede tener decimales.")
-    price = c2.number_input("Precio unit. estimado", min_value=0.0, value=suggested, step=0.1, format="%.2f", key=f"budget_{site_id}_price_{material['id']}",
+    price = c2.number_input("Precio unit. estimado", min_value=0.0, value=suggested, step=0.1, format="%.2f", key=f"budget_{site_id}_price_{material['id']}_{skey}",
                             help="Se propone el mejor precio entre tus proveedores para materiales nuevos. Puedes ajustarlo; 0 = sin precio estimado.")
     forms.section("3. Revisa el presupuesto", "Comprueba el costo previsto antes de guardar.")
     total = sum(float(r["planned_qty"]) * float(r["planned_unit_price"]) for r in budgets.to_dict("records"))
@@ -134,11 +167,17 @@ def _budget_dialog(site_id: str, site_name: str) -> None:
         issues = forms.validate({qty_label: qty, "Precio unit. estimado": price})
         if not math.isfinite(qty * price):
             issues.append("Costo previsto: revisa la cantidad y el precio para obtener un total finito.")
+        if stage_pick == NEW_STAGE and not stage:
+            issues.append("Nombre de la etapa nueva: escribe cómo se llama la etapa.")
         if forms.errors(issues):
             return
-        repo.set_budget(site_id, material["id"], qty, price)
+        try:
+            repo.set_budget(site_id, material["id"], qty, price, stage)
+        except ValueError as exc:
+            st.error(f"No se pudo guardar el presupuesto: {exc}")
+            return
         _clear_budget_draft(site_id)
-        ui.flash(f"Presupuesto de «{site_name}»: {material['name']} × {qty:g}.", "🧮")
+        ui.flash(f"Presupuesto de «{site_name}»{f' · {stage}' if stage else ''}: {material['name']} × {qty:g}.", "🧮")
         st.rerun()
 
 
@@ -239,6 +278,18 @@ def _tab_materials(site: dict, df: pd.DataFrame) -> None:
         inventario._clear_return_draft()
         inventario.return_dialog(default_site_id=site_id)
 
+    stages = site_stages(site_id)
+    stage_view = None
+    if stages:
+        pick = st.selectbox(
+            "Etapa", [ALL_STAGES, NO_STAGE, *stages], key=f"obra_stage_{site_id}",
+            help="Ver el presupuesto y lo despachado de una etapa. «Todas las etapas» suma todo, incluidos los pedidos.",
+        )
+        stage_view = None if pick == ALL_STAGES else ("" if pick == NO_STAGE else pick)
+        if stage_view is not None:
+            df = progress_by_material(site_id, stage_view)
+            st.caption("Las órdenes de compra no se asignan a etapas: aquí se comparan solo el presupuesto y lo despachado de la etapa.")
+
     if df.empty:
         ui.empty_state("Aún no hay materiales en esta obra", "Añade un material al presupuesto o crea una orden con esta obra como destino.")
         return
@@ -247,8 +298,11 @@ def _tab_materials(site: dict, df: pd.DataFrame) -> None:
     view = df.copy()
     view["Estado"] = view.apply(_state, axis=1)
     view["Despachado %"] = view.apply(lambda r: min(r["Despachado"] / r["Presupuesto"] * 100, 100) if r["Presupuesto"] else 0, axis=1)
+    shown = ["Material", "Unidad", "Presupuesto", "Pedido", "Recibido", "Despachado", "Despachado %", "Presupuesto $", "Gasto pedido $", "Estado"]
+    if stage_view is not None:
+        shown = ["Material", "Unidad", "Presupuesto", "Despachado", "Despachado %", "Presupuesto $", "Despachado $"]
     st.dataframe(
-        view[["Material", "Unidad", "Presupuesto", "Pedido", "Recibido", "Despachado", "Despachado %", "Presupuesto $", "Gasto pedido $", "Estado"]],
+        view[shown],
         hide_index=True,
         width="stretch",
         column_config={
@@ -259,6 +313,7 @@ def _tab_materials(site: dict, df: pd.DataFrame) -> None:
             "Despachado %": st.column_config.ProgressColumn(format="%.0f%%", min_value=0, max_value=100),
             "Presupuesto $": st.column_config.NumberColumn(format="%.2f"),
             "Gasto pedido $": st.column_config.NumberColumn(format="%.2f"),
+            "Despachado $": st.column_config.NumberColumn(format="%.2f"),
         },
     )
 
@@ -269,16 +324,17 @@ def _tab_materials(site: dict, df: pd.DataFrame) -> None:
     if i2.button("ℹ️ Ver ficha", width="stretch", key=f"obra_mat_btn_{site_id}"):
         materiales.info_dialog(names[chosen])
 
-    budgeted = df[df["budget_id"].notna()]
+    budgeted = repo.list_budgets(site_id)
     if not budgeted.empty:
         with st.expander("Quitar materiales del presupuesto"):
             for row in budgeted.to_dict("records"):
                 c1, c2 = st.columns([6, 1])
-                c1.write(f"{row['Material']} · {row['Presupuesto']:g} {row['Unidad'] or ''}")
-                if c2.button("🗑", key=f"del_budget_{row['budget_id']}", help="Quitar del presupuesto"):
+                where = f" · etapa {row['stage']}" if row.get("stage") else ""
+                c1.write(f"{row['material_name']} · {float(row['planned_qty']):g} {row['unit'] or ''}{where}")
+                if c2.button("🗑", key=f"del_budget_{row['id']}", help="Quitar del presupuesto"):
                     ui.confirm_delete(
-                        f"¿Quitar «{row['Material']}» del presupuesto de «{site_name}»? Se eliminará su cantidad y costo previstos. Sus pedidos y despachos se conservan.",
-                        lambda bid=row["budget_id"], name=row["Material"], sn=site_name: _delete_budget(bid, name, sn),
+                        f"¿Quitar «{row['material_name']}»{where} del presupuesto de «{site_name}»? Se eliminará su cantidad y costo previstos. Sus pedidos y despachos se conservan.",
+                        lambda bid=row["id"], name=row["material_name"], sn=site_name: _delete_budget(bid, name, sn),
                     )
 
 
