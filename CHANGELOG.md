@@ -6,6 +6,27 @@ Formato de cada parche: **Agregado** · **Corregido** · **Problemas y causa** �
 
 ---
 
+## Parche 060 — Ventanas de ayuda «Cómo usar» renovadas · 2026-10-16
+
+La ayuda de cada pantalla era un cuadro pequeño con un muro de texto y numeración rara («3a0», «3b1»). Ahora es una ventana propia, ordenada y clara.
+
+**Qué cambió**
+- **Ventana en lugar de globo:** el botón **Cómo usar** (con icono, en forma de píldora) abre una ventana grande con encabezado de color (icono, nombre de la pantalla, para qué sirve y cuántos pasos tiene).
+- **Tres pestañas:** **Paso a paso**, **Ejemplo** y **Consejos y avisos**.
+- **Paso a paso con línea de tiempo:** los pasos van agrupados por tarea («Parte 2 de 5 · Comunicarla al proveedor»), numerados de corrido (1, 2, 3…), con un título corto, una explicación breve y una etiqueta **dónde está** (por ejemplo «Botón de arriba a la derecha»).
+- **Ejemplo real** contado en pocos pasos (pedir 120 bolsas de cemento, despachar a una obra, importar una lista de precios…).
+- **Consejos, avisos y «lo que el sistema no hace»** en tarjetas de colores distintas (azul, ámbar y verde azulado). Queda dicho en las pantallas que corresponde que el sistema no se conecta con el proveedor, no compra y no paga.
+- **Estilo nuevo** (`modules/styles/45_help.css`): tarjetas con bordes redondeados y sombra suave, degradado de la marca, números con degradado, animación al pasar el mouse, funciona en **modo claro y oscuro** y en pantallas angostas, y respeta «reducir movimiento».
+- **Iconos vectoriales** dibujados (`utils/icons.py`), los mismos de los PDF: no dependen de internet ni de fuentes.
+- **Guías reescritas** para las 12 pantallas con frases cortas y orden lógico: por ejemplo, Órdenes de compra pasó de una lista de 20 viñetas mezcladas a 5 partes (armar el pedido, comunicarla al proveedor, cuando llega el material, corregir o cerrar, y ayuda para decidir) con 14 pasos.
+- Las guías ahora son datos estructurados (`modules/guides.py`), no texto suelto.
+
+**Problema que se encontró al probarlo en el navegador:** Streamlit da a las listas del Markdown un ancho «ajustado al contenido» con más fuerza que cualquier clase, y las tarjetas de una misma guía salían de anchos distintos. Se fuerza el ancho completo y hay una prueba que lo vigila.
+
+**Pruebas nuevas (12):** toda pantalla tiene guía y todo `page_header` del código resuelve a una; estructura completa (icono válido, pasos con título y texto cortos, sin numeración escrita a mano); formato en línea seguro (se escapa el HTML); numeración continua entre partes; ejemplo y avisos; que no quede Markdown sin convertir; que exista el estilo de cada clase; y el ancho completo de las listas.
+
+**Hay que hacer:** nada (no hay SQL nuevo).
+
 ## Parche 059 — Corrección de lenguaje: el sistema prepara pedidos, no compra · 2026-10-16
 
 **Aclaración (definitiva):** una orden de compra en el sistema **no es una transacción**: no se conecta con el sistema ni la base de datos del proveedor, no compra y no maneja dinero. Sirve para llegar a la **exactitud del trato, con el IGV**, de modo que al hacer la compra (por fuera) se sepa cuánto es. El sistema solo maneja datos: qué se pide a cada proveedor, qué entra al almacén y qué sale a cada obra.

@@ -1,0 +1,121 @@
+/* =========================================================================
+   45 · AYUDA — la ventana «Cómo usar»: encabezado de color, pasos con línea de
+   tiempo, ejemplo y avisos. Usa solo las variables --mrp-* (sirve en claro y oscuro).
+   ========================================================================= */
+
+/* Botón «Cómo usar» de cada pantalla */
+[class*="st-key-help_open_"] button {
+  border-radius: 999px; padding: .3rem .95rem; min-height: 0; font-weight: 650; font-size: var(--fs-sm);
+  background: var(--mrp-soft); color: var(--mrp-accent); border: 1px solid transparent;
+  transition: transform .15s ease, box-shadow .15s ease, background .15s ease;
+}
+[class*="st-key-help_open_"] button:hover { background: var(--mrp-surface); border-color: var(--mrp-accent); transform: translateY(-1px); box-shadow: var(--mrp-shadow); }
+[class*="st-key-help_open_"] button p { font-weight: 650; }
+
+/* Encabezado de la guía */
+.mrp-help-hero {
+  width: 100%; box-sizing: border-box; position: relative; display: flex; gap: 1.1rem; align-items: center; padding: 1.35rem 1.4rem; margin: .1rem 0 1rem;
+  border-radius: 1.4rem; color: #fff; overflow: hidden;
+  background: radial-gradient(120% 140% at 100% 0%, rgba(255, 255, 255, .22) 0%, rgba(255, 255, 255, 0) 55%), var(--mrp-grad);
+  box-shadow: 0 18px 40px -18px rgba(90, 63, 240, .65);
+}
+.mrp-help-hero::after {
+  content: ""; position: absolute; right: -2.5rem; bottom: -3.2rem; width: 11rem; height: 11rem; border-radius: 50%;
+  border: 1.6rem solid rgba(255, 255, 255, .09);
+}
+.mrp-help-badge {
+  flex: 0 0 auto; width: 3.4rem; height: 3.4rem; display: grid; place-items: center; border-radius: 1.1rem; color: #fff;
+  background: rgba(255, 255, 255, .18); border: 1px solid rgba(255, 255, 255, .35); backdrop-filter: blur(6px);
+}
+.mrp-help-hero-text { position: relative; z-index: 1; min-width: 0; }
+.mrp-help-kicker { font-size: .7rem; letter-spacing: .14em; text-transform: uppercase; font-weight: 700; color: rgba(255, 255, 255, .78); }
+.mrp-help-title { font-size: 1.55rem; line-height: 1.15; font-weight: 800; letter-spacing: -.02em; margin-top: .15rem; color: #fff; }
+.mrp-help-summary { margin-top: .4rem; font-size: .95rem; line-height: 1.5; color: rgba(255, 255, 255, .92); max-width: 46rem; }
+.mrp-help-summary strong, .mrp-help-summary em { color: #fff; }
+.mrp-help-meta { display: flex; flex-wrap: wrap; gap: .4rem; margin-top: .75rem; }
+.mrp-help-chip {
+  padding: .18rem .65rem; border-radius: 999px; font-size: .72rem; font-weight: 650; color: #fff;
+  background: rgba(255, 255, 255, .17); border: 1px solid rgba(255, 255, 255, .28);
+}
+
+/* Pasos */
+.mrp-help-sec { width: 100%; display: flex; flex-wrap: wrap; align-items: baseline; gap: .6rem; margin: 1.35rem 0 .7rem; }
+.mrp-help-sec:first-child { margin-top: .35rem; }
+.mrp-help-sec-no {
+  padding: .12rem .6rem; border-radius: 999px; font-size: .68rem; letter-spacing: .06em; text-transform: uppercase; font-weight: 700;
+  color: var(--mrp-accent); background: var(--mrp-soft);
+}
+.mrp-help-sec-title { font-size: 1.08rem; font-weight: 800; color: var(--mrp-text); letter-spacing: -.01em; }
+.mrp-help-steps { list-style: none; margin: 0; padding: 0; position: relative; width: 100%; box-sizing: border-box; }
+.mrp-help-steps li { position: relative; display: flex; gap: .85rem; padding-bottom: .8rem; }
+.mrp-help-steps li:not(:last-child)::before {
+  content: ""; position: absolute; left: 1.05rem; top: 2.3rem; bottom: .1rem; width: 2px; border-radius: 2px;
+  background: linear-gradient(var(--mrp-accent), transparent); opacity: .28;
+}
+.mrp-help-num {
+  flex: 0 0 auto; width: 2.1rem; height: 2.1rem; display: grid; place-items: center; border-radius: 50%; z-index: 1;
+  font-weight: 800; font-size: .9rem; color: #fff; background: var(--mrp-grad); box-shadow: 0 6px 14px -6px rgba(90, 63, 240, .7);
+}
+.mrp-help-card {
+  flex: 1 1 auto; min-width: 0; padding: .8rem 1rem .85rem; border-radius: 1rem; background: var(--mrp-surface);
+  border: 1px solid var(--mrp-border); box-shadow: 0 1px 2px rgba(20, 26, 51, .04);
+  transition: transform .15s ease, box-shadow .15s ease, border-color .15s ease;
+}
+.mrp-help-card:hover { transform: translateY(-1px); border-color: var(--mrp-accent); box-shadow: var(--mrp-shadow); }
+.mrp-help-st { font-weight: 750; font-size: 1rem; color: var(--mrp-text); line-height: 1.3; }
+.mrp-help-tx { margin-top: .22rem; color: var(--mrp-muted); font-size: .92rem; line-height: 1.6; overflow-wrap: anywhere; }
+.mrp-help-tx strong { color: var(--mrp-text); font-weight: 700; }
+.mrp-help-tx code, .mrp-help-example code {
+  padding: .05rem .4rem; border-radius: .4rem; font-size: .85em; color: var(--mrp-accent); background: var(--mrp-soft);
+}
+.mrp-help-where {
+  display: inline-flex; align-items: center; gap: .3rem; margin-top: .55rem; padding: .16rem .6rem .16rem .5rem; border-radius: 999px;
+  font-size: .75rem; font-weight: 650; color: var(--mrp-accent); background: var(--mrp-soft);
+}
+.mrp-help-where .mrp-ico { flex: 0 0 auto; }
+
+/* Streamlit da a las listas del Markdown «width: fit-content» con más fuerza que una clase: se fuerza el ancho completo */
+.mrp-help-steps, .mrp-help-timeline { width: 100% !important; max-width: 100% !important; box-sizing: border-box; }
+
+/* Ejemplo */
+.mrp-help-example {
+  width: 100%; box-sizing: border-box; margin-top: .4rem; padding: 1.1rem 1.2rem 1rem; border-radius: 1.2rem; background: var(--mrp-surface); border: 1px solid var(--mrp-border);
+  box-shadow: var(--mrp-shadow);
+}
+.mrp-help-example-head { display: inline-flex; align-items: center; gap: .4rem; font-size: .72rem; font-weight: 800; letter-spacing: .1em; text-transform: uppercase; color: var(--mrp-warn); }
+.mrp-help-example-title { margin: .35rem 0 .8rem; font-size: 1.15rem; font-weight: 800; color: var(--mrp-text); letter-spacing: -.01em; }
+.mrp-help-timeline { list-style: none; margin: 0; padding: 0; counter-reset: ex; }
+.mrp-help-timeline li { counter-increment: ex; position: relative; display: flex; gap: .8rem; padding: 0 0 .85rem; color: var(--mrp-text); font-size: .93rem; line-height: 1.55; }
+.mrp-help-timeline li:not(:last-child)::before { content: ""; position: absolute; left: .62rem; top: 1.5rem; bottom: .05rem; width: 2px; background: var(--mrp-border); }
+.mrp-help-timeline li::after {
+  content: counter(ex); position: absolute; left: 0; top: .05rem; width: 1.3rem; height: 1.3rem; display: grid; place-items: center; border-radius: 50%;
+  font-size: .7rem; font-weight: 800; color: var(--mrp-accent); background: var(--mrp-soft); border: 1.5px solid var(--mrp-accent);
+}
+.mrp-help-dot { flex: 0 0 1.3rem; height: 1.3rem; }
+.mrp-help-timeline strong { color: var(--mrp-text); }
+
+/* Consejos, avisos y lo que el sistema no hace */
+.mrp-help-callout { width: 100%; box-sizing: border-box; display: flex; gap: .8rem; align-items: flex-start; padding: .85rem 1rem; margin-bottom: .6rem; border-radius: 1rem; border: 1px solid transparent; }
+.mrp-help-callout-ico { flex: 0 0 auto; width: 2.1rem; height: 2.1rem; display: grid; place-items: center; border-radius: .7rem; }
+.mrp-help-callout-head { font-size: .7rem; font-weight: 800; letter-spacing: .09em; text-transform: uppercase; }
+.mrp-help-callout .mrp-help-tx { margin-top: .15rem; color: var(--mrp-text); }
+.mrp-help-tip { background: var(--mrp-info-bg); border-color: var(--mrp-info-bg); }
+.mrp-help-tip .mrp-help-callout-ico { background: var(--mrp-surface); color: var(--mrp-info); }
+.mrp-help-tip .mrp-help-callout-head { color: var(--mrp-info); }
+.mrp-help-warn { background: var(--mrp-warn-bg); border-color: var(--mrp-warn-bg); }
+.mrp-help-warn .mrp-help-callout-ico { background: var(--mrp-surface); color: var(--mrp-warn); }
+.mrp-help-warn .mrp-help-callout-head { color: var(--mrp-warn); }
+.mrp-help-no { background: var(--mrp-teal-bg); border-color: var(--mrp-teal-bg); }
+.mrp-help-no .mrp-help-callout-ico { background: var(--mrp-surface); color: var(--mrp-teal); }
+.mrp-help-no .mrp-help-callout-head { color: var(--mrp-teal); }
+
+@media (max-width: 640px) {
+  .mrp-help-hero { padding: 1.1rem; gap: .8rem; }
+  .mrp-help-badge { width: 2.8rem; height: 2.8rem; }
+  .mrp-help-title { font-size: 1.3rem; }
+  .mrp-help-card { padding: .7rem .8rem; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .mrp-help-card, [class*="st-key-help_open_"] button { transition: none; }
+  .mrp-help-card:hover, [class*="st-key-help_open_"] button:hover { transform: none; }
+}

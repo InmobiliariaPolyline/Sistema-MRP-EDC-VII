@@ -90,14 +90,14 @@ def chart_theme(fig):
 
 def guide_button(title: str) -> None:
     """Botón «Cómo usar» de un módulo cuyo encabezado no es page_header."""
-    from modules.guides import GUIDES
-    _guide_popover(GUIDES.get(title))
+    _guide_popover(guide_for("", title))
 
 
-def _guide_popover(guide: str | None) -> None:
-    if guide:
-        with st.popover("❓ Cómo usar"):
-            st.markdown(guide)
+def _guide_popover(guide: dict | None) -> None:
+    """Botón «Cómo usar» que abre la ventana de ayuda de la pantalla (ver `modules/help_ui.py`)."""
+    from modules import help_ui
+
+    help_ui.help_button(guide)
 
 
 def tip(text: str) -> None:
