@@ -1,0 +1,40 @@
+/* =========================================================================
+   40 · COMPONENTES — filas, pastillas, enlaces, línea de tiempo, avatares,
+   barras de avance y estados vacíos
+   ========================================================================= */
+.mrp-row { display: flex; gap: .75rem; align-items: center; }
+.mrp-row-name, .mrp-activity-name { color: var(--mrp-text); font-size: var(--fs-md); font-weight: 700; overflow-wrap: anywhere; }
+.mrp-row-sub, .mrp-activity-sub { color: var(--mrp-muted); font-size: var(--fs-sm); line-height: 1.5; overflow-wrap: anywhere; }
+.mrp-avatar { width: 2.5rem; height: 2.5rem; min-width: 2.5rem; display: grid; place-items: center; border-radius: .8rem; background: var(--mrp-soft); color: var(--mrp-accent); font-size: var(--fs-md); font-weight: 800; }
+
+.mrp-activity-item { display: flex; justify-content: space-between; align-items: center; gap: .75rem; padding: .75rem 0; border-bottom: 1px solid var(--mrp-border); }
+.mrp-activity-item:last-child { border-bottom: 0; }
+.mrp-activity-when { font-size: var(--fs-xs); color: var(--mrp-muted); margin-top: .3rem; }
+
+.mrp-timeline-item { display: flex; gap: .75rem; align-items: flex-start; padding: .7rem 0; position: relative; }
+.mrp-timeline-item:not(:last-child)::after { content: ""; position: absolute; left: 1.1rem; top: 2.9rem; bottom: -.5rem; width: 2px; background: var(--mrp-border); }
+.mrp-timeline-dot { width: 2.25rem; height: 2.25rem; min-width: 2.25rem; border-radius: .8rem; display: grid; place-items: center; font-size: 1rem; background: var(--mrp-soft); }
+.mrp-timeline-body { flex: 1; min-width: 0; }
+.mrp-timeline-when { font-size: var(--fs-xs); color: var(--mrp-muted); white-space: nowrap; }
+
+.mrp-pill, .mrp-activity-badge { display: inline-flex; align-items: center; gap: .4rem; background: var(--mrp-soft); color: var(--mrp-accent); font-size: .72rem; font-weight: 700; border-radius: var(--r-full); padding: .25rem .7rem; white-space: normal; line-height: 1.35; }
+.mrp-pill::before { content: ""; width: .4rem; height: .4rem; border-radius: 50%; background: currentColor; opacity: .8; flex-shrink: 0; }
+.mrp-pill-green { background: var(--mrp-good-bg); color: var(--mrp-good); }
+.mrp-pill-red { background: var(--mrp-bad-bg); color: var(--mrp-bad); }
+.mrp-pill-amber { background: var(--mrp-warn-bg); color: var(--mrp-warn); }
+.mrp-pill-blue { background: var(--mrp-info-bg); color: var(--mrp-info); }
+.mrp-pill-gray { background: var(--mrp-field); color: var(--mrp-muted); border: 1px solid var(--mrp-border); }
+
+.mrp-links { display: flex; flex-wrap: wrap; gap: .4rem; margin-top: .4rem; }
+a.mrp-link { display: inline-flex; align-items: center; gap: .25rem; padding: .4rem .7rem; border-radius: var(--r-full); background: var(--mrp-soft); color: var(--mrp-accent) !important; text-decoration: none !important; font-size: var(--fs-sm); font-weight: 600; border: 1px solid transparent; transition: border-color .15s, transform .15s; }
+a.mrp-link:hover { border-color: var(--mrp-accent); transform: translateY(-1px); }
+
+.mrp-tip { background: var(--mrp-soft); border: 1px solid color-mix(in srgb, var(--mrp-accent) 22%, transparent); border-radius: var(--r-md); padding: .75rem .9rem; font-size: var(--fs-sm); line-height: 1.55; color: var(--mrp-text); margin-bottom: .4rem; }
+.mrp-meter { height: .5rem; border-radius: var(--r-full); background: var(--mrp-field); border: 1px solid var(--mrp-border); overflow: hidden; margin: .4rem 0 .25rem; }
+.mrp-meter > span { display: block; height: 100%; border-radius: var(--r-full); background: var(--mrp-grad); transition: width .25s; }
+
+.mrp-empty { background: var(--mrp-surface); border: 1.5px dashed var(--mrp-border); border-radius: var(--r-xl); text-align: center; padding: 2.5rem 1.4rem; margin: .9rem 0; }
+.mrp-empty-icon { width: 4rem; height: 4rem; margin: 0 auto .9rem; border-radius: 1.2rem; background: var(--mrp-soft); display: grid; place-items: center; font-size: 1.9rem; }
+.mrp-empty-title { font-size: var(--fs-lg); font-weight: 800; color: var(--mrp-text); letter-spacing: -.01em; }
+.mrp-empty-copy { max-width: 31rem; margin: .5rem auto 0; color: var(--mrp-muted); font-size: var(--fs-md); line-height: 1.6; }
+.mrp-result-count { font-size: var(--fs-sm); color: var(--mrp-muted); margin: .25rem 0 .75rem; font-weight: 500; }

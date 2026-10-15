@@ -1,0 +1,55 @@
+/* =========================================================================
+   60 · RESPONSIVE — escalado fluido 16:9 (HD, FHD, QHD, UHD) y móvil
+
+   Toda la interfaz está en rem, así que basta con escalar el tamaño raíz:
+     1280 px (HD 720p)  → 15.0 px      1920 px (FHD) → 17.1 px
+     2560 px (QHD)      → 19.5 px      3840 px (UHD 4K al 100 %) → 24.2 px
+   La fórmula crece de forma continua entre esos puntos (sin saltos) y el
+   contenido se centra con un ancho máximo también en rem.
+   ========================================================================= */
+html { font-size: clamp(15px, calc(10px + .37vw), 30px); }
+[data-testid="stMainBlockContainer"] { max-width: min(96rem, 100%); }
+
+/* Estructura general: el menú lateral crece con la pantalla */
+@media (min-width: 1600px) {
+  [data-testid="stSidebar"] { min-width: 17rem; }
+  [data-testid="stMainBlockContainer"] { padding-inline: 3rem; }
+  .mrp-stat-grid { grid-template-columns: repeat(auto-fit, minmax(12.5rem, 1fr)); }
+}
+/* HD 1280×720 y portátiles: más compacto para ver más contenido */
+@media (max-width: 1366px) {
+  [data-testid="stMainBlockContainer"] { padding: 1.6rem 1.8rem 3rem; }
+  .mrp-hero { padding: 1.5rem 1.6rem; }
+  .mrp-stat-card { padding: 1.05rem 1.05rem .95rem; }
+  .mrp-stat-value { font-size: 1.7rem; }
+}
+/* UHD y pantallas muy grandes: contenido más ancho y gráficos más altos */
+@media (min-width: 2400px) {
+  [data-testid="stMainBlockContainer"] { max-width: 118rem; }
+  [data-testid="stPlotlyChart"] { min-height: 19rem; }
+}
+@media (min-width: 3200px) {
+  [data-testid="stMainBlockContainer"] { max-width: 130rem; }
+}
+
+/* Tablet */
+@media (max-width: 900px) {
+  [data-testid="stMainBlockContainer"] { padding: 2rem 1.3rem 3rem; }
+  .mrp-page-title { font-size: 1.7rem; }
+  .mrp-hero { padding: 1.5rem 1.4rem; border-radius: var(--r-lg); }
+  .mrp-hero-title { font-size: 1.7rem; }
+}
+/* Móvil */
+@media (max-width: 640px) {
+  html { font-size: 15px; }
+  [data-testid="stMainBlockContainer"] { padding: 3.5rem 1rem 3rem; }
+  .mrp-stat-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: .65rem; }
+  .mrp-stat-card { padding: 1rem .85rem; }
+  .mrp-stat-value { font-size: 1.5rem; }
+  .mrp-page-title { font-size: 1.5rem; }
+  .mrp-panel { padding: 1rem; }
+  .mrp-activity-item { flex-wrap: wrap; }
+  [data-testid="stDialog"] [role="dialog"] { width: calc(100vw - 1rem) !important; margin: .5rem; border-radius: 1.1rem !important; }
+  [data-testid="stForm"] { padding: 1rem; }
+  [data-baseweb="tab-list"] { width: 100%; }
+}

@@ -1,0 +1,43 @@
+/* =========================================================================
+   00 · BASE — tipografía, lienzo, scroll, animaciones
+   Orden de las hojas: 00 base · 10 layout · 20 sidebar · 30 controles ·
+   40 componentes · 50 formularios · 60 responsive. Todo usa variables
+   --mrp-* (paletas en palette_light.css / palette_dark.css).
+   ========================================================================= */
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap');
+
+:root {
+  /* escala tipográfica (rem: se adapta sola con el tamaño raíz de 60_responsive) */
+  --fs-xs: .72rem; --fs-sm: .8rem; --fs-md: .9rem; --fs-lg: 1.1rem; --fs-xl: 1.5rem; --fs-2xl: 2rem;
+  /* radios y espacios */
+  --r-sm: .6rem; --r-md: .8rem; --r-lg: 1.1rem; --r-xl: 1.4rem; --r-full: 99px;
+  --sp-1: .25rem; --sp-2: .5rem; --sp-3: .75rem; --sp-4: 1rem; --sp-5: 1.5rem; --sp-6: 2rem;
+}
+
+html, body, .stApp, input, textarea, button {
+  font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+  -webkit-font-smoothing: antialiased;
+  text-rendering: optimizeLegibility;
+}
+
+.stApp, [data-testid="stAppViewContainer"], [data-testid="stMain"] {
+  background:
+    radial-gradient(56rem 26rem at 88% -8%, var(--mrp-glow-a), transparent 62%),
+    radial-gradient(48rem 26rem at -4% 0%, var(--mrp-glow-b), transparent 58%),
+    var(--mrp-bg);
+  color: var(--mrp-text);
+}
+[data-testid="stHeader"] { background: transparent; backdrop-filter: blur(8px); }
+hr { border-color: var(--mrp-border) !important; }
+
+::-webkit-scrollbar { width: 9px; height: 9px; }
+::-webkit-scrollbar-track { background: transparent; }
+::-webkit-scrollbar-thumb { background: color-mix(in srgb, var(--mrp-muted) 35%, transparent); border-radius: 20px; }
+
+@keyframes mrpUp  { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: none; } }
+@keyframes mrpPop { from { opacity: 0; transform: scale(.97); }       to { opacity: 1; transform: none; } }
+
+button:focus-visible, a:focus-visible, [role="tab"]:focus-visible { outline: 3px solid var(--mrp-accent) !important; outline-offset: 3px; }
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after { animation: none !important; transition: none !important; scroll-behavior: auto !important; }
+}

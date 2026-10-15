@@ -167,6 +167,8 @@ modules/obras.py             # Presupuesto por obra vs. pedido/recibido/consumid
 modules/asistencia.py        # Pasar lista y resumen
 modules/historial.py         # Auditoría (quién hizo qué)
 modules/reportes.py          # Módulo de Reportes (Excel y PDF)
+modules/styles/              # Hojas CSS ordenadas: paletas, base, layout, sidebar, controles, componentes, formularios, responsive
+modules/form_assist.py       # Progreso de obligatorios, duplicados, contraseñas y altura de gráficos
 modules/ui.py                # CSS y componentes visuales compartidos (tarjetas, pastillas...)
 
 scripts/seed_catalog.py       # Carga única del catálogo de materiales desde Excel
@@ -175,3 +177,10 @@ utils/geocode.py              # Geocodificación de direcciones (Nominatim)
 utils/reports.py              # Generación de Excel (openpyxl) y PDF (fpdf2)
 utils/timeago.py              # Fechas relativas ("hace 5 min")
 ```
+
+## Diseño y pantallas
+
+- **Hojas de estilo** en `modules/styles/` (CSS real, numerado de lo general a lo específico); `modules/ui_styles.py` las une. Las paletas clara/oscura son variables `--mrp-*`.
+- **Adaptable 16:9**: todo está en rem y el tamaño raíz crece de forma continua con el ancho (15 px en HD 1280, ≈17 px en FHD 1920, ≈24 px en UHD 3840), con ancho máximo propio para cada rango; los gráficos ajustan su altura a la pantalla.
+- **Formularios**: barra de progreso de campos obligatorios, aviso de duplicados, medidor de contraseña y botones de guardar fijos al pie de los diálogos.
+- Si cambias un `.css`, reinicia el servidor de Streamlit (no vigila esos archivos).

@@ -1,0 +1,67 @@
+/* =========================================================================
+   10 · LAYOUT — contenedor principal, superficies, encabezados, hero,
+   tarjetas de estadística y paneles
+   ========================================================================= */
+[data-testid="stMainBlockContainer"] { max-width: 96rem; padding: 2.2rem 2.6rem 4rem; margin-inline: auto; }
+
+/* superficies: bloques con borde (st.container(border=True)) */
+[data-testid="stVerticalBlock"] { border-color: var(--mrp-border) !important; border-radius: var(--r-lg); gap: .85rem; }
+[data-testid="stLayoutWrapper"] > [data-testid="stVerticalBlock"]:has(.mrp-panel-title) { background: var(--mrp-surface); box-shadow: var(--mrp-shadow); }
+[data-testid="stLayoutWrapper"] > [data-testid="stVerticalBlock"]:has(.mrp-row) {
+  background: var(--mrp-surface); box-shadow: var(--mrp-shadow); position: relative;
+  transition: transform .18s, border-color .18s, box-shadow .18s, background .18s;
+}
+[data-testid="stLayoutWrapper"] > [data-testid="stVerticalBlock"]:has(.mrp-row):hover {
+  background: var(--mrp-hover); border-color: var(--mrp-accent) !important; box-shadow: var(--mrp-shadow-lg); transform: translateY(-1px);
+}
+[data-testid="stExpander"] { background: var(--mrp-surface); border: 1px solid var(--mrp-border) !important; border-radius: var(--r-lg) !important; box-shadow: var(--mrp-shadow); overflow: hidden; }
+[data-testid="stExpander"] summary, [data-testid="stExpander"] summary p { color: var(--mrp-text); font-weight: 600; }
+[data-testid="stDataFrame"] { border: 1px solid var(--mrp-border); border-radius: var(--r-lg); overflow: hidden; box-shadow: var(--mrp-shadow); }
+[data-testid="stPlotlyChart"] { min-height: 16rem; }
+[data-testid="stDeckGlJsonChart"] { border-radius: var(--r-lg); overflow: hidden; }
+
+/* encabezado de página */
+.mrp-eyebrow { display: inline-flex; align-items: center; gap: .4rem; font-size: var(--fs-xs); font-weight: 700; letter-spacing: .09em; text-transform: uppercase; color: var(--mrp-accent); background: var(--mrp-soft); border-radius: var(--r-full); padding: .25rem .7rem; margin-bottom: .6rem; }
+.mrp-page-title { font-size: var(--fs-2xl); font-weight: 800; line-height: 1.15; letter-spacing: -.03em; color: var(--mrp-text); margin-bottom: .5rem; overflow-wrap: anywhere; }
+.mrp-page-subtitle { font-size: var(--fs-md); line-height: 1.6; color: var(--mrp-muted); margin-bottom: .6rem; max-width: 48rem; }
+
+/* hero del dashboard */
+.mrp-hero {
+  position: relative; overflow: hidden; border-radius: var(--r-xl); padding: 1.9rem 2rem; margin-bottom: .4rem; color: #fff;
+  background:
+    radial-gradient(32rem 16rem at 92% 0%, rgba(255,255,255,.22), transparent 60%),
+    radial-gradient(26rem 16rem at 0% 120%, rgba(34,211,238,.28), transparent 60%),
+    linear-gradient(135deg, #6E58F7 0%, #4B2FD8 55%, #2A1B8F 100%);
+  box-shadow: 0 24px 50px -18px rgba(75,47,216,.7); animation: mrpUp .4s ease-out;
+}
+.mrp-hero::after { content: ""; position: absolute; right: -4rem; bottom: -5.5rem; width: 16rem; height: 16rem; border-radius: 50%; border: 2.7rem solid rgba(255,255,255,.07); }
+.mrp-hero-eyebrow { font-size: var(--fs-xs); font-weight: 700; letter-spacing: .12em; text-transform: uppercase; color: rgba(255,255,255,.78); margin-bottom: .5rem; }
+.mrp-hero-title { font-size: calc(var(--fs-2xl) * 1.1); font-weight: 800; letter-spacing: -.03em; line-height: 1.1; }
+.mrp-hero-sub { max-width: 40rem; font-size: var(--fs-md); line-height: 1.6; color: rgba(255,255,255,.82); margin-top: .6rem; }
+.mrp-hero-chips { display: flex; flex-wrap: wrap; gap: .5rem; margin-top: 1.1rem; }
+.mrp-hero-chip { display: inline-flex; align-items: center; gap: .4rem; font-size: var(--fs-sm); font-weight: 600; padding: .4rem .8rem; border-radius: var(--r-full); background: rgba(255,255,255,.14); border: 1px solid rgba(255,255,255,.18); backdrop-filter: blur(6px); }
+
+/* tarjetas de estadística */
+.mrp-stat-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(11rem, 1fr)); gap: var(--sp-4); margin: 1.2rem 0 1.1rem; }
+.mrp-stat-card, .mrp-panel, .mrp-card { background: var(--mrp-surface); border: 1px solid var(--mrp-border); border-radius: var(--r-xl); box-shadow: var(--mrp-shadow); }
+.mrp-stat-card { position: relative; overflow: hidden; padding: 1.25rem 1.25rem 1.1rem; transition: transform .18s, box-shadow .18s, border-color .18s; animation: mrpUp .4s ease-out both; --tone: var(--mrp-accent); --tone-bg: var(--mrp-soft); }
+.mrp-stat-card:nth-child(2) { animation-delay: .04s; } .mrp-stat-card:nth-child(3) { animation-delay: .08s; }
+.mrp-stat-card:nth-child(4) { animation-delay: .12s; } .mrp-stat-card:nth-child(5) { animation-delay: .16s; }
+.mrp-stat-card::before { content: ""; position: absolute; inset: 0 0 auto 0; height: 3px; background: var(--tone); opacity: .85; }
+.mrp-stat-card:hover { transform: translateY(-3px); box-shadow: var(--mrp-shadow-lg); border-color: color-mix(in srgb, var(--tone) 40%, var(--mrp-border)); }
+.mrp-tone-green { --tone: var(--mrp-good); --tone-bg: var(--mrp-good-bg); }
+.mrp-tone-amber, .mrp-warn { --tone: #E0951A; --tone-bg: var(--mrp-warn-bg); }
+.mrp-tone-blue { --tone: var(--mrp-info); --tone-bg: var(--mrp-info-bg); }
+.mrp-tone-red { --tone: var(--mrp-bad); --tone-bg: var(--mrp-bad-bg); }
+.mrp-tone-teal { --tone: var(--mrp-teal); --tone-bg: var(--mrp-teal-bg); }
+.mrp-stat-top { display: flex; align-items: center; justify-content: space-between; gap: .5rem; margin-bottom: .9rem; }
+.mrp-stat-label { font-size: var(--fs-xs); text-transform: uppercase; letter-spacing: .07em; font-weight: 700; color: var(--mrp-muted); }
+.mrp-icon-badge { width: 2.4rem; height: 2.4rem; flex-shrink: 0; background: var(--tone-bg); border-radius: var(--r-md); display: grid; place-items: center; font-size: 1.1rem; }
+.mrp-stat-value { font-size: 1.95rem; font-weight: 800; letter-spacing: -.03em; color: var(--mrp-text); font-variant-numeric: tabular-nums; line-height: 1.15; overflow-wrap: anywhere; }
+.mrp-stat-caption { color: var(--mrp-muted); font-size: var(--fs-sm); line-height: 1.5; margin-top: .4rem; }
+.mrp-spark { display: block; width: 100%; height: 2.1rem; margin-top: .6rem; }
+
+/* paneles */
+.mrp-panel { padding: 1.4rem; }
+.mrp-panel-title { color: var(--mrp-text); font-size: var(--fs-lg); font-weight: 800; letter-spacing: -.02em; margin: .15rem 0 .9rem; }
+.mrp-chart-sub { font-size: var(--fs-sm); color: var(--mrp-muted); margin: -.6rem 0 .4rem; }

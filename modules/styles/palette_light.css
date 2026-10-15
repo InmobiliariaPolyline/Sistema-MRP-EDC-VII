@@ -1,0 +1,11 @@
+--mrp-bg:#F2F3FA;--mrp-surface:#FFFFFF;--mrp-raised:#FFFFFF;--mrp-field:#F5F6FC;
+--mrp-text:#141A33;--mrp-muted:#5C6685;--mrp-border:#E2E5F1;--mrp-accent:#6B57F5;
+--mrp-soft:#EEEAFF;--mrp-hover:#F8F6FF;
+--mrp-grad:linear-gradient(135deg,#7C66FF 0%,#5A3FF0 100%);
+--mrp-shadow:0 1px 2px rgba(20,26,51,.04),0 10px 28px -8px rgba(20,26,51,.10);
+--mrp-shadow-lg:0 2px 4px rgba(20,26,51,.05),0 22px 48px -12px rgba(60,45,160,.22);
+--mrp-good:#16794A;--mrp-good-bg:#E6F7EE;--mrp-bad:#C0343F;--mrp-bad-bg:#FDECEE;
+--mrp-warn:#94600F;--mrp-warn-bg:#FFF3DA;--mrp-info:#2459A8;--mrp-info-bg:#E8F1FF;
+--mrp-teal:#0E8A8A;--mrp-teal-bg:#E1F6F5;
+--mrp-glow-a:rgba(124,102,255,.14);--mrp-glow-b:rgba(34,211,238,.08);
+color-scheme:light;

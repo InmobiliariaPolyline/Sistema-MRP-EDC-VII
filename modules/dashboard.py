@@ -1,14 +1,15 @@
 """Panel principal: banner de bienvenida con accesos rápidos, tarjetas de
-estadísticas, gráficos de compras, actividad reciente y mapa de obras."""
+estadísticas, analítica de compras, avance por obra, asistencia, actividad
+reciente y mapa de obras."""
 import html
-from datetime import datetime, timedelta, timezone
+from datetime import date, datetime, timedelta, timezone
 
 import pandas as pd
 import plotly.graph_objects as go
 import streamlit as st
 
 from db import repository as repo
-from modules import ordenes, ui
+from modules import obras, ordenes, ui
 from utils.timeago import time_ago
 
 MESES = [
@@ -16,8 +17,10 @@ MESES = [
     "julio", "agosto", "septiembre", "octubre", "noviembre", "diciembre",
 ]
 DIAS = ["lunes", "martes", "miércoles", "jueves", "viernes", "sábado", "domingo"]
-ACCENT, ACCENT_SOFT = "#7C66FF", "#B9AEFF"
+ACCENT, ACCENT_SOFT, TEAL = "#7C66FF", "#B9AEFF", "#22C3B8"
 STATUS_COLORS = {"pendiente": "#F0A93B", "enviada": "#4C8DF6", "parcial": "#9A86FF", "recibida": "#2EB67D", "cancelada": "#E5636D"}
+ATTENDANCE_COLORS = {"presente": "#2EB67D", "tardanza": "#F0A93B", "permiso": "#4C8DF6", "ausente": "#E5636D"}
+CONFIG = {"displayModeBar": False}
 
 
 def _now() -> datetime:
@@ -70,7 +73,8 @@ def render(user: dict) -> None:
     )
 
     _render_alerts(stale)
-    _render_order_charts(orders)
+    _render_purchase_analytics(orders)
+    _render_site_and_attendance()
 
     col_left, col_right = st.columns([3, 2])
     with col_left:
@@ -95,14 +99,18 @@ def _render_quick_actions() -> None:
         col.button(label, icon=icon, key=f"quick_{route}", width="stretch", on_click=ui.go, args=(route,))
 
 
-def _monthly_spend(orders: pd.DataFrame) -> list[float]:
+def _billable(orders: pd.DataFrame) -> pd.DataFrame:
     if orders.empty:
-        return []
-    billable = orders[orders["status"] != "cancelada"]
+        return orders
+    active = orders[orders["status"] != "cancelada"]
+    return active.assign(total=active["total"].astype(float), mes=active["created_at"].astype(str).str[:7])
+
+
+def _monthly_spend(orders: pd.DataFrame) -> list[float]:
+    billable = _billable(orders)
     if billable.empty:
         return []
-    grouped = billable.assign(mes=billable["created_at"].astype(str).str[:7], total=billable["total"].astype(float)).groupby("mes")["total"].sum()
-    return grouped.tail(8).tolist()
+    return billable.groupby("mes")["total"].sum().tail(8).tolist()
 
 
 def _render_alerts(stale: pd.DataFrame) -> None:
@@ -116,62 +124,204 @@ def _render_alerts(stale: pd.DataFrame) -> None:
     )
 
 
-def _bar_layout(fig: go.Figure, height: int = 250) -> go.Figure:
-    fig.update_layout(margin=dict(t=8, b=0, l=0, r=0), height=height, showlegend=False, bargap=0.38)
-    return fig
+# ---------------------------------------------------------------------------
+# Gráficos
+# ---------------------------------------------------------------------------
+
+def _plot(fig: go.Figure, height: int = 300) -> None:
+    fig.update_layout(height=height)
+    st.plotly_chart(ui.chart_theme(fig), width="stretch", config=CONFIG)
 
 
-def _empty_chart(message: str = "Aún no hay órdenes activas.") -> None:
-    st.markdown(f'<div class="mrp-activity-sub" style="padding:36px 0;text-align:center">{message}</div>', unsafe_allow_html=True)
+def _panel(eyebrow: str, title: str, subtitle: str = "") -> None:
+    ui.panel_header(eyebrow, title)
+    if subtitle:
+        st.markdown(f'<div class="mrp-chart-sub">{html.escape(subtitle)}</div>', unsafe_allow_html=True)
 
 
-def _render_order_charts(orders: pd.DataFrame) -> None:
-    """Gasto por mes, gasto por proveedor y órdenes por estado."""
+def _empty_chart(message: str = "Aún no hay datos para este gráfico.") -> None:
+    st.markdown(f'<div class="mrp-activity-sub" style="padding:2.2rem 0;text-align:center">{html.escape(message)}</div>', unsafe_allow_html=True)
+
+
+def _bar_marker(color) -> dict:
+    return dict(color=color, cornerradius=10) if hasattr(go.bar.Marker, "cornerradius") else dict(color=color)
+
+
+def _render_purchase_analytics(orders: pd.DataFrame) -> None:
+    """Gasto mensual, estado de las órdenes, gasto por categoría y por proveedor."""
     if orders.empty:
         return
-    orders = orders.assign(total=orders["total"].astype(float))
-    billable = orders[orders["status"] != "cancelada"]
-    bar_style = dict(cornerradius=10) if hasattr(go.bar.Marker, "cornerradius") else {}
+    billable = _billable(orders)
 
-    c1, c2, c3 = st.columns([3, 3, 2])
+    c1, c2 = st.columns([5, 3])
     with c1:
         with st.container(border=True):
-            ui.panel_header("Compras", "Gasto por mes")
-            if billable.empty:
-                _empty_chart()
-            else:
-                monthly = billable.assign(mes=billable["created_at"].astype(str).str[:7]).groupby("mes")["total"].sum().reset_index()
-                fig = go.Figure(go.Bar(x=monthly["mes"], y=monthly["total"], marker=dict(color=ACCENT, **bar_style), hovertemplate="%{x}: %{y:,.2f}<extra></extra>"))
-                fig.update_xaxes(type="category", showgrid=False)
-                st.plotly_chart(ui.chart_theme(_bar_layout(fig)), width="stretch", config={"displayModeBar": False})
+            _panel("Compras", "Gasto mensual y órdenes", "Barras: monto comprado. Línea: cantidad de órdenes.")
+            _spend_combo(billable)
     with c2:
         with st.container(border=True):
-            ui.panel_header("Compras", "Gasto por proveedor")
-            if billable.empty:
-                _empty_chart()
-            else:
-                by_sup = billable.groupby("supplier_name")["total"].sum().sort_values().tail(6).reset_index()
-                fig = go.Figure(go.Bar(x=by_sup["total"], y=by_sup["supplier_name"], orientation="h", marker=dict(color=ACCENT_SOFT, **bar_style), hovertemplate="%{y}: %{x:,.2f}<extra></extra>"))
-                fig.update_yaxes(type="category", showgrid=False)
-                st.plotly_chart(ui.chart_theme(_bar_layout(fig)), width="stretch", config={"displayModeBar": False})
+            _panel("Compras", "Órdenes por estado", "Dónde está cada pedido hoy.")
+            _status_chart(orders)
+
+    c3, c4 = st.columns([1, 1])
     with c3:
         with st.container(border=True):
-            ui.panel_header("Compras", "Órdenes por estado")
-            counts = orders.groupby("status").size()
-            keys = [k for k in ordenes.STATUSES if k in counts.index]
-            fig = go.Figure(
-                go.Pie(
-                    labels=[ordenes.STATUSES[k][0] for k in keys],
-                    values=[int(counts[k]) for k in keys],
-                    hole=0.66,
-                    marker=dict(colors=[STATUS_COLORS[k] for k in keys], line=dict(color="rgba(0,0,0,0)", width=0)),
-                    textinfo="value",
-                    sort=False,
-                )
-            )
-            fig.update_layout(margin=dict(t=0, b=0, l=0, r=0), height=250, showlegend=True, legend=dict(orientation="h", y=-0.08, font=dict(size=11)))
-            st.plotly_chart(ui.chart_theme(fig), width="stretch", config={"displayModeBar": False})
+            _panel("Compras", "Gasto por categoría", "En qué tipo de material se va el dinero.")
+            _category_treemap()
+    with c4:
+        with st.container(border=True):
+            _panel("Compras", "Gasto por proveedor", "Los seis proveedores con más compras.")
+            _supplier_bars(billable)
 
+
+def _spend_combo(billable: pd.DataFrame) -> None:
+    if billable.empty:
+        _empty_chart("Aún no hay órdenes activas.")
+        return
+    monthly = billable.groupby("mes").agg(total=("total", "sum"), n=("code", "count")).reset_index()
+    fig = go.Figure()
+    fig.add_bar(x=monthly["mes"], y=monthly["total"], name="Monto", marker=_bar_marker(ACCENT), hovertemplate="%{x}: %{y:,.2f}<extra>Monto</extra>")
+    fig.add_scatter(x=monthly["mes"], y=monthly["n"], name="Órdenes", yaxis="y2", mode="lines+markers",
+                    line=dict(color=TEAL, width=3, shape="spline"), marker=dict(size=9, line=dict(width=2, color="#FFFFFF")),
+                    hovertemplate="%{x}: %{y} orden(es)<extra></extra>")
+    fig.update_layout(
+        margin=dict(t=8, b=0, l=0, r=0), bargap=0.4,
+        legend=dict(orientation="h", y=1.12, x=0, font=dict(size=11)),
+        yaxis2=dict(overlaying="y", side="right", showgrid=False, rangemode="tozero", dtick=1),
+    )
+    fig.update_xaxes(type="category", showgrid=False)
+    _plot(fig, 300)
+
+
+def _status_chart(orders: pd.DataFrame) -> None:
+    counts = orders.groupby("status").size()
+    keys = [k for k in ordenes.STATUSES if k in counts.index]
+    fig = go.Figure(
+        go.Pie(
+            labels=[ordenes.STATUSES[k][0] for k in keys],
+            values=[int(counts[k]) for k in keys],
+            hole=0.68, sort=False, textinfo="value",
+            marker=dict(colors=[STATUS_COLORS[k] for k in keys], line=dict(color="rgba(0,0,0,0)", width=0)),
+        )
+    )
+    fig.update_layout(
+        margin=dict(t=0, b=0, l=0, r=0), showlegend=True, legend=dict(orientation="h", y=-0.06, font=dict(size=11)),
+        annotations=[dict(text=f"<b>{int(counts.sum())}</b><br><span style='font-size:11px'>órdenes</span>", showarrow=False, font=dict(size=24))],
+    )
+    _plot(fig, 300)
+
+
+def _category_treemap() -> None:
+    items = repo.list_order_items()
+    orders = repo.list_orders()
+    if items.empty or orders.empty:
+        _empty_chart("Sin líneas de órdenes todavía.")
+        return
+    active = set(orders.loc[orders["status"] != "cancelada", "id"])
+    items = items[items["order_id"].isin(active)]
+    if items.empty:
+        _empty_chart("Sin líneas de órdenes activas.")
+        return
+    categories = repo.list_materials().set_index("id")["category"].to_dict()
+    spend = (
+        items.assign(category=items["material_id"].map(categories).fillna("Sin categoría"), amount=items["subtotal"].astype(float))
+        .groupby("category")["amount"].sum().sort_values(ascending=False)
+    )
+    spend = spend[spend > 0]
+    if spend.empty:
+        _empty_chart("Las líneas todavía no tienen precio.")
+        return
+    fig = go.Figure(
+        go.Treemap(
+            labels=spend.index.tolist(), parents=[""] * len(spend), values=spend.tolist(),
+            textinfo="label+percent root", texttemplate="<b>%{label}</b><br>%{value:,.0f}",
+            marker=dict(colors=spend.tolist(), colorscale=[[0, "#D9D2FF"], [1, "#5A3FF0"]], line=dict(width=3, color="rgba(0,0,0,0)")),
+            hovertemplate="%{label}: %{value:,.2f}<extra></extra>", pathbar=dict(visible=False),
+        )
+    )
+    fig.update_layout(margin=dict(t=0, b=0, l=0, r=0))
+    _plot(fig, 300)
+
+
+def _supplier_bars(billable: pd.DataFrame) -> None:
+    if billable.empty:
+        _empty_chart("Aún no hay órdenes activas.")
+        return
+    by_sup = billable.groupby("supplier_name")["total"].sum().sort_values().tail(6).reset_index()
+    share = by_sup["total"] / by_sup["total"].sum() * 100
+    fig = go.Figure(
+        go.Bar(
+            x=by_sup["total"], y=by_sup["supplier_name"], orientation="h", marker=_bar_marker(ACCENT_SOFT),
+            text=[f"{v:,.0f}  ·  {p:.0f}%" for v, p in zip(by_sup["total"], share)], textposition="outside", cliponaxis=False,
+            hovertemplate="%{y}: %{x:,.2f}<extra></extra>",
+        )
+    )
+    fig.update_layout(margin=dict(t=4, b=0, l=0, r=70), bargap=0.4)
+    fig.update_yaxes(type="category", showgrid=False)
+    fig.update_xaxes(showgrid=False, showticklabels=False)
+    _plot(fig, 300)
+
+
+def _render_site_and_attendance() -> None:
+    c1, c2 = st.columns([5, 3])
+    with c1:
+        with st.container(border=True):
+            _panel("Obras", "Avance de materiales por obra", "Presupuesto frente a lo pedido y lo consumido (en costo).")
+            _site_progress_chart()
+    with c2:
+        with st.container(border=True):
+            _panel("Personal", "Asistencia de los últimos 14 días", "Personas por estado y día.")
+            _attendance_chart()
+
+
+def _site_progress_chart() -> None:
+    sites = repo.list_project_sites()
+    rows = []
+    for site in sites.to_dict("records"):
+        df = obras.progress_by_material(site["id"])
+        if df.empty or not float(df["Presupuesto $"].sum()):
+            continue
+        rows.append(
+            {
+                "obra": site["name"],
+                "Presupuesto": float(df["Presupuesto $"].sum()),
+                "Pedido": float(df["Gasto pedido $"].sum()),
+                "Consumido": float(df["Consumido $"].sum()),
+            }
+        )
+    if not rows:
+        _empty_chart("Define el presupuesto de una obra (Obras → Materiales) para ver su avance.")
+        return
+    data = pd.DataFrame(rows).iloc[::-1]
+    fig = go.Figure()
+    for name, color in (("Presupuesto", "rgba(150,160,190,.38)"), ("Pedido", ACCENT), ("Consumido", TEAL)):
+        fig.add_bar(y=data["obra"], x=data[name], name=name, orientation="h", marker=_bar_marker(color), hovertemplate="%{y}: %{x:,.2f}<extra>" + name + "</extra>")
+    fig.update_layout(margin=dict(t=8, b=0, l=0, r=0), barmode="group", bargap=0.3, bargroupgap=0.08, legend=dict(orientation="h", y=1.12, x=0, font=dict(size=11)))
+    fig.update_yaxes(type="category", showgrid=False)
+    _plot(fig, max(300, 90 * len(rows) + 120))
+
+
+def _attendance_chart() -> None:
+    today = date.today()
+    records = repo.list_attendance((today - timedelta(days=13)).isoformat(), today.isoformat())
+    if records.empty:
+        _empty_chart("Aún no hay asistencia registrada en los últimos 14 días.")
+        return
+    counts = records.groupby(["work_date", "status"]).size().unstack(fill_value=0).reindex(
+        [(today - timedelta(days=13 - i)).isoformat() for i in range(14)], fill_value=0
+    )
+    fig = go.Figure()
+    for status, color in ATTENDANCE_COLORS.items():
+        if status in counts.columns:
+            fig.add_bar(x=[d[5:] for d in counts.index], y=counts[status], name=status.capitalize(), marker=dict(color=color), hovertemplate="%{x}: %{y}<extra>" + status + "</extra>")
+    fig.update_layout(margin=dict(t=8, b=0, l=0, r=0), barmode="stack", bargap=0.25, legend=dict(orientation="h", y=1.12, x=0, font=dict(size=11)))
+    fig.update_xaxes(type="category", showgrid=False)
+    _plot(fig, 300)
+
+
+# ---------------------------------------------------------------------------
+# Paneles
+# ---------------------------------------------------------------------------
 
 def _render_sites_map() -> None:
     """Todas las obras con ubicación en un mapa, y cuántos trabajadores tiene cada una."""
@@ -278,10 +428,9 @@ def _render_status_donut(totals: dict) -> None:
         fig.update_layout(
             showlegend=False,
             margin=dict(t=0, b=0, l=0, r=0),
-            height=210,
             annotations=[dict(text=f"<b>{pct}%</b><br><span style='font-size:11px'>con stock</span>", showarrow=False, font=dict(size=24))],
         )
-        st.plotly_chart(ui.chart_theme(fig), width="stretch", config={"displayModeBar": False})
+        _plot(fig, 220)
 
         st.markdown(
             f'<div class="mrp-activity-item"><div>🟣 Con disponibilidad</div><b>{con_disponible}</b></div>'

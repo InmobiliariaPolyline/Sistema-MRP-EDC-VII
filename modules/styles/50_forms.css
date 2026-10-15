@@ -1,0 +1,49 @@
+/* =========================================================================
+   50 · FORMULARIOS — encabezado, secciones, validación en vivo, progreso de
+   obligatorios, aviso de duplicados, medidor de contraseña y barra de
+   acciones fija al pie de los diálogos
+   ========================================================================= */
+[data-testid="stForm"] { border-color: var(--mrp-border); background: var(--mrp-surface); border-radius: var(--r-xl); padding: 1.4rem; box-shadow: var(--mrp-shadow); }
+[data-testid="stDialog"] [data-testid="stForm"] { box-shadow: none; padding: 1rem 0 0; border: 0; background: transparent; }
+
+.mrp-form-intro { border-bottom: 1px solid var(--mrp-border); padding-bottom: .9rem; margin-bottom: .25rem; }
+.mrp-form-title { font-size: var(--fs-lg); font-weight: 800; letter-spacing: -.02em; color: var(--mrp-text); }
+.mrp-form-description { font-size: var(--fs-sm); line-height: 1.6; color: var(--mrp-muted); margin-top: .25rem; }
+.mrp-form-section { display: flex; flex-direction: column; gap: .2rem; margin: 1.1rem 0 .25rem; padding-top: .8rem; border-top: 1px dashed var(--mrp-border); color: var(--mrp-text); font-size: var(--fs-sm); }
+.mrp-form-section strong { font-size: .72rem; text-transform: uppercase; letter-spacing: .08em; color: var(--mrp-accent); }
+.mrp-form-section span { font-size: .75rem; color: var(--mrp-muted); line-height: 1.5; }
+
+/* validación en vivo (live_validation.py) */
+.mrp-live { display: flex; flex-wrap: wrap; gap: .25rem .65rem; font-size: .72rem; line-height: 1.45; max-width: 100%; margin: .4rem .15rem .15rem; font-weight: 500; }
+.mrp-live[data-state="ok"] { color: var(--mrp-good); }
+.mrp-live[data-state="bad"] { color: var(--mrp-bad); }
+.mrp-live[data-state="idle"] { color: var(--mrp-muted); }
+.mrp-live-count { font-variant-numeric: tabular-nums; white-space: nowrap; color: var(--mrp-muted); }
+[data-testid="stTextInput"]:has(.mrp-live) [data-testid="InputInstructions"],
+[data-testid="stNumberInput"]:has(.mrp-live) [data-testid="InputInstructions"],
+[data-testid="stTextArea"]:has(.mrp-live) [data-testid="InputInstructions"] { display: none; }
+
+/* ayudas añadidas por form_assist.py */
+.mrp-dup { margin: .3rem .15rem 0; padding: .45rem .7rem; border-radius: var(--r-sm); background: var(--mrp-warn-bg); color: var(--mrp-warn); font-size: .75rem; font-weight: 600; line-height: 1.45; }
+.mrp-pwd { display: flex; align-items: center; gap: .6rem; margin: .35rem .15rem 0; font-size: .72rem; font-weight: 600; color: var(--mrp-muted); }
+.mrp-pwd-bar { flex: 1; height: .35rem; border-radius: var(--r-full); background: var(--mrp-field); border: 1px solid var(--mrp-border); overflow: hidden; }
+.mrp-pwd-bar > span { display: block; height: 100%; width: 0; border-radius: var(--r-full); background: var(--mrp-bad); transition: width .2s, background .2s; }
+.mrp-pwd[data-level="2"] .mrp-pwd-bar > span { background: #E0951A; }
+.mrp-pwd[data-level="3"] .mrp-pwd-bar > span { background: var(--mrp-good); }
+.mrp-pwd-match { margin: .3rem .15rem 0; font-size: .72rem; font-weight: 600; }
+.mrp-pwd-match[data-state="ok"] { color: var(--mrp-good); } .mrp-pwd-match[data-state="bad"] { color: var(--mrp-bad); }
+
+/* progreso de campos obligatorios: queda visible arriba del diálogo o formulario */
+.mrp-formprogress { position: sticky; top: 0; z-index: 6; display: flex; flex-direction: column; gap: .25rem; margin: 0 0 .6rem; padding: .6rem .8rem; border-radius: var(--r-md); background: color-mix(in srgb, var(--mrp-surface) 88%, transparent); backdrop-filter: blur(8px); border: 1px solid var(--mrp-border); font-size: var(--fs-sm); }
+.mrp-formprogress-row { display: flex; justify-content: space-between; gap: .75rem; font-weight: 700; color: var(--mrp-text); }
+.mrp-formprogress-row small { font-weight: 600; color: var(--mrp-muted); }
+.mrp-formprogress[data-done="1"] .mrp-formprogress-row b { color: var(--mrp-good); }
+.mrp-formprogress .mrp-meter { margin: .15rem 0; }
+.mrp-formprogress-missing { font-size: .72rem; color: var(--mrp-muted); line-height: 1.45; }
+
+/* barra de acciones fija al pie del diálogo: el sticky va en el envoltorio de la fila
+   (su padre es el bloque del formulario, que sí tiene recorrido para pegarse abajo) */
+[data-testid="stDialog"] [role="dialog"] [data-testid="stLayoutWrapper"]:has(> [data-testid="stHorizontalBlock"] button[kind$="FormSubmit"]) {
+  position: sticky; bottom: -1px; z-index: 5; padding: .9rem 0 .3rem; margin-top: .5rem;
+  background: linear-gradient(to bottom, transparent, var(--mrp-surface) 30%);
+}

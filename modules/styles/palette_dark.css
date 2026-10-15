@@ -1,0 +1,11 @@
+--mrp-bg:#0B1020;--mrp-surface:#131A2F;--mrp-raised:#1B2442;--mrp-field:#0F1629;
+--mrp-text:#EEF1FC;--mrp-muted:#A7B2CE;--mrp-border:#28345A;--mrp-accent:#A596FF;
+--mrp-soft:#2A2356;--mrp-hover:#1C2546;
+--mrp-grad:linear-gradient(135deg,#8B79FF 0%,#5F45F2 100%);
+--mrp-shadow:0 1px 2px rgba(0,0,0,.25),0 12px 30px -10px rgba(0,0,0,.55);
+--mrp-shadow-lg:0 2px 4px rgba(0,0,0,.3),0 24px 52px -14px rgba(0,0,0,.7);
+--mrp-good:#7FE0AB;--mrp-good-bg:#143B30;--mrp-bad:#FFA9B1;--mrp-bad-bg:#47232F;
+--mrp-warn:#F3CD7E;--mrp-warn-bg:#41341D;--mrp-info:#A8CBFF;--mrp-info-bg:#1F3558;
+--mrp-teal:#6FE0DC;--mrp-teal-bg:#133B3F;
+--mrp-glow-a:rgba(139,121,255,.20);--mrp-glow-b:rgba(34,211,238,.08);
+color-scheme:dark;

@@ -1,0 +1,68 @@
+/* =========================================================================
+   30 · CONTROLES — botones, campos, selects, pestañas, diálogos, avisos
+   ========================================================================= */
+
+/* botones */
+button[kind] { border-radius: var(--r-md) !important; min-height: 2.6rem; font-weight: 600 !important; letter-spacing: -.005em; transition: transform .15s, background .15s, box-shadow .15s, border-color .15s; }
+button[kind="primary"], button[kind="primaryFormSubmit"] { background: var(--mrp-grad) !important; color: #FFF !important; border: 1px solid rgba(255,255,255,.14) !important; box-shadow: 0 8px 20px -8px rgba(100,80,245,.75); }
+button[kind="primary"]:hover, button[kind="primaryFormSubmit"]:hover { box-shadow: 0 12px 26px -8px rgba(100,80,245,.85); transform: translateY(-1px); filter: brightness(1.06); }
+button[kind="primary"]:active, button[kind="primaryFormSubmit"]:active { transform: translateY(0); }
+button[kind="primary"] p, button[kind="primaryFormSubmit"] p { color: #FFFFFF !important; }
+button[kind="secondary"], button[kind="secondaryFormSubmit"], button[kind="tertiary"] { color: var(--mrp-text) !important; background: var(--mrp-surface) !important; border: 1px solid var(--mrp-border) !important; box-shadow: 0 1px 2px rgba(20,26,51,.04); }
+button[kind="secondary"]:hover, button[kind="secondaryFormSubmit"]:hover { background: var(--mrp-soft) !important; border-color: var(--mrp-accent) !important; color: var(--mrp-accent) !important; transform: translateY(-1px); }
+button[kind]:disabled { opacity: .5; cursor: not-allowed; box-shadow: none; filter: none; transform: none; }
+[data-testid="stDownloadButton"] button, [data-testid="stLinkButton"] a { border-radius: var(--r-md) !important; }
+
+/* etiquetas y textos de widgets */
+[data-testid="stWidgetLabel"] p, [data-testid="stMarkdownContainer"] p, [data-testid="stMarkdownContainer"] li,
+[data-testid="stMarkdownContainer"] h1, [data-testid="stMarkdownContainer"] h2, [data-testid="stMarkdownContainer"] h3 { color: var(--mrp-text); }
+[data-testid="stWidgetLabel"] p { font-size: var(--fs-sm); font-weight: 600; line-height: 1.45; letter-spacing: .01em; }
+[data-testid="stCaptionContainer"], [data-testid="stCaptionContainer"] p { color: var(--mrp-muted) !important; }
+[data-testid="stMetricValue"], [data-testid="stMetricLabel"], [data-testid="stMetricLabel"] p { color: var(--mrp-text) !important; }
+
+/* campos de texto, número, área y select */
+[data-baseweb="input"], [data-baseweb="textarea"], [data-baseweb="select"] > div {
+  background: var(--mrp-field) !important; border: 1px solid var(--mrp-border); border-radius: var(--r-md) !important; min-height: 2.75rem;
+  transition: border-color .15s, box-shadow .15s, background .15s;
+}
+[data-baseweb="input"]:hover, [data-baseweb="textarea"]:hover, [data-baseweb="select"] > div:hover { border-color: color-mix(in srgb, var(--mrp-accent) 45%, var(--mrp-border)); }
+[data-baseweb="base-input"], [data-baseweb="input"] input, [data-baseweb="textarea"] textarea { background: transparent !important; color: var(--mrp-text) !important; caret-color: var(--mrp-accent); }
+[data-baseweb="input"]:focus-within, [data-baseweb="textarea"]:focus-within, [data-baseweb="select"] > div:focus-within {
+  border-color: var(--mrp-accent) !important; background: var(--mrp-surface) !important; box-shadow: 0 0 0 4px color-mix(in srgb, var(--mrp-accent) 18%, transparent);
+}
+input::placeholder, textarea::placeholder { color: var(--mrp-muted) !important; opacity: .7; }
+[data-baseweb="select"] span, [data-baseweb="select"] div, [data-baseweb="select"] input { color: var(--mrp-text); }
+[data-baseweb="select"] svg, [data-testid="stNumberInput"] button svg, [data-testid="stHeader"] svg { fill: var(--mrp-muted); color: var(--mrp-muted); }
+[data-baseweb="popover"] > div, [data-baseweb="menu"], [role="listbox"], [data-testid="stPopoverBody"], [data-testid="stTooltipContent"] {
+  background: var(--mrp-raised) !important; color: var(--mrp-text) !important; border: 1px solid var(--mrp-border) !important; border-radius: var(--r-md) !important; box-shadow: var(--mrp-shadow-lg) !important;
+}
+[role="option"], [data-baseweb="menu"] li { color: var(--mrp-text) !important; background: transparent !important; border-radius: .5rem; }
+[role="option"]:hover, [data-baseweb="menu"] li:hover, [role="option"][aria-selected="true"] { background: var(--mrp-soft) !important; }
+[data-baseweb="tag"] { background: var(--mrp-soft) !important; color: var(--mrp-accent) !important; border-radius: .5rem !important; }
+[data-testid="stToggle"] label p { font-weight: 600; }
+[data-testid="stCheckbox"] label { font-weight: 500; }
+
+/* pestañas segmentadas */
+[data-baseweb="tab-list"] { gap: .25rem; background: var(--mrp-field); border: 1px solid var(--mrp-border); border-radius: var(--r-md); padding: .25rem; width: fit-content; max-width: 100%; overflow-x: auto; }
+[data-baseweb="tab-highlight"], [data-baseweb="tab-border"] { display: none !important; }
+[data-baseweb="tab"] { color: var(--mrp-muted); padding: .55rem 1rem; border-radius: .6rem; font-weight: 600; background: transparent; transition: background .15s, color .15s; }
+[data-baseweb="tab"]:hover { color: var(--mrp-text); }
+[data-baseweb="tab"][aria-selected="true"] { color: var(--mrp-accent); background: var(--mrp-surface); box-shadow: 0 1px 3px rgba(20,26,51,.12); font-weight: 700; }
+[data-baseweb="tab-panel"] { padding-top: 1rem; }
+
+/* diálogos */
+[data-testid="stDialog"] { backdrop-filter: blur(6px); background: rgba(8,12,30,.50); }
+[data-testid="stDialog"] [role="dialog"] { background: var(--mrp-surface); color: var(--mrp-text); border: 1px solid var(--mrp-border); border-radius: 1.5rem !important; box-shadow: 0 30px 100px rgba(0,0,0,.35); animation: mrpPop .22s ease-out; max-height: calc(100dvh - 2rem); overflow-y: auto; scrollbar-gutter: stable; }
+[data-testid="stDialog"] [role="dialog"] > div:first-child { background: var(--mrp-surface); }
+[data-testid="stDialog"] h2 { font-weight: 800; letter-spacing: -.02em; }
+
+/* avisos, toast y progreso */
+[data-testid="stAlertContainer"] { border-radius: var(--r-md) !important; border: 1px solid var(--mrp-border) !important; }
+[data-testid="stAlertContainer"]:has([data-testid="stAlertContentInfo"]) { background: var(--mrp-info-bg) !important; }
+[data-testid="stAlertContainer"]:has([data-testid="stAlertContentSuccess"]) { background: var(--mrp-good-bg) !important; }
+[data-testid="stAlertContainer"]:has([data-testid="stAlertContentWarning"]) { background: var(--mrp-warn-bg) !important; }
+[data-testid="stAlertContainer"]:has([data-testid="stAlertContentError"]) { background: var(--mrp-bad-bg) !important; }
+[data-testid="stAlertContainer"] p { color: var(--mrp-text) !important; }
+[data-testid="stToast"] { background: var(--mrp-raised) !important; color: var(--mrp-text) !important; border: 1px solid var(--mrp-border) !important; border-radius: var(--r-md) !important; box-shadow: var(--mrp-shadow-lg) !important; }
+[data-testid="stProgress"] [role="progressbar"] { background: var(--mrp-field) !important; border-radius: var(--r-full); overflow: hidden; }
+[data-testid="stProgress"] [role="progressbar"] > div { background: var(--mrp-grad) !important; border-radius: var(--r-full); }
