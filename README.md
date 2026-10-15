@@ -51,6 +51,8 @@ borrar, avisos (toast) al guardar, y diseño adaptado a móvil.
 Todavía no incluye expedientes/tareas del planner original; se evaluará más
 adelante.
 
+El historial completo de parches, correcciones, problemas encontrados y pendientes está en [CHANGELOG.md](CHANGELOG.md).
+
 ## Arquitectura
 
 ### Formularios e interfaz (parche 030)
