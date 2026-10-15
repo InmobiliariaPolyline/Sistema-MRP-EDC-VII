@@ -59,20 +59,18 @@ def render(user: dict) -> None:
     ui.stat_grid(
         [
             ui.stat_card("📦", totals["materials"], "Materiales", "en el catálogo", tone="purple"),
-            ui.stat_card("🏭", totals["suppliers"], "Proveedores", "registrados en total", tone="blue"),
-            ui.stat_card("✅", totals["suppliers_with_available"], "Con disponibilidad", "ofrecen algo hoy", tone="green"),
+            ui.stat_card("🏬", totals.get("materials_in_stock", 0), "En el almacén", "materiales con stock", tone="green"),
             ui.stat_card(
-                "⚠️",
-                totals["materials_without_supplier"],
-                "Sin proveedor",
-                "materiales por cotizar",
-                warn=totals["materials_without_supplier"] > 0,
+                "⚠️", totals.get("low_stock", 0), "Stock bajo", "en o bajo el mínimo definido",
+                warn=totals.get("low_stock", 0) > 0,
             ),
+            ui.stat_card("🚚", totals.get("dispatches_month", 0), "Despachos del mes", "vales de salida a obras", tone="blue"),
             ui.stat_card("🧾", totals.get("orders_open", 0), "Órdenes abiertas", "pendientes, enviadas o parciales", tone="teal", trend=monthly),
+            ui.stat_card("🏭", totals["suppliers"], "Proveedores", "registrados", tone="blue"),
         ]
     )
 
-    _render_alerts(stale)
+    _render_alerts(stale, _low_stock_rows())
     _render_purchase_analytics(orders)
     _render_site_and_attendance()
 
@@ -90,7 +88,7 @@ def _render_quick_actions() -> None:
     actions = [
         ("Nueva orden", ":material/add_shopping_cart:", "Órdenes de compra"),
         ("Pasar lista", ":material/event_available:", "Asistencia"),
-        ("Ver inventario", ":material/inventory_2:", "Inventario"),
+        ("Despachar material", ":material/local_shipping:", "Inventario"),
         ("Ver obras", ":material/apartment:", "Obras"),
     ]
     cols = st.columns(len(actions))
@@ -112,7 +110,24 @@ def _monthly_spend(orders: pd.DataFrame) -> list[float]:
     return billable.groupby("mes")["total"].sum().tail(8).tolist()
 
 
-def _render_alerts(stale: pd.DataFrame) -> None:
+def _low_stock_rows() -> list[dict]:
+    levels = repo.stock_levels()
+    if levels.empty:
+        return []
+    levels = levels.assign(stock=levels["stock"].astype(float), min_stock=levels["min_stock"].astype(float))
+    low = levels[(levels["min_stock"] > 0) & (levels["stock"] <= levels["min_stock"])]
+    return low.sort_values("stock").to_dict("records")
+
+
+def _render_alerts(stale: pd.DataFrame, low: list[dict] | None = None) -> None:
+    low = low or []
+    if low:
+        detail = ", ".join(f"{r['material_name']} ({r['stock']:g} de mín. {r['min_stock']:g})" for r in low[:5])
+        more = f" y {len(low) - 5} más" if len(low) > 5 else ""
+        st.warning(
+            f"**{len(low)} material(es) con stock bajo:** {detail}{more}. Revisa la sugerencia de compra en Órdenes de compra.",
+            icon=":material/inventory:",
+        )
     if stale.empty:
         return
     detail = ", ".join(f"{r['code']} ({r['supplier_name']}, {int(r['age'])} d)" for r in stale.to_dict("records")[:5])
@@ -265,7 +280,7 @@ def _render_site_and_attendance() -> None:
     c1, c2 = st.columns([5, 3])
     with c1:
         with st.container(border=True):
-            _panel("Obras", "Avance de materiales por obra", "Presupuesto frente a lo pedido y lo consumido (en costo).")
+            _panel("Obras", "Avance de materiales por obra", "Presupuesto frente a lo pedido y lo despachado (en costo).")
             _site_progress_chart()
     with c2:
         with st.container(border=True):
@@ -285,7 +300,7 @@ def _site_progress_chart() -> None:
                 "obra": site["name"],
                 "Presupuesto": float(df["Presupuesto $"].sum()),
                 "Pedido": float(df["Gasto pedido $"].sum()),
-                "Consumido": float(df["Consumido $"].sum()),
+                "Despachado": float(df["Despachado $"].sum()),
             }
         )
     if not rows:
@@ -293,7 +308,7 @@ def _site_progress_chart() -> None:
         return
     data = pd.DataFrame(rows).iloc[::-1]
     fig = go.Figure()
-    for name, color in (("Presupuesto", "rgba(150,160,190,.38)"), ("Pedido", ACCENT), ("Consumido", TEAL)):
+    for name, color in (("Presupuesto", "rgba(150,160,190,.38)"), ("Pedido", ACCENT), ("Despachado", TEAL)):
         fig.add_bar(y=data["obra"], x=data[name], name=name, orientation="h", marker=_bar_marker(color), hovertemplate="%{y}: %{x:,.2f}<extra>" + name + "</extra>")
     fig.update_layout(margin=dict(t=8, b=0, l=0, r=0), barmode="group", bargap=0.3, bargroupgap=0.08, legend=dict(orientation="h", y=1.12, x=0, font=dict(size=11)))
     fig.update_yaxes(type="category", showgrid=False)
@@ -362,7 +377,7 @@ def _render_sites_map() -> None:
 def _icon_for(summary: str) -> str:
     text = summary.lower()
     for words, icon in [
-        (("eliminad",), "🗑️"), (("recepci", "stock", "movimiento", "consumo", "entrada", "salida"), "📦"),
+        (("eliminad",), "🗑️"), (("recepci", "stock", "movimiento", "despacho", "entrada", "salida"), "📦"),
         (("orden",), "🧾"), (("proveedor",), "🏭"), (("material", "presupuesto"), "🧱"),
         (("asistencia",), "📅"), (("trabajador", "obra", "cuadrilla", "acceso"), "👷"),
     ]:

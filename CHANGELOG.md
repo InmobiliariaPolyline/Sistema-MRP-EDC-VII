@@ -6,6 +6,34 @@ Formato de cada parche: **Agregado** · **Corregido** · **Problemas y causa** �
 
 ---
 
+## Parche 036 — Despacho a obra, stock mínimo, sugerencia de compra e integridad · 2026-10-16
+Basado en cómo se usa el sistema: **un solo administrador** opera el almacén; el material llega del proveedor al almacén (entrada) y sale hacia las obras cuando alguien lo pide en persona (despacho). No hay roles ni aprobaciones, y el almacén es uno solo.
+
+**Agregado**
+- **Despacho a obra con vale de salida** (`Inventario → ＋ Despachar a obra`, también desde Obras): obra, solicitante (trabajador o texto libre), varios materiales por vale, aviso si supera el presupuesto, descuento de stock y **vale PDF** con firmas (`VS-0001…`). Pestaña «Vales de salida» para reimprimirlos.
+- **Stock mínimo** por material, alertas en el tablero y estado «stock bajo» en el inventario.
+- **Sugerencia de compra** (`Órdenes de compra → Sugerencia de compra`): faltante = presupuesto sin despachar + mínimo − stock − lo que ya viene en órdenes; asigna el proveedor más barato y crea las órdenes agrupadas.
+- **Importar lista de precios** del proveedor desde Excel/CSV (detecta columnas, tolera títulos, enlaza por nombre incluso con diferencias leves, vista previa y plantilla descargable) e **historial de precios**.
+- **Editar órdenes** pendientes o enviadas (cantidades, precios, obra, notas, quitar líneas) mientras no hayan recibido material.
+- Aviso de **presupuesto al crear una orden** (total y por material).
+- Tablero: KPIs útiles (en el almacén, stock bajo, despachos del mes), alerta de stock bajo y accesos rápidos a despachar.
+- `db/migrations/036_despacho_mrp.sql`: script SQL único (idempotente) con columnas, tablas, vista `stock_levels`, funciones `receive_order` y `create_dispatch`, triggers y permisos.
+- Pruebas automáticas de stock, recepción, despacho, edición/borrado de órdenes, precios, sugerencia de compra e importación (34 en total).
+
+**Corregido**
+- «Consumo» pasa a llamarse **«Despacho»** en toda la interfaz (el material sale del almacén aunque todavía no se gaste).
+- Borrar una orden con material recibido dejaba el stock descuadrado: ahora no se puede (se cancela). También lo impide un trigger en la base.
+- Recepciones y despachos son **todo o nada** (función en la base; respaldo en Python que valida antes de escribir). No se puede recibir más de lo pedido ni sacar más stock del que hay, ni siquiera con dos operaciones simultáneas (trigger con bloqueo).
+- El KPI «sin proveedor» se quitó del tablero: el catálogo es todo lo que el almacén puede manejar, no solo lo cotizado.
+
+**Problemas y causa**
+- **Límite silencioso de 1 000 filas**: PostgREST (Supabase) corta cada consulta en 1 000 filas sin avisar; con 500 materiales × varios proveedores o miles de movimientos, listas como ofertas, líneas de órdenes y movimientos se truncaban. Ahora se consultan por páginas (`_select_all`, probado contra Supabase con 501 filas en páginas de 100).
+- El stock se calculaba con los últimos 5 000 movimientos (en Supabase, 1 000): ahora sale de la vista `stock_levels` (o de todos los movimientos si la vista aún no existe).
+
+**Hay que hacer**
+- En Supabase → SQL Editor, pegar y ejecutar `db/migrations/036_despacho_mrp.sql` (una vez). Hasta entonces la app funciona con respaldos, pero sin historial automático de precios, sin los triggers de integridad y con despachos/recepciones menos protegidos contra fallos a medias.
+- Reiniciar la app en Streamlit Cloud si no toma el cambio.
+
 ## Parche 035 — Los cambios de CSS no se veían en Streamlit Cloud · 2026-10-15
 **Corregido**
 - Los parches 033 y 034 (espaciado, textos pegados) estaban en GitHub pero la app desplegada seguía mostrando el diseño anterior hasta reiniciarla.

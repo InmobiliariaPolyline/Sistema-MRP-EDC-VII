@@ -17,42 +17,46 @@ GUIDES: dict[str, str] = {
 **Para qué sirve:** tener a quién llamar y qué vende cada uno.
 
 1. **＋ Nuevo proveedor:** escribe nombre y teléfono *con código de país* (ej. `51987654321`) para que WhatsApp funcione.
-2. **Catálogo:** marca *Lo ofrece*, si está *Disponible* ahora y su *precio*. Esos precios alimentan el comparador de cotizaciones.
-3. Los botones 📞 💬 ✉️ contactan al proveedor con un clic.
+2. **Catálogo:** marca *Lo ofrece*, si está *Disponible* y su *precio*. Esos precios alimentan el comparador y la sugerencia de compra.
+3. **📥 Importar precios:** sube el Excel o CSV que te mandó el proveedor. Se enlaza cada fila con tu catálogo y ves qué cambia antes de aplicar. Si no tiene formato, descarga la plantilla.
+4. Cada cambio de precio queda en el historial automáticamente.
 """,
     "Materiales": """
-**Para qué sirve:** el catálogo maestro de materiales.
+**Para qué sirve:** el catálogo maestro de todo lo que el almacén puede manejar.
 
-- **ℹ️** abre la ficha del material: densidad, qué significa, precios por proveedor, stock y en qué obras se usa.
-- **＋ Nuevo material:** categoría + nombre (no se pueden repetir juntos), densidad (kg/m³) y la métrica con la que se compra (ej. *Volumen (m³)*).
-- La etiqueta verde «Mejor» es el precio más bajo entre proveedores con disponibilidad.
+- **ℹ️** abre la ficha del material: densidad, precios por proveedor, stock y en qué obras se usa.
+- **＋ Nuevo material:** categoría + nombre (no pueden repetirse juntos), densidad (kg/m³), métrica de compra (ej. *Volumen (m³)*) y **stock mínimo**.
+- **Stock mínimo:** si lo defines, el tablero avisa cuando el stock llega a ese nivel y la sugerencia de compra lo repone.
+- Que un material no tenga proveedor es normal: el catálogo es todo lo que puedes almacenar, no solo lo que ya cotizaste.
 """,
     "Órdenes de compra": """
-**Para qué sirve:** pedir materiales a un proveedor y seguir el pedido.
+**Para qué sirve:** pedir material a un proveedor y seguir el pedido hasta que llega al almacén.
 
-1. **＋ Nueva orden:** elige proveedor, obra destino y agrega materiales con cantidad y precio. El desplegable **💡 Comparar cotizaciones** te dice si otro proveedor es más barato.
+1. **＋ Nueva orden:** proveedor, obra destino (opcional) y materiales con cantidad y precio. **💡 Comparar cotizaciones** te dice si otro proveedor es más barato; si eliges obra, avisa cuando el pedido supera su presupuesto.
 2. **Estados:** Pendiente → Enviada → Recibida (o Parcial si llegó solo una parte).
-3. **📦 Registrar recepción:** anota lo que llegó; se suma al inventario.
-4. **PDF / WhatsApp / Duplicar:** imprime la orden, envíala escrita por WhatsApp o repítela.
-
-*Ejemplo:* pediste 12 m³ de concreto y llegaron 5: escribe 5 en «Recibido ahora»; la orden queda *Parcial* con 7 pendientes.
+3. **📦 Registrar recepción:** anota lo que llegó; entra al stock del almacén. No se puede recibir más de lo pedido.
+4. **✏️ Editar orden:** corrige cantidades, precios, obra o notas mientras no haya recibido material.
+5. Una orden que ya recibió material **no se borra** (el stock quedaría descuadrado): si no continúa, cancélala.
+6. **Sugerencia de compra:** calcula qué falta pedir según los presupuestos de las obras, el stock y lo que ya viene en camino, y crea las órdenes agrupadas por el proveedor más barato.
 """,
     "Inventario": """
-**Para qué sirve:** saber cuánto hay de cada material.
+**Para qué sirve:** saber qué hay en el almacén y llevar la cuenta de lo que sale hacia las obras.
 
-- El stock **sube** con las recepciones de órdenes y con *Entradas* manuales.
-- **Baja** con *Consumo en una obra* o *Salidas* (merma, préstamo).
-- No se puede sacar más de lo que hay.
+- **Entra** con las recepciones de las órdenes de compra (y con entradas de ajuste).
+- **Sale** con un **despacho a obra**: cuando alguien pide material, pulsa **＋ Despachar a obra**, elige la obra y quién lo pide, agrega los materiales y confirma. Se descuenta del almacén y se genera un **vale de salida en PDF** para firmar.
+- Si te pasas del presupuesto de la obra, el sistema avisa (no lo impide).
+- **Entrada de ajuste o merma:** para corregir un conteo o dar de baja material dañado o prestado.
+- No se puede sacar más de lo que hay. La pestaña **Vales de salida** guarda todos los vales para reimprimirlos.
 
-*Ejemplo:* **＋ Movimiento → Consumo en una obra →** Concreto, 2 m³, obra «Torre Central».
+*Ejemplo:* Juan Pérez pide 4 m³ de concreto para Torre Central → Despachar a obra → Torre Central, Juan Pérez, Concreto 4 → Registrar → descargar el vale.
 """,
     "Obras y presupuesto": """
 **Para qué sirve:** ver todo de una obra en un solo lugar.
 
 - **Información:** dirección, mapa y enlace a Google Maps.
-- **Materiales:** presupuesto vs. pedido, recibido y consumido; ℹ️ para informarte de un material.
+- **Materiales:** presupuesto frente a lo pedido, recibido y **despachado** desde el almacén; ℹ️ para informarte de un material y **🚚 Despachar material** para sacar del almacén hacia esta obra.
 - **Trabajadores:** quién está asignado y cuántas jornadas asistió.
-- **Progreso:** porcentajes de pedido, recepción y consumo.
+- **Progreso:** porcentajes de pedido, recepción y despacho.
 
 Primero define el presupuesto con **＋ Material al presupuesto** (cantidad prevista y precio estimado).
 """,

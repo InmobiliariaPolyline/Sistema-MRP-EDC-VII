@@ -13,7 +13,7 @@ import pandas as pd
 import streamlit as st
 
 from db import repository as repo
-from modules import forms, ui
+from modules import forms, sugerencias, ui
 from utils.reports import order_pdf, order_whatsapp_text
 from utils.timeago import age_days
 
@@ -82,6 +82,9 @@ def render() -> None:
         _new_order_dialog()
     elif st.session_state.get(PRESET_KEY):
         _new_order_dialog()
+    if st.button("Sugerencia de compra", key="open_suggestions", icon=":material/lightbulb:",
+                 help="Calcula qué falta pedir según los presupuestos de las obras, el stock y lo que ya viene en camino."):
+        sugerencias.suggestion_dialog()
 
     _render_list()
 
@@ -230,6 +233,8 @@ def _new_order_dialog() -> None:
     if lines:
         st.metric("Total del pedido", f"{total:,.2f}")
         st.caption(f"{len(lines)} material(es) · Proveedor: {supplier_name} · Destino: {site_choice}")
+        if site_choice != NO_SITE:
+            _budget_warning(sites.loc[sites["name"] == site_choice, "id"].iloc[0], site_choice, lines, total)
         if any(line["unit_price"] == 0 for line in lines):
             st.warning("Hay materiales con precio 0. El total solo incluye los precios registrados.")
         totals = _supplier_totals(lines, offers)
@@ -270,6 +275,99 @@ def _new_order_dialog() -> None:
         st.rerun()
 
 
+def _budget_warning(site_id: str, site_name: str, lines: list[dict], total: float) -> None:
+    """Avisa si esta orden hace que la obra supere lo presupuestado (en costo total o por material)."""
+    budgets = repo.list_budgets(site_id)
+    if budgets.empty:
+        return
+    planned = float((budgets["planned_qty"].astype(float) * budgets["planned_unit_price"].astype(float)).sum())
+    orders = repo.list_orders()
+    site_orders = orders[(orders["project_site_id"] == site_id) & (orders["status"] != "cancelada")] if not orders.empty else orders
+    ordered = float(site_orders["total"].astype(float).sum()) if not site_orders.empty else 0.0
+    if planned > 0 and ordered + total > planned + 1e-9:
+        st.warning(
+            f"Con esta orden, «{site_name}» pasaría lo presupuestado: previsto {planned:,.2f}, ya pedido {ordered:,.2f} + esta orden {total:,.2f} "
+            f"= {ordered + total:,.2f} ({(ordered + total) / planned * 100:.0f} %).",
+            icon=":material/warning:",
+        )
+    items = repo.list_order_items()
+    ids = set(site_orders["id"]) if not site_orders.empty else set()
+    already: dict[str, float] = {}
+    if not items.empty:
+        for row in items[items["order_id"].isin(ids)].to_dict("records"):
+            if row.get("material_id"):
+                already[row["material_id"]] = already.get(row["material_id"], 0.0) + float(row["quantity"])
+    planned_qty = budgets.set_index("material_id")["planned_qty"].astype(float).to_dict()
+    over = [
+        f"{line['material_name']} ({already.get(line['material_id'], 0) + line['quantity']:g} de {planned_qty[line['material_id']]:g})"
+        for line in lines
+        if line.get("material_id") in planned_qty and already.get(line["material_id"], 0) + line["quantity"] > planned_qty[line["material_id"]] + 1e-9
+    ]
+    if over:
+        st.warning("Materiales por encima de su cantidad presupuestada para esta obra: " + ", ".join(over) + ".", icon=":material/warning:")
+
+
+@st.dialog("Editar orden", width="large")
+def _edit_order_dialog(order: dict, items: pd.DataFrame) -> None:
+    """Corrige obra, notas, cantidades y precios de una orden que todavía no recibió material."""
+    forms.header(f"Editar {order['code']}", "Solo se puede mientras la orden no haya recibido material. Para quitar una línea, marca «Quitar».")
+    sites = repo.list_project_sites()
+    site_names = [NO_SITE] + sites["name"].tolist()
+    current = order.get("site_name") if order.get("site_name") in site_names else NO_SITE
+    forms.section("1. Destino y notas", "Cambia la obra destino o las notas de la orden.")
+    site_choice = st.selectbox("Obra destino (opcional)", site_names, index=site_names.index(current), key=f"edit_site_{order['id']}")
+    notes = st.text_input("Notas (opcional)", value=order.get("notes") or "", max_chars=forms.RULES["Notas (opcional)"]["max"], key=f"edit_notes_{order['id']}")
+
+    forms.section("2. Líneas", "Ajusta cantidades y precios. Las líneas marcadas con «Quitar» se eliminan al guardar.")
+    records = items.to_dict("records")
+    table = pd.DataFrame(
+        {
+            "Quitar": False,
+            "Material": [r["material_name"] for r in records],
+            "Unidad": [r.get("unit") or "" for r in records],
+            "Cantidad": [float(r["quantity"]) for r in records],
+            "Precio unit.": [float(r["unit_price"]) for r in records],
+        }
+    )
+    edited = st.data_editor(
+        table, hide_index=True, width="stretch", key=f"edit_lines_{order['id']}", disabled=["Material", "Unidad"],
+        column_config={
+            "Cantidad": st.column_config.NumberColumn(min_value=0.0, format="%.2f"),
+            "Precio unit.": st.column_config.NumberColumn(min_value=0.0, format="%.2f"),
+        },
+    )
+    kept = edited[~edited["Quitar"]]
+    total = float((kept["Cantidad"] * kept["Precio unit."]).sum())
+    st.metric("Total de la orden", f"{total:,.2f}")
+
+    cancel, save = st.columns([1, 2])
+    if cancel.button("Cancelar", key=f"edit_cancel_{order['id']}", width="stretch"):
+        st.rerun()
+    if save.button("Guardar cambios", type="primary", width="stretch", key=f"edit_save_{order['id']}"):
+        issues = forms.validate({"Notas (opcional)": notes})
+        if kept.empty:
+            issues.append("Líneas: la orden debe conservar al menos un material (para quitarla por completo, elimínala).")
+        for _, row in kept.iterrows():
+            issues.extend(f"{row['Material']}: {i}" for i in forms.validate({"Cantidad": row["Cantidad"], "Precio unit.": row["Precio unit."]}))
+        if forms.errors(issues):
+            return
+        new_items = [
+            {
+                "material_id": records[i].get("material_id"), "material_name": records[i]["material_name"], "unit": records[i].get("unit"),
+                "quantity": float(row["Cantidad"]), "unit_price": float(row["Precio unit."]),
+            }
+            for i, row in kept.iterrows()
+        ]
+        site_id = None if site_choice == NO_SITE else sites.loc[sites["name"] == site_choice, "id"].iloc[0]
+        try:
+            repo.update_order(order["id"], site_id, notes.strip() or None, new_items)
+        except ValueError as exc:
+            st.error(str(exc))
+            return
+        ui.flash(f"Orden {order['code']} actualizada.", "✏️")
+        st.rerun()
+
+
 def _duplicate(order: dict, items: pd.DataFrame) -> None:
     """Prepara el diálogo de nueva orden con los datos de otra ya hecha."""
     suppliers = repo.list_suppliers()
@@ -303,7 +401,11 @@ def _duplicate(order: dict, items: pd.DataFrame) -> None:
 # ---------------------------------------------------------------------------
 
 def _delete_order(order_id: str, code: str) -> None:
-    repo.delete_order(order_id)
+    try:
+        repo.delete_order(order_id)
+    except ValueError as exc:  # p. ej. ya recibió material: el stock quedaría descuadrado
+        ui.flash(f"No se pudo eliminar {code}: {exc}", "⚠️", log=False)
+        return
     if st.session_state.get(SELECTED_KEY) == order_id:
         st.session_state[SELECTED_KEY] = None
     ui.flash(f"Orden {code} eliminada.", "🗑️")
@@ -545,16 +647,21 @@ def _render_detail(order_id: str) -> None:
         if status in ("pendiente", "enviada", "parcial"):
             _render_reception(order, items)
 
-    b1, b2, b3, _ = st.columns([3, 2.2, 2, 1])
+    received_any = bool(not items.empty and (items["received_qty"].astype(float) > 0).any())
+    b1, b2, b3, b4 = st.columns([3, 2.2, 2, 1.8])
     if status == "pendiente" and b1.button("📤 Marcar como enviada", width="stretch"):
         _change_status(order_id, order["code"], "enviada")
     if status in ("pendiente", "enviada", "parcial") and b2.button("Cancelar orden", width="stretch"):
         _change_status(order_id, order["code"], "cancelada")
-    if b3.button("🗑 Eliminar", width="stretch"):
+    if b3.button("🗑 Eliminar", width="stretch", disabled=received_any,
+                 help="Ya recibió material: no se puede eliminar. Cancélala si el pedido no continúa." if received_any else None):
         ui.confirm_delete(
             f"¿Eliminar la orden {order['code']}? Se borran también sus líneas.",
             lambda oid=order_id, code=order["code"]: _delete_order(oid, code),
         )
+    if status in ("pendiente", "enviada") and not received_any and not items.empty:
+        if b4.button("✏️ Editar orden", width="stretch", help="Cambia cantidades, precios, obra o notas mientras no haya recibido material."):
+            _edit_order_dialog(order, items)
 
     if not items.empty:
         d1, d2, d3, _ = st.columns([2, 2.6, 2.2, 1])

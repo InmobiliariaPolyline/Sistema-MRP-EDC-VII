@@ -185,3 +185,60 @@ def order_whatsapp_text(order: dict, items: pd.DataFrame) -> str:
         lines.append(f"Notas: {order['notes']}")
     lines.append("¿Me confirman disponibilidad y fecha de entrega? Gracias.")
     return "\n".join(lines)
+
+
+def dispatch_pdf(voucher: dict, lines: pd.DataFrame) -> bytes:
+    """Vale de salida (despacho de almacén a obra), con espacio para las firmas."""
+    pdf = FPDF(orientation="P", unit="mm", format="A4")
+    pdf.set_auto_page_break(auto=True, margin=16)
+    pdf.add_page()
+
+    pdf.set_font("Helvetica", "B", 20)
+    pdf.cell(0, 10, _latin1(f"Vale de salida {voucher['code']}"), new_x="LMARGIN", new_y="NEXT")
+    pdf.set_font("Helvetica", "", 10)
+    pdf.set_text_color(110, 110, 110)
+    pdf.cell(0, 6, _latin1(f"Fecha: {str(voucher['created_at'])[:16].replace('T', ' ')}"), new_x="LMARGIN", new_y="NEXT")
+    pdf.set_text_color(0, 0, 0)
+    pdf.ln(4)
+
+    def line(label: str, value) -> None:
+        if not value:
+            return
+        pdf.set_font("Helvetica", "B", 10)
+        pdf.cell(34, 6, _latin1(label))
+        pdf.set_font("Helvetica", "", 10)
+        pdf.multi_cell(0, 6, _latin1(str(value)), new_x="LMARGIN", new_y="NEXT")
+
+    line("Obra destino:", voucher.get("site_name"))
+    line("Solicitado por:", voucher.get("requested_by"))
+    line("Registrado por:", voucher.get("actor"))
+    line("Nota:", voucher.get("note"))
+    pdf.ln(4)
+
+    widths = [110, 30, 40]
+    heads = ["Material", "Unidad", "Cantidad"]
+    pdf.set_font("Helvetica", "B", 9)
+    pdf.set_fill_color(239, 236, 253)
+    for head, w in zip(heads, widths):
+        pdf.cell(w, 8, _latin1(head), border=1, fill=True, align="R" if head == "Cantidad" else "L")
+    pdf.ln()
+    pdf.set_font("Helvetica", "", 9)
+    total_lines = 0
+    for row in lines.to_dict("records"):
+        total_lines += 1
+        cells = [_latin1(str(row["material_name"]))[:62], _latin1(str(row.get("unit") or ""))[:16], f"{float(row['quantity']):,.2f}"]
+        for i, (value, w) in enumerate(zip(cells, widths)):
+            pdf.cell(w, 7, value, border=1, align="R" if i == 2 else "L")
+        pdf.ln()
+    pdf.set_font("Helvetica", "I", 9)
+    pdf.set_text_color(110, 110, 110)
+    pdf.cell(0, 8, f"{total_lines} material(es) despachado(s)", new_x="LMARGIN", new_y="NEXT")
+    pdf.set_text_color(0, 0, 0)
+
+    pdf.ln(22)
+    pdf.set_font("Helvetica", "", 9)
+    pdf.cell(95, 6, "______________________________", new_x="RIGHT")
+    pdf.cell(0, 6, "______________________________", new_x="LMARGIN", new_y="NEXT")
+    pdf.cell(95, 5, _latin1("Entrega (almacén)"))
+    pdf.cell(0, 5, _latin1("Recibe (" + (voucher.get("requested_by") or "solicitante") + ")"), new_x="LMARGIN", new_y="NEXT")
+    return bytes(pdf.output())

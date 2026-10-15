@@ -8,6 +8,7 @@ import streamlit as st
 
 from db import repository as repo
 from modules import forms, ui
+from utils import pricelist
 
 SELECTED_KEY = "selected_supplier_id"
 ALL_CATALOG = "Todos los materiales"
@@ -177,6 +178,93 @@ def _render_cards() -> None:
                     )
 
 
+@st.dialog("Importar lista de precios", width="large")
+def _import_prices_dialog(supplier: dict) -> None:
+    """Carga los precios de un proveedor desde su Excel/CSV, enlazando cada fila con el catálogo."""
+    forms.header(
+        f"Lista de precios de {supplier['name']}",
+        "Sube el archivo que te mandó el proveedor (una columna con el material y otra con el precio). Antes de aplicar verás qué se va a cambiar.",
+    )
+    catalog = repo.get_supplier_catalog(supplier["id"])
+    if catalog.empty:
+        ui.empty_state("El catálogo está vacío", "Crea materiales en Materiales para poder enlazar la lista del proveedor.")
+        return
+    priced = catalog[catalog["offered"] & catalog["price"].notna()]
+    current = {r["id"]: float(r["price"]) for r in priced.to_dict("records") if float(r["price"]) > 0}
+
+    forms.section("1. Plantilla (opcional)", "Si el proveedor no tiene formato, descarga esta hoja con todos tus materiales para que la llene.")
+    st.download_button(
+        "Descargar plantilla con el catálogo", data=pricelist.template_bytes(catalog, current), file_name="plantilla_precios.xlsx",
+        mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet", icon=":material/download:", key=f"tpl_{supplier['id']}",
+    )
+
+    forms.section("2. Archivo del proveedor", "Excel (.xlsx, .xls) o CSV. Se detectan solas las columnas «Material» y «Precio».")
+    upload = st.file_uploader("Archivo de precios", type=["xlsx", "xls", "csv"], key=f"price_file_{supplier['id']}")
+    if upload is None:
+        return
+    try:
+        table = pricelist.read_table(upload.getvalue(), upload.name)
+    except Exception as exc:
+        st.error(f"No se pudo leer el archivo: {exc}")
+        return
+    result = pricelist.match_rows(table, catalog, current)
+    if result.empty:
+        st.warning("El archivo no tiene filas con material.")
+        return
+
+    forms.section("3. Revisa antes de aplicar", "Solo se aplican las filas marcadas. Las coincidencias «parecidas» vienen sin marcar: confírmalas tú.")
+    counts = result["estado"].value_counts().to_dict()
+    c1, c2, c3, c4 = st.columns(4)
+    c1.metric("Nuevos", counts.get("nuevo", 0))
+    c2.metric("Cambian de precio", counts.get("cambia", 0))
+    c3.metric("Sin cambio", counts.get("igual", 0))
+    c4.metric("Sin coincidencia", counts.get("sin coincidencia", 0) + counts.get("sin precio válido", 0))
+
+    actionable = result[result["estado"].isin(["nuevo", "cambia"])].copy()
+    if actionable.empty:
+        st.info("No hay precios nuevos ni cambios que aplicar.")
+    else:
+        view = pd.DataFrame(
+            {
+                "Aplicar": actionable["coincidencia"] == "exacta",
+                "En el archivo": actionable["archivo"],
+                "Material del catálogo": actionable["material"],
+                "Coincidencia": actionable["coincidencia"],
+                "Precio actual": actionable["precio_actual"].astype(float),
+                "Precio nuevo": actionable["precio"].astype(float),
+            }
+        )
+        edited = st.data_editor(
+            view, hide_index=True, width="stretch", key=f"price_review_{supplier['id']}_{upload.name}",
+            disabled=["En el archivo", "Material del catálogo", "Coincidencia", "Precio actual", "Precio nuevo"],
+            column_config={
+                "Precio actual": st.column_config.NumberColumn(format="%.2f"),
+                "Precio nuevo": st.column_config.NumberColumn(format="%.2f"),
+            },
+        )
+        make_available = st.checkbox("Marcar como disponibles los materiales que se carguen", value=True, key=f"price_avail_{supplier['id']}")
+        chosen = actionable[edited["Aplicar"].to_numpy()]
+        st.caption(f"{len(chosen)} precio(s) marcado(s) para aplicar.")
+        if st.button("Aplicar precios marcados", type="primary", width="stretch", disabled=chosen.empty, key=f"price_apply_{supplier['id']}"):
+            rows = [{"material_id": r["material_id"], "price": float(r["precio"])} for r in chosen.to_dict("records")]
+            try:
+                applied = repo.bulk_set_supplier_prices(supplier["id"], rows, make_available)
+            except Exception:
+                st.error("No se pudieron guardar los precios. Tus datos del archivo se conservan; inténtalo de nuevo.")
+                return
+            ui.flash(f"Lista de «{supplier['name']}» importada: {applied} precio(s) aplicado(s).", "📥")
+            st.rerun()
+
+    unmatched = result[result["estado"].isin(["sin coincidencia", "sin precio válido"])]
+    if not unmatched.empty:
+        with st.expander(f"Filas que no se pueden aplicar ({len(unmatched)})"):
+            st.caption("No coinciden con ningún material del catálogo o no tienen un precio válido. Revisa el nombre o créalos en Materiales.")
+            st.dataframe(
+                unmatched[["fila", "archivo", "estado"]].rename(columns={"fila": "Fila", "archivo": "En el archivo", "estado": "Motivo"}),
+                hide_index=True, width="stretch",
+            )
+
+
 def _render_supplier_detail(supplier_id: str) -> None:
     suppliers = repo.list_suppliers()
     match = suppliers[suppliers["id"] == supplier_id]
@@ -186,12 +274,14 @@ def _render_supplier_detail(supplier_id: str) -> None:
         return
     supplier = match.to_dict("records")[0]
 
-    b1, b2, _ = st.columns([1.5, 1.5, 5])
+    b1, b2, b3, _ = st.columns([1.5, 1.5, 2.6, 3.4])
     if b1.button("← Volver"):
         st.session_state[SELECTED_KEY] = None
         st.rerun()
     if b2.button("✏️ Editar"):
         _edit_supplier_dialog(supplier)
+    if b3.button("📥 Importar precios", help="Carga de una vez la lista de precios (Excel o CSV) que te mandó el proveedor."):
+        _import_prices_dialog(supplier)
 
     ui.page_header("Ficha de proveedor", supplier["name"])
 

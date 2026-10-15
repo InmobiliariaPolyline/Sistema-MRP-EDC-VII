@@ -31,9 +31,12 @@ Sistema con login propio, dashboard y varios módulos:
   **PDF** o enviar por **WhatsApp** con el pedido ya escrito. Las órdenes
   abiertas hace más de X días se marcan con ⏰ aquí y en el dashboard.
 - **Inventario**: stock por material (entradas por recepciones y ajustes,
-  menos consumo en obra y mermas) e historial de movimientos.
+  menos despachos a obra y mermas) e historial de movimientos.
+- **Despacho a obra y vales de salida** (en Inventario): el flujo es proveedor → almacén (entrada por recepción) → obra (despacho). Quien administra el almacén registra el despacho cuando alguien pide material en persona: elige obra y solicitante, agrega los materiales y se genera un vale PDF para firmar. El stock nunca queda negativo y, si el despacho supera el presupuesto de la obra, avisa.
+- **Stock mínimo y sugerencia de compra**: cada material puede tener un stock mínimo (alerta en el tablero). *Órdenes de compra → Sugerencia de compra* calcula qué falta pedir (presupuestos de obra − despachado, más mínimos, menos stock y lo que ya viene en camino) y crea las órdenes por el proveedor más barato.
+- **Importar precios** (en la ficha de cada proveedor): carga la lista de precios del proveedor desde Excel o CSV, enlazada con el catálogo, con vista previa y plantilla descargable; cada cambio de precio queda en el historial.
 - **Obras**: presupuesto de materiales por obra frente a lo pedido, recibido
-  y consumido, con aviso cuando un material excede lo previsto.
+  y despachado desde el almacén, con aviso cuando un material excede lo previsto.
 - **Asistencia**: pasar lista por día (estado y obra de cada trabajador) y
   resumen por trabajador y por obra.
 - **Ayuda en cada pantalla**: botón «❓ Cómo usar» junto al título de cada módulo, consejos con ejemplo en los formularios y **validación en vivo** mientras se escribe (contador de caracteres, qué falta, qué caracteres no se permiten, borde rojo/verde).
@@ -110,8 +113,8 @@ le pertenecen a ningún módulo en particular.
    (crea las tablas `materials`, `suppliers`, `supplier_materials`, `users`,
    `work_groups`, `project_sites`, `workers`, `purchase_orders`,
    `purchase_order_items`, `stock_movements`, `site_budgets`, `attendance`
-   y `audit_log`). Si actualizas un proyecto existente, corre solo
-   las tablas que falten. Si alguna queda con Row Level Security activado,
+   `audit_log`, `price_history` y `dispatch_vouchers`). Si actualizas un proyecto existente, corre solo
+   las migraciones de `db/migrations/` que falten (la última: `036_despacho_mrp.sql`). Si alguna queda con Row Level Security activado,
    la app no podrá escribir en ella: el propio `schema.sql` trae los
    `alter table ... disable row level security`.
 2. Instala las dependencias:
@@ -165,7 +168,7 @@ modules/proveedores.py       # Módulo de Proveedores
 modules/trabajadores.py      # Módulo de Trabajadores (cuadrillas, obras, acceso)
 modules/ordenes.py           # Módulo de Órdenes de compra (alta, estados, detalle)
 modules/inventario.py        # Stock y movimientos
-modules/obras.py             # Presupuesto por obra vs. pedido/recibido/consumido
+modules/obras.py             # Presupuesto por obra vs. pedido/recibido/despachado
 modules/asistencia.py        # Pasar lista y resumen
 modules/historial.py         # Auditoría (quién hizo qué)
 modules/reportes.py          # Módulo de Reportes (Excel y PDF)

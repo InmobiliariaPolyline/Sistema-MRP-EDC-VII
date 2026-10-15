@@ -228,6 +228,14 @@ def current_actor() -> str:
     return user.get("name") or user.get("username") or "Sistema"
 
 
+def log(summary: str) -> None:
+    """Anota una acción en el historial sin mostrar aviso (para cuando la pantalla ya muestra el resultado)."""
+    try:
+        repo.log_action(current_actor(), summary)
+    except Exception:  # el historial nunca debe romper la acción en sí
+        pass
+
+
 def flash(message: str, icon: str = "✅", log: bool = True) -> None:
     """Deja un aviso (toast) para mostrarse en la próxima recarga: sirve para
     confirmar una acción justo antes de un st.rerun(), que de otro modo se

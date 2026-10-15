@@ -26,7 +26,7 @@ def render() -> None:
     _render_table()
 
 
-def _material_form(material: dict | None) -> tuple[str, str, float | None, str]:
+def _material_form(material: dict | None) -> tuple[str, str, float | None, str, float]:
     forms.section("Identificación", "Categoría y nombre son obligatorios; juntos identifican el material.")
     c1, c2 = st.columns(2)
     category = c1.text_input(
@@ -53,12 +53,18 @@ def _material_form(material: dict | None) -> tuple[str, str, float | None, str]:
         placeholder="Ej. Volumen (m³)", max_chars=forms.RULES["Métrica de cómputo"]["max"],
         help="Unidad con la que presupuestas y solicitas el material: m³, kg, m², unidades…",
     )
-    return category.strip(), name.strip(), density or None, metric_label.strip()
+    forms.section("Stock del almacén", "Si defines un mínimo, el sistema avisa en el tablero y sugiere comprar cuando el stock llega a ese nivel.")
+    stored_min = float(material.get("min_stock") or 0) if material else 0.0
+    min_stock = st.number_input(
+        "Stock mínimo (opcional)", min_value=0.0, max_value=max(100000000.0, stored_min), step=1.0, value=stored_min,
+        help="Cantidad (en la métrica del material) por debajo de la cual conviene reponer. Deja 0 si no quieres alerta.",
+    )
+    return category.strip(), name.strip(), density or None, metric_label.strip(), float(min_stock or 0)
 
 
-def _save(values: tuple[str, str, float | None, str], material_id: str | None) -> None:
-    category, name, density, metric_label = values
-    errors = forms.validate({"Categoría": category, "Nombre": name, "Métrica de cómputo": metric_label})
+def _save(values: tuple[str, str, float | None, str, float], material_id: str | None) -> None:
+    category, name, density, metric_label, min_stock = values
+    errors = forms.validate({"Categoría": category, "Nombre": name, "Métrica de cómputo": metric_label, "Stock mínimo (opcional)": min_stock})
     if density is None or density <= DENSITY_MAX:
         errors += forms.validate({"Densidad (kg/m³, opcional)": density or 0.0})
     elif not math.isfinite(density):
@@ -84,7 +90,7 @@ def _save(values: tuple[str, str, float | None, str], material_id: str | None) -
     if forms.errors(errors):
         return
     try:
-        repo.upsert_material(category, name, density, metric_label, material_id)
+        repo.upsert_material(category, name, density, metric_label, material_id, min_stock)
     except Exception:
         st.error("No se pudo guardar el material. Revisa que categoría y nombre no estén repetidos e inténtalo de nuevo.")
         return
@@ -117,12 +123,13 @@ def _material_dialog_form(material: dict | None) -> None:
     if cancel:
         st.rerun()
     if preview:
-        category, name, density, metric = values
+        category, name, density, metric, min_stock = values
         forms.section("Vista previa", "Estos datos todavía no se han guardado.")
         with st.container(border=True):
             st.write(name or "Nombre pendiente")
             st.caption(f"Categoría: {category or 'pendiente'} · Métrica: {metric or 'sin definir'}")
             st.caption(f"Densidad: {density:g} kg/m³" if density else "Sin densidad registrada")
+            st.caption(f"Stock mínimo: {min_stock:g}" if min_stock else "Sin stock mínimo (no genera alertas)")
     if save:
         _save(values, material["id"] if material else None)
 

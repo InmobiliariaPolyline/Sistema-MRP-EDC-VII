@@ -1,5 +1,5 @@
 """Módulo de Obras: presupuesto de materiales por obra frente a lo que ya se
-pidió, recibió y consumió."""
+pidió, recibió y despachó desde el almacén."""
 from datetime import date, timedelta
 import math
 
@@ -25,13 +25,13 @@ def _delete_budget(budget_id: str, material_name: str, site_name: str) -> None:
 
 
 def progress_by_material(site_id: str) -> pd.DataFrame:
-    """Por material: presupuestado, pedido, recibido, consumido y gasto, para una obra."""
+    """Por material: presupuestado, pedido, recibido, despachado y gasto, para una obra."""
     budgets = repo.list_budgets(site_id)
     orders = repo.list_orders()
     orders = orders[(orders["project_site_id"] == site_id) & (orders["status"] != "cancelada")] if not orders.empty else orders
     items = repo.list_order_items()
     items = items[items["order_id"].isin(orders["id"])] if not orders.empty and not items.empty else items.iloc[0:0]
-    consumed = repo.list_movements(project_site_id=site_id, limit=5000)
+    consumed = repo.list_movements(project_site_id=site_id, limit=100000)
 
     data: dict[str, dict] = {}
 
@@ -40,8 +40,8 @@ def progress_by_material(site_id: str) -> pd.DataFrame:
             material_id,
             {
                 "material_id": material_id, "Material": name, "Categoría": category, "Unidad": unit,
-                "Presupuesto": 0.0, "Pedido": 0.0, "Recibido": 0.0, "Consumido": 0.0,
-                "Presupuesto $": 0.0, "Gasto pedido $": 0.0, "Recibido $": 0.0, "Consumido $": 0.0,
+                "Presupuesto": 0.0, "Pedido": 0.0, "Recibido": 0.0, "Despachado": 0.0,
+                "Presupuesto $": 0.0, "Gasto pedido $": 0.0, "Recibido $": 0.0, "Despachado $": 0.0,
                 "budget_id": None, "planned_price": 0.0,
             },
         )
@@ -64,15 +64,15 @@ def progress_by_material(site_id: str) -> pd.DataFrame:
         if m["kind"] != "salida":
             continue
         s = slot(m["material_id"], m["material_name"], m["category"], m["unit"])
-        s["Consumido"] += float(m["quantity"])
+        s["Despachado"] += float(m["quantity"])
 
-    for s in data.values():  # el consumo se valora al precio presupuestado (o al promedio pedido)
+    for s in data.values():  # el despacho se valora al precio presupuestado (o al promedio pedido)
         price = s["planned_price"] or (s["Gasto pedido $"] / s["Pedido"] if s["Pedido"] else 0.0)
-        s["Consumido $"] = s["Consumido"] * price
+        s["Despachado $"] = s["Despachado"] * price
 
     columns = [
         "material_id", "budget_id", "Material", "Categoría", "Unidad", "Presupuesto", "Pedido", "Recibido",
-        "Consumido", "Presupuesto $", "Gasto pedido $", "Recibido $", "Consumido $", "planned_price",
+        "Despachado", "Presupuesto $", "Gasto pedido $", "Recibido $", "Despachado $", "planned_price",
     ]
     df = pd.DataFrame(list(data.values()))
     for col in columns:
@@ -147,7 +147,7 @@ def site_progress(df: pd.DataFrame) -> dict:
     planned = float(df["Presupuesto $"].sum())
     ordered = float(df["Gasto pedido $"].sum())
     received = float(df["Recibido $"].sum())
-    consumed_capped = float(df[["Consumido $", "Presupuesto $"]].min(axis=1).sum())
+    consumed_capped = float(df[["Despachado $", "Presupuesto $"]].min(axis=1).sum())
     return {
         "planned": planned,
         "ordered": ordered,
@@ -226,13 +226,13 @@ def _tab_info(site: dict) -> None:
 
 def _tab_materials(site: dict, df: pd.DataFrame) -> None:
     site_id, site_name = site["id"], site["name"]
-    ui.tip("Primero define lo que esperas usar con «＋ Material al presupuesto». Luego verás cuánto llevas pedido, recibido y consumido.")
+    ui.tip("Primero define lo que esperas usar con «＋ Material al presupuesto». Luego verás cuánto llevas pedido, recibido y despachado.")
     b1, b2, _ = st.columns([2, 2, 4])
     if b1.button("＋ Material al presupuesto", type="primary", width="stretch"):
         _clear_budget_draft(site_id)
         _budget_dialog(site_id, site_name)
-    if b2.button("📤 Registrar consumo", width="stretch"):
-        inventario.movement_dialog(default_site_id=site_id)
+    if b2.button("🚚 Despachar material", width="stretch", help="Saca material del almacén hacia esta obra y genera el vale de salida."):
+        inventario.dispatch_dialog(default_site_id=site_id)
 
     if df.empty:
         ui.empty_state("Aún no hay materiales en esta obra", "Añade un material al presupuesto o crea una orden con esta obra como destino.")
@@ -241,17 +241,17 @@ def _tab_materials(site: dict, df: pd.DataFrame) -> None:
     ui.result_count(len(df), len(df), noun="materiales")
     view = df.copy()
     view["Estado"] = view.apply(_state, axis=1)
-    view["Consumido %"] = view.apply(lambda r: min(r["Consumido"] / r["Presupuesto"] * 100, 100) if r["Presupuesto"] else 0, axis=1)
+    view["Despachado %"] = view.apply(lambda r: min(r["Despachado"] / r["Presupuesto"] * 100, 100) if r["Presupuesto"] else 0, axis=1)
     st.dataframe(
-        view[["Material", "Unidad", "Presupuesto", "Pedido", "Recibido", "Consumido", "Consumido %", "Presupuesto $", "Gasto pedido $", "Estado"]],
+        view[["Material", "Unidad", "Presupuesto", "Pedido", "Recibido", "Despachado", "Despachado %", "Presupuesto $", "Gasto pedido $", "Estado"]],
         hide_index=True,
         width="stretch",
         column_config={
             "Presupuesto": st.column_config.NumberColumn(format="%.2f"),
             "Pedido": st.column_config.NumberColumn(format="%.2f"),
             "Recibido": st.column_config.NumberColumn(format="%.2f"),
-            "Consumido": st.column_config.NumberColumn(format="%.2f"),
-            "Consumido %": st.column_config.ProgressColumn(format="%.0f%%", min_value=0, max_value=100),
+            "Despachado": st.column_config.NumberColumn(format="%.2f"),
+            "Despachado %": st.column_config.ProgressColumn(format="%.0f%%", min_value=0, max_value=100),
             "Presupuesto $": st.column_config.NumberColumn(format="%.2f"),
             "Gasto pedido $": st.column_config.NumberColumn(format="%.2f"),
         },
@@ -272,7 +272,7 @@ def _tab_materials(site: dict, df: pd.DataFrame) -> None:
                 c1.write(f"{row['Material']} · {row['Presupuesto']:g} {row['Unidad'] or ''}")
                 if c2.button("🗑", key=f"del_budget_{row['budget_id']}", help="Quitar del presupuesto"):
                     ui.confirm_delete(
-                        f"¿Quitar «{row['Material']}» del presupuesto de «{site_name}»? Se eliminará su cantidad y costo previstos. Sus pedidos y consumos se conservan.",
+                        f"¿Quitar «{row['Material']}» del presupuesto de «{site_name}»? Se eliminará su cantidad y costo previstos. Sus pedidos y despachos se conservan.",
                         lambda bid=row["budget_id"], name=row["Material"], sn=site_name: _delete_budget(bid, name, sn),
                     )
 
@@ -309,7 +309,7 @@ def _tab_progress(site: dict, df: pd.DataFrame, prog: dict) -> None:
         return
     overall = prog["pct_consumed"] or 0.0
     st.markdown(f'<div class="mrp-eyebrow">Avance de materiales</div><div class="mrp-page-title">{overall * 100:.0f}%</div>', unsafe_allow_html=True)
-    st.caption("Porcentaje del presupuesto de materiales que ya se consumió en la obra (ponderado por costo).")
+    st.caption("Porcentaje del presupuesto de materiales que ya se despachó a la obra desde el almacén (ponderado por costo).")
 
     def bar(label: str, value: float | None, detail: str) -> None:
         st.markdown(f"**{label}** — {detail}")
@@ -318,8 +318,8 @@ def _tab_progress(site: dict, df: pd.DataFrame, prog: dict) -> None:
     bar("Pedido", prog["pct_ordered"], f"{prog['ordered']:,.0f} de {prog['planned']:,.0f} presupuestados")
     received = float(df["Recibido $"].sum())
     bar("Recibido", prog["pct_received"], f"{received:,.0f} de {prog['ordered']:,.0f} pedidos" if prog["ordered"] else "todavía sin pedidos")
-    consumed = float(df["Consumido $"].sum())
-    bar("Consumido", prog["pct_consumed"], f"{consumed:,.0f} de {prog['planned']:,.0f} presupuestados")
+    consumed = float(df["Despachado $"].sum())
+    bar("Despachado", prog["pct_consumed"], f"{consumed:,.0f} de {prog['planned']:,.0f} presupuestados")
 
     late = df[(df["Pedido"] > 0) & (df["Recibido"] < df["Pedido"])]
     if not late.empty:

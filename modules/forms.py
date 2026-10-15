@@ -34,6 +34,9 @@ RULES = {
     "Precio unit.": {"num": {"min": 0}, "hint": "0 = precio sin registrar"},
     "Precio unit. estimado": {"num": {"min": 0}},
     "Recibido ahora": {"num": {"min": 0}},
+    "Nombre del solicitante": {"required": True, "min": 3, "max": 120, "allowed": PERSON, "kind": "person", "hint": "Quien pidió el material, ej. Juan Pérez"},
+    "Nota del vale (opcional)": {"max": 500, "hint": "Para qué se usará el material"},
+    "Stock mínimo (opcional)": {"optional_number": True, "num": {"min": 0, "max": 100000000}, "hint": "0 o vacío = sin alerta de stock bajo"},
 }
 
 
