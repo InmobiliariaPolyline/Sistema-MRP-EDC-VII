@@ -92,6 +92,24 @@ class StockRulesTests(unittest.TestCase):
         with self.assertRaises(ValueError):
             repo.update_order(order_id, None, None, [{"material_id": self.concreto, "material_name": "x", "quantity": 1, "unit_price": 1}])
 
+    def test_edit_can_add_remove_and_change_quantities_in_one_save(self):
+        order_id, items = self._order(qty_c=10.0, qty_v=100.0)
+        repo.upsert_material("Madera", "Triplay 18 mm", None, "m²")
+        triplay = {r["name"]: r["id"] for r in repo.list_materials().to_dict("records")}["Triplay 18 mm"]
+        repo.update_order(
+            order_id, self.site, "Reenviar al proveedor",
+            [
+                {"material_id": self.concreto, "material_name": "Concreto normal", "unit": "m³", "quantity": 12.0, "unit_price": 100.0},  # cantidad cambiada
+                {"material_id": triplay, "material_name": "Triplay 18 mm", "unit": "m²", "quantity": 4.0, "unit_price": 40.0},  # agregado
+            ],  # la varilla se quitó
+        )
+        edited = repo.list_order_items(order_id).set_index("material_name")
+        self.assertEqual(sorted(edited.index), ["Concreto normal", "Triplay 18 mm"])
+        self.assertEqual(float(edited.loc["Concreto normal", "quantity"]), 12.0)
+        order = repo.list_orders().iloc[0]
+        self.assertEqual(float(order["total"]), 12 * 100 + 4 * 40)
+        self.assertEqual(order["notes"], "Reenviar al proveedor")
+
     # --- despacho ---
     def test_dispatch_creates_voucher_and_reduces_stock(self):
         repo.add_movement(self.concreto, "entrada", 10, None, "ingreso", "admin")

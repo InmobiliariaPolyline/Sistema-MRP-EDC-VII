@@ -6,6 +6,13 @@ Formato de cada parche: **Agregado** · **Corregido** · **Problemas y causa** �
 
 ---
 
+## Parche 038 — Editar una orden permite agregar y quitar materiales · 2026-10-16
+**Agregado**
+- Al editar una orden (pendiente o enviada, mientras no haya recibido material) ahora se puede, en un solo guardado: **agregar** materiales del catálogo del proveedor (con su precio fijo), **cambiar la cantidad** de cada línea y **quitar** líneas. Obra y notas también.
+- Si el material ya estaba en la orden, lo agregado se suma a su cantidad y conserva su precio; si no tiene precio en el catálogo, no se puede agregar.
+- Si la orden ya estaba «enviada», el aviso al guardar recuerda **reenviar** el pedido actualizado (el PDF y el mensaje de WhatsApp se arman siempre con los datos vigentes de la orden).
+- Prueba automática del caso agregar + cambiar cantidad + quitar.
+
 ## Parche 037 — El precio unitario de una orden es el del catálogo y no se edita · 2026-10-16
 **Corregido**
 - Al crear una orden, el precio unitario se podía subir o bajar a mano. Ahora es de solo lectura: sale del catálogo del proveedor (donde el administrador sí lo edita) y solo cambia el **total** al pedir más cantidad.

@@ -317,64 +317,141 @@ def _budget_warning(site_id: str, site_name: str, lines: list[dict], total: floa
         st.warning("Materiales por encima de su cantidad presupuestada para esta obra: " + ", ".join(over) + ".", icon=":material/warning:")
 
 
+def _edit_state_keys(order_id: str) -> list[str]:
+    return [f"edit_draft_{order_id}", f"edit_ver_{order_id}", f"edit_site_{order_id}", f"edit_notes_{order_id}",
+            f"edit_add_mat_{order_id}", f"edit_add_qty_{order_id}"]
+
+
+def _clear_edit_draft(order_id: str) -> None:
+    for key in _edit_state_keys(order_id):
+        st.session_state.pop(key, None)
+    for key in [k for k in st.session_state if str(k).startswith(f"edit_lines_{order_id}")]:
+        st.session_state.pop(key, None)
+
+
 @st.dialog("Editar orden", width="large")
 def _edit_order_dialog(order: dict, items: pd.DataFrame) -> None:
-    """Corrige obra, notas, cantidades y precios de una orden que todavía no recibió material."""
-    forms.header(f"Editar {order['code']}", "Solo se puede mientras la orden no haya recibido material. Puedes cambiar las cantidades o quitar líneas; el precio unitario es el del catálogo y no se modifica.")
+    """Corrige una orden que todavía no recibió material: obra, notas, cantidades, quitar líneas y
+    agregar materiales del catálogo del proveedor (con su precio fijo)."""
+    oid = order["id"]
+    draft_key, ver_key = f"edit_draft_{oid}", f"edit_ver_{oid}"
+    if draft_key not in st.session_state:
+        st.session_state[draft_key] = [
+            {
+                "material_id": r.get("material_id"), "material_name": r["material_name"], "unit": r.get("unit"),
+                "quantity": float(r["quantity"]), "unit_price": float(r["unit_price"]), "remove": False,
+            }
+            for r in items.to_dict("records")
+        ]
+        st.session_state[ver_key] = 0
+    draft: list[dict] = st.session_state[draft_key]
+
+    forms.header(
+        f"Editar {order['code']}",
+        "Solo se puede mientras la orden no haya recibido material. Puedes cambiar cantidades, quitar líneas y agregar materiales; el precio unitario siempre es el del catálogo del proveedor.",
+    )
     sites = repo.list_project_sites()
     site_names = [NO_SITE] + sites["name"].tolist()
     current = order.get("site_name") if order.get("site_name") in site_names else NO_SITE
     forms.section("1. Destino y notas", "Cambia la obra destino o las notas de la orden.")
-    site_choice = st.selectbox("Obra destino (opcional)", site_names, index=site_names.index(current), key=f"edit_site_{order['id']}")
-    notes = st.text_input("Notas (opcional)", value=order.get("notes") or "", max_chars=forms.RULES["Notas (opcional)"]["max"], key=f"edit_notes_{order['id']}")
+    site_choice = st.selectbox("Obra destino (opcional)", site_names, index=site_names.index(current), key=f"edit_site_{oid}")
+    notes = st.text_input("Notas (opcional)", value=order.get("notes") or "", max_chars=forms.RULES["Notas (opcional)"]["max"], key=f"edit_notes_{oid}")
 
-    forms.section("2. Líneas", "Ajusta las cantidades. Las líneas marcadas con «Quitar» se eliminan al guardar. El precio unitario queda como estaba al hacer la orden.")
-    records = items.to_dict("records")
+    forms.section("2. Materiales de la orden", "Ajusta las cantidades. Marca «Quitar» para eliminar una línea al guardar.")
     table = pd.DataFrame(
         {
-            "Quitar": False,
-            "Material": [r["material_name"] for r in records],
-            "Unidad": [r.get("unit") or "" for r in records],
-            "Cantidad": [float(r["quantity"]) for r in records],
-            "Precio unit.": [float(r["unit_price"]) for r in records],
+            "Quitar": [bool(l["remove"]) for l in draft],
+            "Material": [l["material_name"] for l in draft],
+            "Unidad": [l.get("unit") or "" for l in draft],
+            "Cantidad": [float(l["quantity"]) for l in draft],
+            "Precio unit.": [float(l["unit_price"]) for l in draft],
         }
     )
     edited = st.data_editor(
-        table, hide_index=True, width="stretch", key=f"edit_lines_{order['id']}", disabled=["Material", "Unidad", "Precio unit."],
+        table, hide_index=True, width="stretch", key=f"edit_lines_{oid}_{st.session_state[ver_key]}",
+        disabled=["Material", "Unidad", "Precio unit."],
         column_config={
             "Cantidad": st.column_config.NumberColumn(min_value=0.0, format="%.2f"),
             "Precio unit.": st.column_config.NumberColumn(format="%.2f", help="Fijo: viene del catálogo del proveedor."),
         },
     )
+
+    def sync() -> None:
+        """Pasa al borrador lo que se editó en la tabla (cantidades y «Quitar»)."""
+        for i, row in edited.reset_index(drop=True).iterrows():
+            draft[i]["quantity"] = float(row["Cantidad"])
+            draft[i]["remove"] = bool(row["Quitar"])
+
+    forms.section("3. Agregar material", "Elige un material del catálogo de este proveedor. Si ya está en la orden, se suma a su cantidad.")
+    catalog = repo.get_supplier_catalog(order["supplier_id"]) if order.get("supplier_id") else pd.DataFrame()
+    offered = catalog[catalog["offered"]] if not catalog.empty else catalog
+    if offered.empty:
+        st.caption("El proveedor de esta orden ya no existe o no tiene materiales en su catálogo: solo puedes editar cantidades.")
+    else:
+        options = {f"{r['category']} · {r['name']}": r for r in offered.to_dict("records")}
+        a1, a2, a3 = st.columns([4, 2, 2])
+        choice = a1.selectbox("Material", list(options), key=f"edit_add_mat_{oid}")
+        record = options[choice]
+        qty = a2.number_input("Cantidad", min_value=0.0, value=1.0, step=1.0, key=f"edit_add_qty_{oid}",
+                              help=f"Unidad: {record['metric_label'] or 'unid.'}. Debe ser mayor que 0.")
+        existing = next((l for l in draft if l["material_id"] == record["id"]), None)
+        catalog_price = float(record["price"]) if pd.notna(record["price"]) else 0.0
+        shown = existing["unit_price"] if existing else catalog_price
+        a3.number_input("Precio unit.", value=float(shown), format="%.2f", disabled=True, key=f"edit_add_price_{oid}_{record['id']}",
+                        help="Fijo: precio del catálogo del proveedor (o el que ya tiene la línea de la orden).")
+        if not existing and catalog_price <= 0:
+            st.warning("Este material no tiene precio en el catálogo del proveedor. Regístralo en Proveedores → Catálogo para poder agregarlo.", icon=":material/sell:")
+        if st.button("＋ Agregar a la orden", width="stretch", key=f"edit_add_btn_{oid}", disabled=(not existing and catalog_price <= 0)):
+            issues = forms.validate({"Cantidad": qty})
+            if not forms.errors(issues):
+                sync()
+                if existing:
+                    existing["quantity"] += qty
+                    existing["remove"] = False
+                else:
+                    draft.append(
+                        {
+                            "material_id": record["id"], "material_name": record["name"], "unit": record["metric_label"] or None,
+                            "quantity": float(qty), "unit_price": catalog_price, "remove": False,
+                        }
+                    )
+                st.session_state[ver_key] += 1  # la tabla se reconstruye con el borrador actualizado
+                st.rerun(scope="fragment")
+
     kept = edited[~edited["Quitar"]]
     total = float((kept["Cantidad"] * kept["Precio unit."]).sum())
     st.metric("Total de la orden", f"{total:,.2f}")
+    st.caption(f"{len(kept)} material(es) en la orden. Al guardar, el mensaje de WhatsApp y el PDF se arman con estos datos.")
 
     cancel, save = st.columns([1, 2])
-    if cancel.button("Cancelar", key=f"edit_cancel_{order['id']}", width="stretch"):
+    if cancel.button("Cancelar", key=f"edit_cancel_{oid}", width="stretch"):
+        _clear_edit_draft(oid)
         st.rerun()
-    if save.button("Guardar cambios", type="primary", width="stretch", key=f"edit_save_{order['id']}"):
+    if save.button("Guardar cambios", type="primary", width="stretch", key=f"edit_save_{oid}"):
         issues = forms.validate({"Notas (opcional)": notes})
         if kept.empty:
-            issues.append("Líneas: la orden debe conservar al menos un material (para quitarla por completo, elimínala).")
+            issues.append("Materiales: la orden debe conservar al menos un material (para quitarla por completo, elimínala).")
         for _, row in kept.iterrows():
             issues.extend(f"{row['Material']}: {i}" for i in forms.validate({"Cantidad": row["Cantidad"], "Precio unit.": row["Precio unit."]}))
         if forms.errors(issues):
             return
+        sync()
         new_items = [
             {
-                "material_id": records[i].get("material_id"), "material_name": records[i]["material_name"], "unit": records[i].get("unit"),
-                "quantity": float(row["Cantidad"]), "unit_price": float(row["Precio unit."]),
+                "material_id": l["material_id"], "material_name": l["material_name"], "unit": l.get("unit"),
+                "quantity": float(l["quantity"]), "unit_price": float(l["unit_price"]),
             }
-            for i, row in kept.iterrows()
+            for l in draft if not l["remove"]
         ]
         site_id = None if site_choice == NO_SITE else sites.loc[sites["name"] == site_choice, "id"].iloc[0]
         try:
-            repo.update_order(order["id"], site_id, notes.strip() or None, new_items)
+            repo.update_order(oid, site_id, notes.strip() or None, new_items)
         except ValueError as exc:
             st.error(str(exc))
             return
-        ui.flash(f"Orden {order['code']} actualizada.", "✏️")
+        _clear_edit_draft(oid)
+        reminder = " Reenvía el pedido actualizado al proveedor." if order["status"] == "enviada" else ""
+        ui.flash(f"Orden {order['code']} actualizada.{reminder}", "✏️")
         st.rerun()
 
 
@@ -676,7 +753,8 @@ def _render_detail(order_id: str) -> None:
             lambda oid=order_id, code=order["code"]: _delete_order(oid, code),
         )
     if status in ("pendiente", "enviada") and not received_any and not items.empty:
-        if b4.button("✏️ Editar orden", width="stretch", help="Cambia cantidades, precios, obra o notas mientras no haya recibido material."):
+        if b4.button("✏️ Editar orden", width="stretch", help="Agrega, quita o cambia la cantidad de materiales, la obra o las notas mientras no haya recibido material."):
+            _clear_edit_draft(order_id)  # cada vez que se abre parte de lo guardado
             _edit_order_dialog(order, items)
 
     if not items.empty:
