@@ -22,7 +22,7 @@
 .mrp-usercard .mrp-avatar { background: var(--mrp-grad); color: #fff; border-radius: 50%; width: 2.1rem; height: 2.1rem; min-width: 2.1rem; font-size: var(--fs-md); }
 .mrp-usercard-name { font-size: var(--fs-md); font-weight: 700; color: #FFFFFF; line-height: 1.2; }
 .mrp-usercard-role { font-size: var(--fs-xs); color: #A9B2DC; }
-.mrp-sidebar-section { font-size: .62rem; color: #7F89B6; font-weight: 700; text-transform: uppercase; letter-spacing: .12em; margin: .9rem .4rem .4rem; }
+.mrp-sidebar-section { font-size: .62rem; color: #7F89B6; font-weight: 700; text-transform: uppercase; letter-spacing: .12em; }
 
 /* menú de navegación (botones st.button dentro de .st-key-mrp_sidebar_navigation) */
 .st-key-mrp_sidebar_navigation, .st-key-mrp_sidebar_navigation [data-testid="stVerticalBlock"] { gap: .2rem; }

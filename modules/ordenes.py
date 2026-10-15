@@ -513,7 +513,6 @@ def _render_detail(order_id: str) -> None:
     if supplier:
         st.markdown(ui.contact_links(supplier["phone"], supplier["email"]), unsafe_allow_html=True)
 
-    st.write("")
     st.markdown('<div class="mrp-eyebrow">Detalle</div>', unsafe_allow_html=True)
     st.markdown('<div class="mrp-panel-title">Materiales del pedido</div>', unsafe_allow_html=True)
     items = repo.list_order_items(order_id)
@@ -546,7 +545,6 @@ def _render_detail(order_id: str) -> None:
         if status in ("pendiente", "enviada", "parcial"):
             _render_reception(order, items)
 
-    st.write("")
     b1, b2, b3, _ = st.columns([3, 2.2, 2, 1])
     if status == "pendiente" and b1.button("📤 Marcar como enviada", width="stretch"):
         _change_status(order_id, order["code"], "enviada")

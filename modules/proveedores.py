@@ -207,7 +207,6 @@ def _render_supplier_detail(supplier_id: str) -> None:
         forms.section("Notas del proveedor")
         st.caption(supplier["notes"])
 
-    st.write("")
     st.markdown('<div class="mrp-eyebrow">Catálogo</div>', unsafe_allow_html=True)
     st.markdown('<div class="mrp-panel-title">Materiales de este proveedor</div>', unsafe_allow_html=True)
 

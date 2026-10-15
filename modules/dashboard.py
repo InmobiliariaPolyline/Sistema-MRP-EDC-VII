@@ -82,7 +82,6 @@ def render(user: dict) -> None:
     with col_right:
         _render_status_donut(totals)
 
-    st.write("")
     _render_sites_map()
 
 

@@ -20,7 +20,6 @@ html { font-size: clamp(15px, calc(10px + .37vw), 30px); }
 @media (max-width: 1366px) {
   [data-testid="stMainBlockContainer"] { padding: 1.6rem 1.8rem 3rem; }
   .mrp-hero { padding: 1.5rem 1.6rem; }
-  .mrp-stat-card { padding: 1.05rem 1.05rem .95rem; }
   .mrp-stat-value { font-size: 1.7rem; }
 }
 /* UHD y pantallas muy grandes: contenido más ancho y gráficos más altos */
@@ -43,11 +42,9 @@ html { font-size: clamp(15px, calc(10px + .37vw), 30px); }
 @media (max-width: 640px) {
   html { font-size: 15px; }
   [data-testid="stMainBlockContainer"] { padding: 3.5rem 1rem 3rem; }
-  .mrp-stat-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: .65rem; }
-  .mrp-stat-card { padding: 1rem .85rem; }
+  .mrp-stat-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
   .mrp-stat-value { font-size: 1.5rem; }
   .mrp-page-title { font-size: 1.5rem; }
-  .mrp-panel { padding: 1rem; }
   .mrp-activity-item { flex-wrap: wrap; }
   [data-testid="stDialog"] [role="dialog"] { width: calc(100vw - 1rem) !important; margin: .5rem; border-radius: 1.1rem !important; }
   [data-testid="stForm"] { padding: 1rem; }

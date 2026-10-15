@@ -182,5 +182,6 @@ utils/timeago.py              # Fechas relativas ("hace 5 min")
 
 - **Hojas de estilo** en `modules/styles/` (CSS real, numerado de lo general a lo específico); `modules/ui_styles.py` las une. Las paletas clara/oscura son variables `--mrp-*`.
 - **Adaptable 16:9**: todo está en rem y el tamaño raíz crece de forma continua con el ancho (15 px en HD 1280, ≈17 px en FHD 1920, ≈24 px en UHD 3840), con ancho máximo propio para cada rango; los gráficos ajustan su altura a la pantalla.
+- **Espaciado**: una sola escala (`15_spacing.css`: `--gap-section`, `--gap-card`, `--gap-field`, `--gap-tight`) que crece con la pantalla; entre bloques hay siempre la misma separación (≈20 px en HD, 27 px en FHD, 44 px en UHD) y los bloques propios no llevan margen.
 - **Formularios**: barra de progreso de campos obligatorios, aviso de duplicados, medidor de contraseña y botones de guardar fijos al pie de los diálogos.
 - Si cambias un `.css`, reinicia el servidor de Streamlit (no vigila esos archivos).

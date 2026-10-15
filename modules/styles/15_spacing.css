@@ -1,0 +1,80 @@
+/* =========================================================================
+   15 · ESPACIADO — una sola escala para toda la interfaz
+   Todo se mide en rem, así que crece con el tamaño raíz de 60_responsive
+   (HD → FHD → UHD). Solo hay cuatro valores que se reutilizan:
+
+     --gap-section  entre bloques grandes de una pantalla (hero, filas de
+                    tarjetas, paneles) y entre columnas
+     --gap-card     dentro de una tarjeta o panel, y entre tarjetas de una
+                    misma fila
+     --gap-field    entre campos de un formulario y entre filas de lista
+     --gap-tight    entre una etiqueta y su contenido
+
+   Los bloques propios (.mrp-hero, .mrp-stat-grid…) no llevan margen: el
+   espacio lo pone siempre el contenedor, para que nunca se sume o se apriete.
+   ========================================================================= */
+:root {
+  --gap-section: 1.6rem;
+  --gap-card: 1.1rem;
+  --gap-field: .85rem;
+  --gap-tight: .4rem;
+  --pad-card: 1.4rem;
+}
+
+/* pantalla: separación pareja entre todos los bloques y columnas */
+[data-testid="stMainBlockContainer"] > [data-testid="stVerticalBlock"] { gap: var(--gap-section); }
+[data-testid="stMainBlockContainer"] [data-testid="stHorizontalBlock"] { gap: var(--gap-section); }
+.mrp-hero, .mrp-stat-grid { margin: 0; }
+.mrp-stat-grid { gap: var(--gap-card); }
+
+/* tarjetas y paneles: mismo aire por dentro */
+[data-testid="stLayoutWrapper"] > [data-testid="stVerticalBlock"]:has(.mrp-panel-title) { padding: var(--pad-card); gap: var(--gap-card); }
+[data-testid="stLayoutWrapper"] > [data-testid="stVerticalBlock"]:has(.mrp-row) { padding: 1rem 1.2rem; gap: var(--gap-tight); }
+.mrp-panel { padding: var(--pad-card); }
+.mrp-stat-card { padding: var(--pad-card) calc(var(--pad-card) * .9); }
+.mrp-eyebrow { margin-bottom: var(--gap-card); }
+.mrp-panel-title { margin: 0 0 var(--gap-tight); }
+.mrp-chart-sub { margin: 0; }
+.mrp-page-title { margin-bottom: var(--gap-tight); }
+.mrp-page-subtitle { margin-bottom: 0; }
+
+/* listas de filas y columnas dentro de una tarjeta */
+[data-testid="stLayoutWrapper"] > [data-testid="stVerticalBlock"] [data-testid="stHorizontalBlock"] { gap: var(--gap-card); }
+.mrp-activity-item, .mrp-timeline-item { padding-block: var(--gap-field); }
+.mrp-links { margin-top: var(--gap-tight); }
+
+/* formularios y diálogos */
+[data-testid="stForm"] [data-testid="stVerticalBlock"], [role="dialog"] [data-testid="stVerticalBlock"] { gap: var(--gap-field); }
+[role="dialog"] [data-testid="stHorizontalBlock"] { gap: var(--gap-card); }
+.mrp-form-section { margin: var(--gap-card) 0 0; padding-top: var(--gap-field); }
+.mrp-form-intro { padding-bottom: var(--gap-field); margin-bottom: 0; }
+.mrp-tip { margin-bottom: 0; }
+
+/* sidebar: etiqueta de sección y botones con ritmo constante */
+[data-testid="stSidebarContent"] [data-testid="stVerticalBlock"] { gap: .75rem; }
+[data-testid="stSidebarContent"] [data-testid="stVerticalBlock"].st-key-mrp_sidebar_navigation,
+[data-testid="stSidebarContent"] .st-key-mrp_sidebar_navigation [data-testid="stVerticalBlock"] { gap: .3rem; }
+.mrp-brand { margin: .5rem 0 0; }
+.mrp-usercard { margin: 0; }
+/* los elementos del sidebar no se encogen: si el menú es más alto que la pantalla,
+   Streamlit los comprimía (las etiquetas de sección llegaban a medir 0 px y se
+   montaban sobre el botón siguiente); ahora el sidebar hace scroll en su lugar */
+[data-testid="stSidebarContent"] [data-testid="stVerticalBlock"] > * { flex-shrink: 0; }
+
+/* el contenedor de Streamlit mide mal el texto de la etiqueta (queda en 0–10 px y se monta
+   sobre el botón siguiente): se le da una altura fija y el aire va en su margen superior */
+.mrp-sidebar-section { margin: 0; padding: 0 .5rem; line-height: 1.3; }
+.st-key-mrp_sidebar_navigation > [data-testid="stElementContainer"]:has(.mrp-sidebar-section) { height: 1.5rem; min-height: 1.5rem; margin-top: .9rem; }
+.st-key-mrp_sidebar_navigation > [data-testid="stElementContainer"]:first-child:has(.mrp-sidebar-section) { margin-top: .1rem; }
+
+/* las columnas no se parten en filas mientras haya sitio (Streamlit solo las apila en móvil) */
+@media (min-width: 641px) {
+  [data-testid="stHorizontalBlock"] { flex-wrap: nowrap; }
+  [data-testid="stHorizontalBlock"] > [data-testid="stColumn"] { min-width: 0; }
+}
+
+/* escalas por pantalla */
+@media (max-width: 1366px) { :root { --gap-section: 1.35rem; --gap-card: 1rem; --pad-card: 1.2rem; } }
+@media (min-width: 2400px) { :root { --gap-section: 1.8rem; --gap-card: 1.25rem; --pad-card: 1.55rem; } }
+@media (max-width: 900px)  { :root { --gap-section: 1.2rem; --gap-card: .95rem; --pad-card: 1.1rem; } }
+@media (max-width: 640px)  { :root { --gap-section: 1rem; --gap-card: .8rem; --gap-field: .7rem; --pad-card: 1rem; } }

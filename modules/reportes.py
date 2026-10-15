@@ -199,7 +199,6 @@ def render() -> None:
         width="stretch",
     )
 
-    st.write("")
     forms.section("3. Revisa la vista previa", "Abre cada conjunto para comprobar sus datos antes de compartir el archivo.")
     for name, df in frames.items():
         with st.expander(f"{name} ({len(df)})"):
