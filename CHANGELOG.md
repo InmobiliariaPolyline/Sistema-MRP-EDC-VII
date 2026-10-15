@@ -6,6 +6,13 @@ Formato de cada parche: **Agregado** · **Corregido** · **Problemas y causa** �
 
 ---
 
+## Parche 037 — El precio unitario de una orden es el del catálogo y no se edita · 2026-10-16
+**Corregido**
+- Al crear una orden, el precio unitario se podía subir o bajar a mano. Ahora es de solo lectura: sale del catálogo del proveedor (donde el administrador sí lo edita) y solo cambia el **total** al pedir más cantidad.
+- Si el material no tiene precio en el catálogo del proveedor, no se puede agregar a la orden: se avisa dónde registrarlo (Proveedores → Catálogo o importar su lista).
+- Al **editar** una orden solo se pueden cambiar las cantidades (y quitar líneas); el precio queda como estaba.
+- Al **duplicar** una orden, las líneas toman el precio vigente del catálogo, no el que tenía la orden original.
+
 ## Parche 036 — Despacho a obra, stock mínimo, sugerencia de compra e integridad · 2026-10-16
 Basado en cómo se usa el sistema: **un solo administrador** opera el almacén; el material llega del proveedor al almacén (entrada) y sale hacia las obras cuando alguien lo pide en persona (despacho). No hay roles ni aprobaciones, y el almacén es uno solo.
 

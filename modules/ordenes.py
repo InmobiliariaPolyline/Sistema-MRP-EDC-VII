@@ -174,7 +174,7 @@ def _new_order_dialog() -> None:
     notes = st.text_input("Notas (opcional)", placeholder="Ej. Entregar antes del viernes", key="new_order_notes", max_chars=500,
                           help="Condiciones de entrega o indicaciones para el proveedor. Hasta 500 caracteres.")
 
-    forms.section("2. Agrega materiales", "Cantidad en la unidad del material y precio por unidad. Agregar de nuevo suma cantidades y actualiza el precio de toda esa línea.")
+    forms.section("2. Agrega materiales", "La cantidad se indica en la unidad del material. El precio unitario viene fijo del catálogo del proveedor y no se cambia aquí: lo que sube con la cantidad es el total. Agregar de nuevo un material suma cantidades.")
     catalog = repo.get_supplier_catalog(supplier_id)
     offered = catalog[catalog["offered"]] if not catalog.empty else catalog
     if offered.empty:
@@ -187,15 +187,25 @@ def _new_order_dialog() -> None:
         qty = c2.number_input("Cantidad", min_value=0.0, value=1.0, step=1.0, key=f"oqty_{record['id']}",
                                help=f"Unidad: {record['metric_label'] or 'unid.'}. Admite decimales; debe ser mayor que 0.")
         catalog_price = float(record["price"]) if pd.notna(record["price"]) else 0.0
-        price = c3.number_input(
-            "Precio unit.", min_value=0.0, value=catalog_price, step=0.1, format="%.2f", key=f"oprice_{supplier_id}_{record['id']}",
-            help="Precio por unidad. Se propone la cotización del proveedor; 0 significa precio sin registrar."
+        # El precio unitario es el del catálogo del proveedor y no se puede modificar al comprar:
+        # solo informa. Para cambiarlo se edita en la ficha del proveedor.
+        price = catalog_price
+        c3.number_input(
+            "Precio unit.", value=catalog_price, format="%.2f", disabled=True, key=f"oprice_{supplier_id}_{record['id']}",
+            help="Fijo: es el precio del catálogo de este proveedor. Para cambiarlo, edítalo en su ficha (Proveedores → Catálogo).",
         )
-        st.caption(f"Esta selección: {qty:g} {record['metric_label'] or 'unid.'} × {price:,.2f} = **{qty * price:,.2f}**")
+        if catalog_price <= 0:
+            st.warning(
+                "Este material no tiene precio en el catálogo del proveedor, así que no se puede agregar. "
+                "Regístralo en Proveedores → Catálogo (o importa su lista de precios) y vuelve.",
+                icon=":material/sell:",
+            )
+        else:
+            st.caption(f"Esta selección: {qty:g} {record['metric_label'] or 'unid.'} × {price:,.2f} = **{qty * price:,.2f}**")
         if not record.get("available", True):
             st.caption("El catálogo indica que este material no está disponible. Confirma la entrega con el proveedor.")
         _material_quotes(record["id"], supplier_id, offers)
-        if st.button("＋ Agregar al pedido", width="stretch"):
+        if st.button("＋ Agregar al pedido", width="stretch", disabled=catalog_price <= 0):
             existing = next((ln for ln in lines if ln["material_id"] == record["id"]), None)
             issues = forms.validate({"Cantidad": qty, "Precio unit.": price})
             if existing:
@@ -206,7 +216,7 @@ def _new_order_dialog() -> None:
             if not forms.errors(issues):
                 if existing:
                     existing["quantity"] += qty
-                    existing["unit_price"] = price
+                    existing["unit_price"] = price  # siempre el precio vigente del catálogo
                 else:
                     lines.append(
                         {
@@ -310,7 +320,7 @@ def _budget_warning(site_id: str, site_name: str, lines: list[dict], total: floa
 @st.dialog("Editar orden", width="large")
 def _edit_order_dialog(order: dict, items: pd.DataFrame) -> None:
     """Corrige obra, notas, cantidades y precios de una orden que todavía no recibió material."""
-    forms.header(f"Editar {order['code']}", "Solo se puede mientras la orden no haya recibido material. Para quitar una línea, marca «Quitar».")
+    forms.header(f"Editar {order['code']}", "Solo se puede mientras la orden no haya recibido material. Puedes cambiar las cantidades o quitar líneas; el precio unitario es el del catálogo y no se modifica.")
     sites = repo.list_project_sites()
     site_names = [NO_SITE] + sites["name"].tolist()
     current = order.get("site_name") if order.get("site_name") in site_names else NO_SITE
@@ -318,7 +328,7 @@ def _edit_order_dialog(order: dict, items: pd.DataFrame) -> None:
     site_choice = st.selectbox("Obra destino (opcional)", site_names, index=site_names.index(current), key=f"edit_site_{order['id']}")
     notes = st.text_input("Notas (opcional)", value=order.get("notes") or "", max_chars=forms.RULES["Notas (opcional)"]["max"], key=f"edit_notes_{order['id']}")
 
-    forms.section("2. Líneas", "Ajusta cantidades y precios. Las líneas marcadas con «Quitar» se eliminan al guardar.")
+    forms.section("2. Líneas", "Ajusta las cantidades. Las líneas marcadas con «Quitar» se eliminan al guardar. El precio unitario queda como estaba al hacer la orden.")
     records = items.to_dict("records")
     table = pd.DataFrame(
         {
@@ -330,10 +340,10 @@ def _edit_order_dialog(order: dict, items: pd.DataFrame) -> None:
         }
     )
     edited = st.data_editor(
-        table, hide_index=True, width="stretch", key=f"edit_lines_{order['id']}", disabled=["Material", "Unidad"],
+        table, hide_index=True, width="stretch", key=f"edit_lines_{order['id']}", disabled=["Material", "Unidad", "Precio unit."],
         column_config={
             "Cantidad": st.column_config.NumberColumn(min_value=0.0, format="%.2f"),
-            "Precio unit.": st.column_config.NumberColumn(min_value=0.0, format="%.2f"),
+            "Precio unit.": st.column_config.NumberColumn(format="%.2f", help="Fijo: viene del catálogo del proveedor."),
         },
     )
     kept = edited[~edited["Quitar"]]
@@ -375,6 +385,12 @@ def _duplicate(order: dict, items: pd.DataFrame) -> None:
     if match.empty:
         st.toast("El proveedor de esta orden ya no existe; no se puede duplicar.", icon="⚠️")
         return
+    catalog = repo.get_supplier_catalog(order["supplier_id"])
+    current = {}
+    if not catalog.empty:
+        for r in catalog[catalog["offered"]].to_dict("records"):
+            if pd.notna(r["price"]) and float(r["price"]) > 0:
+                current[r["id"]] = float(r["price"])
     st.session_state[SELECTED_KEY] = None
     st.session_state[PRESET_KEY] = {
         "supplier_id": order["supplier_id"],
@@ -387,7 +403,7 @@ def _duplicate(order: dict, items: pd.DataFrame) -> None:
                 "material_name": r["material_name"],
                 "unit": r.get("unit"),
                 "quantity": float(r["quantity"]),
-                "unit_price": float(r["unit_price"]),
+                "unit_price": current.get(r["material_id"], float(r["unit_price"])),  # precio vigente del catálogo
             }
             for r in items.to_dict("records")
             if r.get("material_id")

@@ -32,7 +32,7 @@ GUIDES: dict[str, str] = {
     "Órdenes de compra": """
 **Para qué sirve:** pedir material a un proveedor y seguir el pedido hasta que llega al almacén.
 
-1. **＋ Nueva orden:** proveedor, obra destino (opcional) y materiales con cantidad y precio. **💡 Comparar cotizaciones** te dice si otro proveedor es más barato; si eliges obra, avisa cuando el pedido supera su presupuesto.
+1. **＋ Nueva orden:** proveedor, obra destino (opcional) y materiales con su cantidad. El **precio unitario es el del catálogo del proveedor y no se puede cambiar en la orden** (solo sube el total al pedir más); si hay que cambiarlo, edítalo en Proveedores → Catálogo. **💡 Comparar cotizaciones** te dice si otro proveedor es más barato; si eliges obra, avisa cuando el pedido supera su presupuesto.
 2. **Estados:** Pendiente → Enviada → Recibida (o Parcial si llegó solo una parte).
 3. **📦 Registrar recepción:** anota lo que llegó; entra al stock del almacén. No se puede recibir más de lo pedido.
 4. **✏️ Editar orden:** corrige cantidades, precios, obra o notas mientras no haya recibido material.
