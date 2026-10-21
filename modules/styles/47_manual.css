@@ -119,6 +119,10 @@
 .mrp-mock-box { flex: 0 0 auto; width: 1.05rem; height: 1.05rem; display: grid; place-items: center; border-radius: .3rem; border: 1.5px solid var(--mrp-muted); color: #fff; }
 .mrp-mock-box.on { background: var(--mrp-accent); border-color: var(--mrp-accent); }
 
+.mrp-mock-radios { display: grid; gap: .3rem; }
+.mrp-mock-radio { flex: 0 0 auto; width: 1rem; height: 1rem; border-radius: 50%; border: 1.5px solid var(--mrp-muted); box-sizing: border-box; }
+.mrp-mock-radio.on { border: 5px solid var(--mrp-accent); background: #fff; }
+
 .mrp-mock-btns { display: flex; flex-wrap: wrap; justify-content: flex-end; gap: .5rem; margin-top: .15rem; }
 .mrp-mock-btn { position: relative; padding: .42rem .95rem; border-radius: .75rem; font-size: .78rem; font-weight: 700; border: 1px solid var(--mrp-border); color: var(--mrp-text); background: var(--mrp-surface); }
 .mrp-mock-btn.primary { color: #fff; border-color: transparent; background: var(--mrp-grad); box-shadow: 0 8px 18px -10px rgba(90, 63, 240, .8); }

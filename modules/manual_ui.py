@@ -48,6 +48,12 @@ def field_html(field: dict) -> str:
     """Un campo del formulario: etiqueta, caja con su valor o texto de ayuda, y la marca del paso."""
     kind = field.get("kind", "text")
     label, value, placeholder = field["field"], field.get("value"), field.get("placeholder")
+    if kind == "radio":
+        options = "".join(
+            f'<div class="mrp-mock-check"><span class="mrp-mock-radio{" on" if i == field.get("selected", 0) else ""}"></span><span>{esc(o)}</span></div>'
+            for i, o in enumerate(field["options"])
+        )
+        return f'<div class="mrp-mock-field"><div class="mrp-mock-label">{esc(label)}{_mark(field.get("mark"))}</div><div class="mrp-mock-radios">{options}</div></div>'
     if kind == "check":
         checked = " on" if field.get("checked") else ""
         return (

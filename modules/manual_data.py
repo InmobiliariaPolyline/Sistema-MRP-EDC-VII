@@ -557,7 +557,7 @@ CHAPTERS: list[dict] = [
                     ],
                 },
                 "steps": [
-                    {"title": "Elige la obra", "text": "Aparece lo que esa obra tiene: lo despachado menos lo ya devuelto."},
+                    {"title": "Elige la obra", "text": "Aparece lo que esa obra tiene: lo despachado menos lo ya devuelto. «Quién devuelve» y la nota son opcionales."},
                     {"title": "Escribe cuánto vuelve", "text": "En la columna **Devolver** de cada material. Deja en 0 el resto. No puedes devolver más de lo que la obra recibió."},
                     {"title": "Registra la devolución", "text": "El material **suma al stock** y baja lo consumido por la obra en su presupuesto."},
                 ],
@@ -593,10 +593,29 @@ CHAPTERS: list[dict] = [
                 "title": "Entradas, mermas y devoluciones a proveedor",
                 "goal": "Registrar movimientos que no son una recepción ni un despacho.",
                 "where": "Inventario › Entrada, merma o devolución a proveedor",
+                "mock": {
+                    "title": "Registra una entrada, una merma o una devolución a proveedor",
+                    "source": ["inventario.py"],
+                    "rows": [
+                        {"sec": "1. Tipo y material"},
+                        {"field": "Tipo de movimiento", "kind": "radio", "mark": 2, "selected": 1, "options": [
+                            "Entrada (ajuste / compra directa)", "Merma o salida sin obra (préstamo, pérdida…)", "Devolución a un proveedor (sale del almacén)"]},
+                        {"field": "Material", "kind": "select", "value": "Cemento · Cemento Portland tipo I", "mark": 3},
+                        {"caption": "Stock actual: 120 bolsa"},
+                        {"sec": "2. Cantidad y motivo"},
+                        {"fields": [
+                            {"field": "Cantidad", "kind": "number", "value": "2.00", "mark": 3},
+                            {"field": "Nota (opcional)", "kind": "text", "placeholder": "Ej. Ajuste por conteo / material dañado en transporte", "mark": 4},
+                        ]},
+                        {"stats": [("Stock actual", "120 bolsa"), ("Stock después", "118 bolsa")], "mark": 3},
+                        {"buttons": [("Cancelar", "ghost"), ("Guardar movimiento", "primary", 4)]},
+                    ],
+                },
                 "steps": [
                     {"title": "Abre el formulario", "text": "Pulsa **Entrada, merma o devolución a proveedor**."},
                     {"title": "Elige el tipo", "text": "**Entrada** suma stock (compra directa, ajuste). **Merma** da de baja material dañado, perdido o prestado. **Devolución a proveedor** saca lo que llegó mal."},
-                    {"title": "Indica material y cantidad", "text": "Verás el stock actual y cómo quedará. Una salida no puede superar lo que hay."},
+                    {"title": "Indica material y cantidad", "text": "Verás el **stock actual** y cómo **quedará**. Una salida no puede superar lo que hay."},
+                    {"title": "Anota el motivo y guarda", "text": "La nota es opcional pero ayuda a entender el movimiento después. Pulsa **Guardar movimiento**."},
                 ],
             },
             {
