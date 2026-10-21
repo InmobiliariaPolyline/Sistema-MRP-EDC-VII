@@ -339,6 +339,12 @@ def upsert_material(
             )
 
 
+def set_min_stock(material_id: str, min_stock: float) -> None:
+    """Fija el stock mínimo de un material (el nivel que activa la alerta de reposición). No toca las existencias."""
+    with _connect() as conn:
+        conn.execute("update materials set min_stock = ?, updated_at = datetime('now') where id = ?", (float(min_stock or 0), material_id))
+
+
 def delete_material(material_id: str) -> None:
     with _connect() as conn:
         conn.execute("delete from materials where id = ?", (material_id,))

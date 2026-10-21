@@ -26,6 +26,17 @@ class StockRulesTests(unittest.TestCase):
         repo.DB_PATH = self._old_path
         self.tmp.cleanup()
 
+    def test_min_stock_is_set_from_inventory_and_never_moves_the_stock(self):
+        repo.add_movement(self.varilla, "entrada", 40, None, "stock", "admin")
+        repo.set_min_stock(self.varilla, 25)
+        row = repo.list_materials().set_index("id").loc[self.varilla]
+        self.assertEqual(float(row["min_stock"]), 25.0)
+        stock = repo.stock_levels().set_index("material_id").loc[self.varilla]
+        self.assertEqual(float(stock["stock"]), 40.0)       # el mínimo es solo un aviso: las existencias siguen igual
+        # editar la ficha del catálogo conserva el mínimo que ya tenía
+        repo.upsert_material("Acero", "Varilla 3/8", 7850, "Peso (kg)", self.varilla, float(row["min_stock"]))
+        self.assertEqual(float(repo.list_materials().set_index("id").loc[self.varilla]["min_stock"]), 25.0)
+
     def _order(self, qty_c=10.0, qty_v=100.0):
         code = repo.create_order(
             self.supplier, "Aceros del Sur", self.site, None,

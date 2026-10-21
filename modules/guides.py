@@ -74,7 +74,7 @@ GUIDES: dict[str, dict] = {
                 "steps": [
                     {"title": "Agrega un material", "text": "Pulsa **＋ Nuevo material**. La **categoría** y el **nombre** juntos identifican al material: no pueden repetirse.", "where": "Botón de arriba a la derecha"},
                     {"title": "Elige su métrica de cómputo", "text": "Es la unidad en que lo presupuestas, lo pides y lo cuentas (por ejemplo *Volumen (m³)* o *Peso (kg)*). Elígela de la lista; así «m3» y «m³» no quedan como dos cosas distintas."},
-                    {"title": "Define el stock mínimo (opcional)", "text": "Es la cantidad por debajo de la cual conviene reponer. Con ella, el tablero avisa y la sugerencia de compra lo repone."},
+                    {"title": "Las existencias no se tocan aquí", "text": "El catálogo solo describe al material. Su stock sube con la **recepción de una orden de compra** o la importación de un proveedor; el **stock mínimo** se define en Inventario."},
                     {"title": "Consulta su ficha", "text": "Pulsa el botón de **información** de un material para ver su densidad, sus precios por proveedor, su stock y en qué obras se usa.", "where": "Botón ℹ️ de cada fila"},
                 ],
             }
@@ -140,6 +140,7 @@ GUIDES: dict[str, dict] = {
                 "steps": [
                     {"title": "Stock actual", "text": "Cada material muestra su stock con un color: verde si hay, ámbar si está en o bajo el mínimo, rojo si se agotó. La pestaña tiene buscador.", "where": "Primera pestaña"},
                     {"title": "Cómo entra el material", "text": "Entra con la **recepción de una orden de compra**. También puedes registrar una **entrada** suelta con «Entrada, merma o devolución a proveedor»."},
+                    {"title": "Define el stock mínimo", "text": "Pulsa **Stock mínimo**, elige el material y escribe el nivel por debajo del cual conviene reponer. Con él, el tablero avisa y la sugerencia de compra lo repone.", "where": "Botón sobre la lista de stock"},
                 ],
             },
             {

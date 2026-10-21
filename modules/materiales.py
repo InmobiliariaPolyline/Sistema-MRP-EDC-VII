@@ -68,18 +68,14 @@ def _material_form(material: dict | None) -> tuple[str, str, float | None, str, 
             help="Se escribe con la unidad entre paréntesis. Se normaliza sola (m3 → m³).",
         )
     metric_label = units.normalize(metric_label, choices)
-    forms.section("Stock del almacén", "Si defines un mínimo, el sistema avisa en el tablero y sugiere comprar cuando el stock llega a ese nivel.")
-    stored_min = float(material.get("min_stock") or 0) if material else 0.0
-    min_stock = st.number_input(
-        "Stock mínimo (opcional)", min_value=0.0, max_value=max(100000000.0, stored_min), step=1.0, value=stored_min,
-        help="Cantidad (en la métrica del material) por debajo de la cual conviene reponer. Deja 0 si no quieres alerta.",
-    )
-    return category.strip(), name.strip(), density or None, metric_label.strip(), float(min_stock or 0)
+    st.caption("Aquí solo se describe el material. Las existencias no se tocan desde el catálogo: entran por la recepción de una orden de compra o la importación de un proveedor, y el stock mínimo se define en Inventario.")
+    stored_min = float(material.get("min_stock") or 0) if material else 0.0   # se conserva tal cual: no se edita aquí
+    return category.strip(), name.strip(), density or None, metric_label.strip(), stored_min
 
 
 def _save(values: tuple[str, str, float | None, str, float], material_id: str | None) -> None:
     category, name, density, metric_label, min_stock = values
-    errors = forms.validate({"Categoría": category, "Nombre": name, "Métrica de cómputo": metric_label, "Stock mínimo (opcional)": min_stock})
+    errors = forms.validate({"Categoría": category, "Nombre": name, "Métrica de cómputo": metric_label})
     if density is None or density <= DENSITY_MAX:
         errors += forms.validate({"Densidad (kg/m³, opcional)": density or 0.0})
     elif not math.isfinite(density):
@@ -154,7 +150,6 @@ def _material_dialog_form(material: dict | None) -> None:
             st.write(name or "Nombre pendiente")
             st.caption(f"Categoría: {category or 'pendiente'} · Métrica: {metric or 'sin definir'}")
             st.caption(f"Densidad: {density:g} kg/m³" if density else "Sin densidad registrada")
-            st.caption(f"Stock mínimo: {min_stock:g}" if min_stock else "Sin stock mínimo (no genera alertas)")
     if save:
         _save(values, material["id"] if material else None)
 

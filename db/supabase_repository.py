@@ -134,6 +134,12 @@ def upsert_material(
     _invalidate_materials()
 
 
+def set_min_stock(material_id: str, min_stock: float) -> None:
+    """Fija el stock mínimo de un material (el nivel que activa la alerta de reposición). No toca las existencias."""
+    get_client().table("materials").update({"min_stock": float(min_stock or 0)}).eq("id", material_id).execute()
+    _invalidate_materials()
+
+
 def delete_material(material_id: str) -> None:
     get_client().table("materials").delete().eq("id", material_id).execute()
     _invalidate_materials()

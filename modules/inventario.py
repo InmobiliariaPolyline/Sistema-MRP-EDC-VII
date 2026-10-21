@@ -555,9 +555,51 @@ def _clear_stock_search() -> None:
     st.session_state["stock_q"] = ""
 
 
+@st.dialog("Stock mínimo")
+def _min_stock_dialog() -> None:
+    forms.header("Define cuánto es poco", "Por debajo de este nivel el tablero avisa y la sugerencia de compra repone el material. Es solo un aviso: no cambia las existencias.")
+    materials = repo.list_materials()
+    if materials.empty:
+        ui.empty_state("Faltan materiales", "Registra un material en el catálogo para definir su stock mínimo.")
+        return
+    options = {f"{r['category']} · {r['name']}": r for r in materials.sort_values(["category", "name"]).to_dict("records")}
+    choice = st.selectbox("Material", list(options), key="min_stock_material", help="Escribe para buscarlo en el catálogo.")
+    material = options[choice]
+    unit = material.get("metric_label") or "unid."
+    current = float(material.get("min_stock") or 0)
+    value = st.number_input(
+        f"Stock mínimo ({unit})", min_value=0.0, max_value=max(100000000.0, current), step=1.0, value=current, key=f"min_stock_value_{material['id']}",
+        help="Deja 0 si no quieres alerta para este material.",
+    )
+    cancel, save = st.columns([1, 2])
+    if cancel.button("Cancelar", key="min_stock_cancel", width="stretch"):
+        st.rerun()
+    if save.button("Guardar mínimo", key="min_stock_save", type="primary", width="stretch"):
+        if forms.errors(forms.validate({"Stock mínimo (opcional)": value})):
+            return
+        try:
+            repo.set_min_stock(material["id"], value)
+        except Exception as exc:
+            ui.db_error(exc, "No se pudo guardar el stock mínimo. Inténtalo de nuevo.")
+            return
+        if value != current:
+            ui.log_change(
+                f"Stock mínimo de «{material['name']}» definido", "material", material["id"],
+                [{"field": "Stock mínimo", "before": current, "after": value}], icon=":material/tune:",
+            )
+        st.cache_data.clear()
+        st.rerun()
+
+
+def _min_stock_button() -> None:
+    if st.button("Stock mínimo", key="min_stock_open", icon=":material/tune:", help="Define el nivel por debajo del cual un material se marca como stock bajo."):
+        _min_stock_dialog()
+
+
 def _render_stock(stock: pd.DataFrame) -> None:
+    _min_stock_button()
     if stock.empty:
-        ui.empty_state("Aún no hay stock", "Se llena al registrar una recepción en Órdenes de compra o una entrada de ajuste. Define un stock mínimo en Materiales para que aparezca aquí.")
+        ui.empty_state("Aún no hay stock", "Se llena al registrar una recepción en Órdenes de compra o una entrada de ajuste. Define un stock mínimo con «Stock mínimo» para que un material aparezca aquí.")
         return
     total = len(stock)
     query = st.text_input("Buscar", placeholder="Material o categoría…", key="stock_q")
