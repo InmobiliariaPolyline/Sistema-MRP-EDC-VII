@@ -132,7 +132,7 @@
 .mrp-mock-tablewrap { position: relative; overflow-x: auto; border-radius: .8rem; border: 1px solid var(--mrp-border); }
 .mrp-mock-table { width: 100%; border-collapse: collapse; font-size: .72rem; }
 .mrp-mock-table th { padding: .42rem .55rem; text-align: left; font-size: .62rem; letter-spacing: .04em; text-transform: uppercase; font-weight: 800; color: var(--mrp-muted); background: var(--mrp-field); white-space: nowrap; }
-.mrp-mock-table td { padding: .42rem .55rem; color: var(--mrp-text); border-top: 1px solid var(--mrp-border); white-space: nowrap; }
+.mrp-mock-table td { padding: .42rem .55rem; color: var(--mrp-text); border-top: 1px solid var(--mrp-border); white-space: nowrap; max-width: 11rem; overflow: hidden; text-overflow: ellipsis; }
 .mrp-mock-table tr:nth-child(even) td { background: color-mix(in srgb, var(--mrp-field) 55%, transparent); }
 .mrp-mock-table .mrp-pill { font-size: .62rem; padding: .08rem .45rem; }
 
