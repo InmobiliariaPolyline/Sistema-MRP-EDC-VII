@@ -22,7 +22,8 @@ def inject() -> None:
     palette = sheets["dark"] if st.session_state.get("dark_mode") else sheets["light"]
     # al cambiar de pantalla se alterna el nombre de la animación de entrada: así se reproduce de nuevo solo al navegar
     palette += "--mrp-enter:" + ("mrpUpB" if st.session_state.get("_mrp_nav", 0) % 2 else "mrpUpA") + ";"
-    st.markdown("<style>" + sheets["font"] + "</style><style>:root {" + palette + "}" + sheets["css"] + "</style>", unsafe_allow_html=True)
+    extra = sheets["dark_extra"] if st.session_state.get("dark_mode") else ""
+    st.markdown("<style>" + sheets["font"] + "</style><style>:root {" + palette + "}" + sheets["css"] + extra + "</style>", unsafe_allow_html=True)
 
 
 def page_header(eyebrow: str, title: str, subtitle: str = "", action_label: str | None = None, action_key: str | None = None) -> bool:
@@ -309,8 +310,8 @@ def signed(value: float, text: str | None = None, good_when_positive: bool = Tru
 def tint_frame(df: pd.DataFrame, signed: list[str] | None = None, good: list[str] | None = None, bad: list[str] | None = None):
     """La tabla con colores según el valor: `signed` (verde si es positivo, rojo si es negativo), `good` (verde si es mayor que
     cero) y `bad` (rojo si es mayor que cero). Los ceros y los vacíos quedan sin color."""
-    dark = bool(st.session_state.get("dark_mode"))
-    green, red = ("#7FE0AB", "#FFA9B1") if dark else ("#16794A", "#C0343F")
+    # en modo oscuro la tabla se invierte por CSS (ver dark_extra.css): con estos colores base queda verde y rojo claro
+    green, red = "#16794A", "#C0343F"
 
     def paint(colors: tuple[str, str]):
         def one(value):

@@ -63,3 +63,10 @@ a.mrp-link:hover .mrp-ico { transform: scale(1.2) rotate(-6deg); }
 .mrp-num-neg::before { border-top: .42rem solid currentColor; animation: mrpTick .4s var(--ease-spring) both; }
 .mrp-stat-value:has(.mrp-num) { display: flex; }
 .mrp-stat-value .mrp-num { font-weight: 800; }
+
+/* st.metric con el mismo aspecto de las tarjetas de estadística */
+[data-testid="stMetric"] { position: relative; overflow: hidden; padding: 1rem 1.15rem; background: var(--mrp-surface); border: 1px solid var(--mrp-border); border-radius: var(--r-lg); box-shadow: var(--mrp-shadow); transition: transform var(--dur-base) var(--ease-out), box-shadow var(--dur-base), border-color var(--dur-base); }
+[data-testid="stMetric"]::before { content: ""; position: absolute; inset: 0 0 auto 0; height: 3px; background: var(--mrp-grad); transform-origin: left; animation: mrpGrow .8s var(--ease-out) .2s both; }
+[data-testid="stMetric"]:hover { transform: translateY(-3px); box-shadow: var(--mrp-shadow-lg); border-color: color-mix(in srgb, var(--mrp-accent) 40%, var(--mrp-border)); }
+[data-testid="stMetricLabel"] p { font-size: var(--fs-xs); text-transform: uppercase; letter-spacing: .07em; font-weight: 700; color: var(--mrp-muted) !important; }
+[data-testid="stMetricDelta"] { font-weight: 700; }

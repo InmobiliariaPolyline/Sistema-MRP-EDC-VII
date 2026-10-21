@@ -1,0 +1,4 @@
+/* Solo en modo oscuro: las tablas de Streamlit se dibujan en un canvas con su propio tema claro, así que se invierten
+   (luminosidad invertida y matiz restituido) para que combinen con el resto de la interfaz. */
+[data-testid="stDataFrameResizable"] { filter: invert(.93) hue-rotate(180deg); }
+[data-testid="stDataFrame"] { background: var(--mrp-surface); }

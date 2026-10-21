@@ -43,6 +43,7 @@ def _build(signature: tuple) -> dict[str, str]:
     return {
         "light": _minify(read("palette_light.css")),
         "dark": _minify(read("palette_dark.css")),
+        "dark_extra": _minify(read("dark_extra.css")),
         "font": "\n".join(line for line in sheets.splitlines() if line.startswith("@import")),
         "css": _minify("\n".join(line for line in sheets.splitlines() if not line.startswith("@import"))),
     }
