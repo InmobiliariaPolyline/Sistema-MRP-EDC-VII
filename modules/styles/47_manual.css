@@ -5,6 +5,10 @@
 
 /* Selector de capítulos y encabezados de sección */
 .st-key-manual_chapter [data-testid="stButtonGroup"] { flex-wrap: wrap; gap: .35rem; }
+.st-key-manual_chapter button[data-testid="stBaseButton-segmented_control"] { background: var(--mrp-surface); color: var(--mrp-text); border: 1px solid var(--mrp-border); border-radius: .8rem; }
+.st-key-manual_chapter button[data-testid="stBaseButton-segmented_control"]:hover { border-color: var(--mrp-accent); color: var(--mrp-accent); }
+.st-key-manual_chapter button[data-testid="stBaseButton-segmented_controlActive"] { background: var(--mrp-soft); color: var(--mrp-accent); border: 1px solid var(--mrp-accent); border-radius: .8rem; font-weight: 700; }
+.st-key-manual_chapter button p { color: inherit; }
 .mrp-man-h { margin: 1.7rem 0 .8rem; font-size: 1.15rem; font-weight: 800; letter-spacing: -.015em; color: var(--mrp-text); display: flex; align-items: center; gap: .6rem; }
 .mrp-man-h::after { content: ""; flex: 1; height: 1px; background: var(--mrp-border); }
 .mrp-man-hero { margin-top: .6rem; }
