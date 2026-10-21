@@ -11,6 +11,7 @@ import streamlit as st
 from db import repository as repo
 from db.auth import hash_password
 from modules import forms, ui, security
+from utils import icons
 from utils.geocode import google_maps_search_url, parse_coordinates, search_address
 
 ROLES = ["operador", "admin"]
@@ -82,7 +83,7 @@ def _render_groups_panel() -> None:
         for row in groups.to_dict("records"):
             c1, c2 = st.columns([4, 1])
             c1.write(row["name"])
-            if c2.button("🗑", key=f"del_group_{row['id']}", help="Eliminar cuadrilla"):
+            if c2.button(":material/delete:", key=f"del_group_{row['id']}", help="Eliminar cuadrilla"):
                 ui.confirm_delete(
                     f"¿Eliminar la cuadrilla «{row['name']}»? Los trabajadores quedarán sin cuadrilla.",
                     lambda gid=row["id"], nm=row["name"]: _delete_group(gid, nm),
@@ -117,7 +118,7 @@ def _render_sites_panel() -> None:
             cancel_col, save_col = st.columns([1, 2])
             save = save_col.form_submit_button("Guardar obra", type="primary", width="stretch")
             cancel = cancel_col.form_submit_button("Cancelar", width="stretch")
-            search = st.form_submit_button("🔍 Ubicar en el mapa", width="stretch", help="Busca y muestra la ubicación sin guardar la obra.")
+            search = st.form_submit_button(":material/search: Ubicar en el mapa", width="stretch", help="Busca y muestra la ubicación sin guardar la obra.")
 
         if cancel:
             st.session_state["_site_reset_pending"] = True
@@ -159,23 +160,27 @@ def _render_sites_panel() -> None:
         geocode = st.session_state.get("_site_geocode")
         if geocode:
             forms.section("Vista previa de la ubicación", "Este punto se asociará a la obra al guardar.")
-            st.caption(f"📍 {geocode['display_name']}")
+            st.caption(f":material/location_on: {geocode['display_name']}")
             if not geocode.get("exact"):
                 st.caption(
-                    "⚠️ Ubicación aproximada (OpenStreetMap suele ubicar solo la calle). "
+                    ":material/warning: Ubicación aproximada (OpenStreetMap suele ubicar solo la calle). "
                     "Para el punto exacto pega el enlace de Google Maps arriba."
                 )
             st.map(pd.DataFrame([{"lat": geocode["lat"], "lon": geocode["lon"]}]), zoom=17 if geocode.get("exact") else 15)
             st.markdown(
-                f'<a class="mrp-link" href="{google_maps_search_url(coords=(geocode["lat"], geocode["lon"]))}" '
-                'target="_blank" rel="noopener">🗺️ Abrir estas coordenadas en Google Maps</a>',
+                icons.render_tokens(
+                    f'<a class="mrp-link" href="{google_maps_search_url(coords=(geocode["lat"], geocode["lon"]))}" '
+                    'target="_blank" rel="noopener">:material/map: Abrir estas coordenadas en Google Maps</a>'
+                ),
                 unsafe_allow_html=True,
             )
             st.button("Quitar ubicación", key="_site_clear_location", on_click=_remove_site_location, help="Conserva el nombre y la dirección de la obra.")
         elif address.strip():
             st.markdown(
-                f'<a class="mrp-link" href="{google_maps_search_url(address.strip())}" target="_blank" rel="noopener">'
-                "🗺️ Buscar esta dirección en Google Maps</a>",
+                icons.render_tokens(
+                    f'<a class="mrp-link" href="{google_maps_search_url(address.strip())}" target="_blank" rel="noopener">'
+                    ":material/map: Buscar esta dirección en Google Maps</a>"
+                ),
                 unsafe_allow_html=True,
             )
 
@@ -211,10 +216,10 @@ def _render_sites_panel() -> None:
             c1, c2 = st.columns([4, 1])
             if _has_coordinates(row.get("latitude"), row.get("longitude")):
                 url = google_maps_search_url(coords=(float(row["latitude"]), float(row["longitude"])))
-                c1.markdown(f'{html.escape(row["name"])} <a class="mrp-link" href="{url}" target="_blank" rel="noopener">📍 Ver en Google Maps</a>', unsafe_allow_html=True)
+                c1.markdown(icons.render_tokens(f'{html.escape(row["name"])} <a class="mrp-link" href="{url}" target="_blank" rel="noopener">📍 Ver en Google Maps</a>'), unsafe_allow_html=True)
             else:
                 c1.write(row["name"])
-            if c2.button("🗑", key=f"del_site_{row['id']}", help="Eliminar obra"):
+            if c2.button(":material/delete:", key=f"del_site_{row['id']}", help="Eliminar obra"):
                 ui.confirm_delete(
                     f"¿Eliminar la obra «{row['name']}»? Los trabajadores y órdenes asignados quedarán sin obra.",
                     lambda sid=row["id"], nm=row["name"]: _delete_site(sid, nm),
@@ -247,22 +252,22 @@ def _has_coordinates(latitude: object, longitude: object) -> bool:
 
 def _delete_group(group_id: str, name: str) -> None:
     repo.delete_work_group(group_id)
-    ui.flash(f"Cuadrilla «{name}» eliminada.", "🗑️")
+    ui.flash(f"Cuadrilla «{name}» eliminada.", ":material/delete:")
 
 
 def _delete_site(site_id: str, name: str) -> None:
     repo.delete_project_site(site_id)
-    ui.flash(f"Obra «{name}» eliminada.", "🗑️")
+    ui.flash(f"Obra «{name}» eliminada.", ":material/delete:")
 
 
 def _delete_worker(worker_id: str, name: str) -> None:
     repo.delete_worker(worker_id)
-    ui.flash(f"Trabajador «{name}» eliminado.", "🗑️")
+    ui.flash(f"Trabajador «{name}» eliminado.", ":material/delete:")
 
 
 def _revoke_access(worker_id: str, user_id: str, name: str) -> None:
     repo.revoke_worker_access(worker_id, user_id)
-    ui.flash(f"Se quitó el acceso al sistema de {name}.", "🔒")
+    ui.flash(f"Se quitó el acceso al sistema de {name}.", ":material/lock:")
 
 
 # ---------------------------------------------------------------------------
@@ -360,7 +365,7 @@ def _new_worker_dialog() -> None:
             try:
                 repo.grant_worker_access(worker_id, username, password_hash, fields["full_name"], role)
             except Exception:
-                ui.flash(f"Trabajador «{fields['full_name']}» registrado. No se pudo crear su acceso; usa «Dar acceso» en el directorio para reintentar.", "⚠️")
+                ui.flash(f"Trabajador «{fields['full_name']}» registrado. No se pudo crear su acceso; usa «Dar acceso» en el directorio para reintentar.", ":material/warning:")
                 st.rerun()
 
         ui.flash(f"Trabajador «{fields['full_name']}» registrado.")
@@ -422,7 +427,7 @@ def _grant_access_dialog(worker: dict) -> None:
         except Exception as exc:
             ui.db_error(exc, "No se pudo crear el acceso. Revisa que el usuario siga disponible e inténtalo de nuevo.")
             return
-        ui.flash(f"Acceso creado para {worker['full_name']}.", "🔑")
+        ui.flash(f"Acceso creado para {worker['full_name']}.", ":material/key:")
         st.rerun()
 
 
@@ -565,10 +570,10 @@ def _render_workers_list() -> None:
                     if st.button("Dar acceso", key=f"grant_{row['id']}", width="stretch"):
                         _grant_access_dialog(row)
             with c4:
-                if st.button("✏️", key=f"edit_worker_{row['id']}", help="Editar trabajador"):
+                if st.button(":material/edit:", key=f"edit_worker_{row['id']}", help="Editar trabajador"):
                     _edit_worker_dialog(row)
             with c5:
-                if st.button("🗑", key=f"del_worker_{row['id']}", help="Eliminar trabajador"):
+                if st.button(":material/delete:", key=f"del_worker_{row['id']}", help="Eliminar trabajador"):
                     ui.confirm_delete(
                         f"¿Eliminar al trabajador «{row['full_name']}»?",
                         lambda wid=row["id"], nm=row["full_name"]: _delete_worker(wid, nm),
@@ -580,7 +585,7 @@ def _render_workers_list() -> None:
                 st.caption(f"Acceso al sistema: @{row['username']} ({row.get('role') or 'operador'})")
 
             if _has_coordinates(row.get("latitude"), row.get("longitude")):
-                with st.expander(f"📍 Ubicación — {row.get('site_name') or ''}"):
+                with st.expander(f":material/location_on: Ubicación — {row.get('site_name') or ''}"):
                     if row.get("site_address"):
                         st.caption(row["site_address"])
                     st.map(pd.DataFrame([{"lat": row["latitude"], "lon": row["longitude"]}]), zoom=13)

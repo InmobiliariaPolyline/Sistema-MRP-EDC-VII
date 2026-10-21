@@ -14,11 +14,14 @@ from modules.guides import guide_for
 
 from modules import ui_styles
 from utils import audit as audit_text
+from utils import icons
 
 
 def inject() -> None:
     sheets = ui_styles.bundle()  # se relee solo si cambió algún .css (ver ui_styles)
     palette = sheets["dark"] if st.session_state.get("dark_mode") else sheets["light"]
+    # al cambiar de pantalla se alterna el nombre de la animación de entrada: así se reproduce de nuevo solo al navegar
+    palette += "--mrp-enter:" + ("mrpUpB" if st.session_state.get("_mrp_nav", 0) % 2 else "mrpUpA") + ";"
     st.markdown("<style>" + sheets["font"] + "</style><style>:root {" + palette + "}" + sheets["css"] + "</style>", unsafe_allow_html=True)
 
 
@@ -43,7 +46,7 @@ def page_header(eyebrow: str, title: str, subtitle: str = "", action_label: str 
 
 def empty_state(title: str, description: str, icon: str = "📦") -> None:
     st.markdown(
-        f'<div class="mrp-empty"><div class="mrp-empty-icon">{html.escape(icon)}</div>'
+        f'<div class="mrp-empty"><div class="mrp-empty-icon">{icons.render_tokens(html.escape(icon), 30, 1.6)}</div>'
         f'<div class="mrp-empty-title">{html.escape(title)}</div>'
         f'<div class="mrp-empty-copy">{html.escape(description)}</div></div>',
         unsafe_allow_html=True,
@@ -83,6 +86,12 @@ def chart_theme(fig):
         paper_bgcolor="rgba(0,0,0,0)", plot_bgcolor="rgba(0,0,0,0)",
         hoverlabel=dict(bgcolor="#1B2442" if dark else "#FFFFFF", font=dict(family="Inter, sans-serif", color=text), bordercolor=grid),
     )
+    fig.update_layout(
+        colorway=["#7C66FF", "#18B4CC", "#E0951A", "#3DB87A", "#E5596B", "#5B8DEF"],
+        transition=dict(duration=600, easing="cubic-in-out"),
+        legend=dict(font=dict(color=muted), bgcolor="rgba(0,0,0,0)"),
+    )
+    fig.update_traces(root_color="rgba(0,0,0,0)", pathbar=dict(visible=False), selector=dict(type="treemap"))
     fig.update_xaxes(gridcolor=grid, zerolinecolor=grid, linecolor=grid, tickfont=dict(color=muted))
     fig.update_yaxes(gridcolor=grid, zerolinecolor=grid, linecolor=grid, tickfont=dict(color=muted))
     return fig
@@ -102,7 +111,7 @@ def _guide_popover(guide: dict | None) -> None:
 
 def tip(text: str) -> None:
     """Consejo breve con ejemplo, para el inicio de un formulario."""
-    st.markdown(f'<div class="mrp-tip">💡 {html.escape(text)}</div>', unsafe_allow_html=True)
+    st.markdown(f'<div class="mrp-tip">{icons.svg("bulb", 16, 2)}<span>{html.escape(text)}</span></div>', unsafe_allow_html=True)
 
 
 def spark(values: list[float], color: str = "currentColor") -> str:
@@ -131,7 +140,7 @@ def stat_card(icon: str, value, label: str, caption: str = "", warn: bool = Fals
         f'<div class="{klass}">'
         f'<div class="mrp-stat-top">'
         f'<div class="mrp-stat-label">{label}</div>'
-        f'<div class="mrp-icon-badge">{icon}</div>'
+        f'<div class="mrp-icon-badge">{icons.render_tokens(icon, 20, 1.8)}</div>'
         f"</div>"
         f'<div class="mrp-stat-value">{value}</div>'
         f"{caption_html}{spark_html}"
@@ -145,7 +154,7 @@ def stat_grid(cards: list[str]) -> None:
 
 def hero(eyebrow: str, title: str, subtitle: str = "", chips: list[str] | None = None) -> None:
     """Banner principal de una pantalla (se usa en el dashboard)."""
-    chips_html = "".join(f'<span class="mrp-hero-chip">{html.escape(c)}</span>' for c in (chips or []))
+    chips_html = "".join(f'<span class="mrp-hero-chip">{icons.render_tokens(html.escape(c), 14, 2)}</span>' for c in (chips or []))
     st.markdown(
         f'<div class="mrp-hero"><div class="mrp-hero-eyebrow">{html.escape(eyebrow)}</div>'
         f'<div class="mrp-hero-title">{html.escape(title)}</div>'
@@ -161,7 +170,7 @@ def timeline_item(icon: str, name: str, sub: str, when: str = "", tone: str = ""
     when_html = f'<div class="mrp-timeline-when">{when}</div>' if when else ""
     return (
         '<div class="mrp-timeline-item">'
-        f'<div class="mrp-timeline-dot">{icon}</div>'
+        f'<div class="mrp-timeline-dot">{icons.render_tokens(icon, 16, 2)}</div>'
         f'<div class="mrp-timeline-body"><div class="mrp-activity-name">{name}</div><div class="mrp-activity-sub">{sub}</div></div>'
         f"{when_html}</div>"
     )
@@ -170,15 +179,16 @@ def timeline_item(icon: str, name: str, sub: str, when: str = "", tone: str = ""
 def go(label: str) -> None:
     """Navega a un módulo del menú (para botones de acceso rápido)."""
     st.session_state["mrp_active_route"] = label
+    st.session_state["_mrp_nav"] = st.session_state.get("_mrp_nav", 0) + 1
 
 
 def activity_item(name: str, sub: str, badge: str, when: str = "") -> str:
-    when_html = f'<div class="mrp-activity-when">{when}</div>' if when else ""
+    when_html = f'<div class="mrp-activity-when">{icons.render_tokens(str(when), 13, 2)}</div>' if when else ""
     return (
         '<div class="mrp-activity-item">'
         f'<div><div class="mrp-activity-name">{name}</div><div class="mrp-activity-sub">{sub}</div></div>'
         f'<div style="text-align:right;">'
-        f'<div class="mrp-activity-badge">{badge}</div>{when_html}'
+        f'<div class="mrp-activity-badge">{icons.render_tokens(str(badge), 14, 2)}</div>{when_html}'
         f"</div>"
         "</div>"
     )
@@ -198,7 +208,7 @@ def avatar(name: str) -> str:
 
 
 def pill(text: str, color: str = "purple") -> str:
-    return f'<span class="mrp-pill mrp-pill-{color}">{text}</span>'
+    return f'<span class="mrp-pill mrp-pill-{color}">{icons.render_tokens(text, 12, 2.2)}</span>'
 
 
 def row_name_sub(avatar_html: str, name: str, sub: str) -> str:
@@ -259,14 +269,14 @@ def log_change(
         return
     text = f"{summary} ({audit_text.describe(changes)})"
     if icon or flash_message:
-        st.session_state["_flash"] = (summary, icon or "✏️")
+        st.session_state["_flash"] = (summary, icon or ":material/edit:")
     try:
         repo.log_action(current_actor(), text, entity_type, entity_id, changes)
     except Exception:  # el historial nunca debe romper la acción en sí
         pass
 
 
-def flash(message: str, icon: str = "✅", log: bool = True) -> None:
+def flash(message: str, icon: str = ":material/check_circle:", log: bool = True) -> None:
     """Deja un aviso (toast) para mostrarse en la próxima recarga: sirve para
     confirmar una acción justo antes de un st.rerun(), que de otro modo se
     llevaría el mensaje. Cada aviso es una acción ya hecha, así que también
@@ -279,10 +289,52 @@ def flash(message: str, icon: str = "✅", log: bool = True) -> None:
             pass
 
 
+def _toast_icon(token: str) -> str:
+    """Los avisos (toast) llevan un icono Material; un emoji conocido se traduce y cualquier otro valor cae en una marca de éxito."""
+    if str(token).startswith(":material/"):
+        return token
+    return icons.material(token, ":material/check_circle:")
+
+
+def signed(value: float, text: str | None = None, good_when_positive: bool = True) -> str:
+    """Un número que cambia de color en tiempo real según su signo: verde si es favorable, rojo si no, gris si es cero."""
+    number = float(value or 0)
+    if number == 0:
+        tone = "zero"
+    else:
+        tone = "pos" if (number > 0) == good_when_positive else "neg"
+    return f'<span class="mrp-num mrp-num-{tone}">{html.escape(text if text is not None else f"{number:,.2f}")}</span>'
+
+
+def tint_frame(df: pd.DataFrame, signed: list[str] | None = None, good: list[str] | None = None, bad: list[str] | None = None):
+    """La tabla con colores según el valor: `signed` (verde si es positivo, rojo si es negativo), `good` (verde si es mayor que
+    cero) y `bad` (rojo si es mayor que cero). Los ceros y los vacíos quedan sin color."""
+    dark = bool(st.session_state.get("dark_mode"))
+    green, red = ("#7FE0AB", "#FFA9B1") if dark else ("#16794A", "#C0343F")
+
+    def paint(colors: tuple[str, str]):
+        def one(value):
+            try:
+                number = float(value)
+            except (TypeError, ValueError):
+                return ""
+            if number != number or number == 0:
+                return ""
+            return f"color: {colors[0] if number > 0 else colors[1]}; font-weight: 700"
+        return one
+
+    styler = df.style
+    for columns, colors in ((signed, (green, red)), (good, (green, "")), (bad, (red, ""))):
+        present = [c for c in (columns or []) if c in df.columns]
+        if present:
+            styler = styler.map(paint(colors), subset=present)
+    return styler
+
+
 def show_flash() -> None:
     item = st.session_state.pop("_flash", None)
     if item:
-        st.toast(item[0], icon=item[1])
+        st.toast(item[0], icon=_toast_icon(item[1]))
 
 
 @st.dialog("Confirmar eliminación")
@@ -326,11 +378,11 @@ def contact_links(phone: str | None, email: str | None) -> str:
     if phone:
         dial = re.sub(r"[^\d+]", "", phone)
         wa = re.sub(r"\D", "", phone)
-        parts.append(f'<a class="mrp-link" href="tel:{dial}">📞 Llamar</a>')
+        parts.append(f'<a class="mrp-link" href="tel:{dial}">{icons.svg("phone", 14, 2)} Llamar</a>')
         if wa:
-            parts.append(f'<a class="mrp-link" href="https://wa.me/{wa}" target="_blank" rel="noopener">💬 WhatsApp</a>')
+            parts.append(f'<a class="mrp-link" href="https://wa.me/{wa}" target="_blank" rel="noopener">{icons.svg("chat", 14, 2)} WhatsApp</a>')
     if email:
-        parts.append(f'<a class="mrp-link" href="mailto:{html.escape(email, quote=True)}">✉️ Correo</a>')
+        parts.append(f'<a class="mrp-link" href="mailto:{html.escape(email, quote=True)}">{icons.svg("mail", 14, 2)} Correo</a>')
     if not parts:
         return '<div class="mrp-row-sub">Sin datos de contacto</div>'
     return '<div class="mrp-links">' + "".join(parts) + "</div>"

@@ -47,3 +47,16 @@
   position: sticky; bottom: -1px; z-index: 5; padding: .9rem 0 .3rem; margin-top: .5rem;
   background: linear-gradient(to bottom, transparent, var(--mrp-surface) 30%);
 }
+
+/* movimiento de los formularios */
+[data-testid="stForm"] { transition: box-shadow var(--dur-base), border-color var(--dur-base); }
+[data-testid="stForm"]:focus-within { border-color: color-mix(in srgb, var(--mrp-accent) 40%, var(--mrp-border)); box-shadow: var(--mrp-shadow-lg); }
+.mrp-form-section strong { position: relative; display: inline-flex; align-items: center; gap: .45rem; }
+.mrp-form-section strong::before { content: ""; width: .9rem; height: 2px; border-radius: 2px; background: var(--mrp-grad); transform-origin: left; animation: mrpGrow .6s var(--ease-out) both; }
+.mrp-form-intro { animation: mrpFade var(--dur-slow) ease-out both; }
+.mrp-live { transition: color var(--dur-base); animation: mrpDown var(--dur-base) var(--ease-out); }
+.mrp-live[data-state="bad"] { animation: mrpShake .4s var(--ease-out); }
+.mrp-dup { animation: mrpSlideLeft var(--dur-base) var(--ease-out); }
+.mrp-pwd-bar > span { transition: width .35s var(--ease-out), background var(--dur-base); }
+.mrp-formprogress .mrp-meter > span { transition: width .45s var(--ease-out); }
+.mrp-formprogress[data-done="1"] { border-color: color-mix(in srgb, var(--mrp-good) 55%, var(--mrp-border)); animation: mrpPop .4s var(--ease-spring); }

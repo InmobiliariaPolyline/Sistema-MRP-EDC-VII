@@ -221,7 +221,7 @@ def suggestion_dialog() -> None:
             "No hace falta comprar nada",
             "El stock y las órdenes abiertas cubren lo presupuestado para las obras (y los stocks mínimos). "
             "Define presupuestos en Obras → Materiales para que aparezcan sugerencias.",
-            "✅",
+            ":material/check_circle:",
         )
         return
 
@@ -346,7 +346,7 @@ def suggestion_dialog() -> None:
                 arrival = lead_by_supplier.get(supplier_id)
                 terms = {**money.default_terms(), **({"expected_date": arrival} if arrival else {})}
                 created.append(repo.create_order(supplier_id, supplier_name, None, "Sugerencia de compra", lines, terms))
-            ui.flash(f"Órdenes creadas por sugerencia de compra: {', '.join(created)}.", "🧾")
+            ui.flash(f"Órdenes creadas por sugerencia de compra: {', '.join(created)}.", ":material/receipt_long:")
             st.rerun()
 
     if not unquoted.empty:

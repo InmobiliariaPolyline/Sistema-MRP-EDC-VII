@@ -25,11 +25,11 @@ def is_stale(updated_at, max_days: int = DEFAULT_MAX_AGE_DAYS, now: datetime | N
 
 
 def describe(updated_at, max_days: int = DEFAULT_MAX_AGE_DAYS, now: datetime | None = None) -> str:
-    """Texto corto para mostrar junto a un precio: «actualizado hace 12 d», «⚠ hace 130 d (vencido)»…"""
+    """Texto corto para mostrar junto a un precio: «actualizado hace 12 d», «hace 130 d (vencido)»…"""
     age = price_age_days(updated_at, now)
     if age is None:
         return "sin fecha de actualización"
     if age == 0:
         return "actualizado hoy"
     text = f"hace {age} d" if age < 60 else f"hace {age // 30} meses"
-    return f"⚠ {text} (vencido)" if age > max_days else f"actualizado {text}"
+    return f"{text} (vencido)" if age > max_days else f"actualizado {text}"

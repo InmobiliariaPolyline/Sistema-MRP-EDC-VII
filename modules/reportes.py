@@ -297,7 +297,7 @@ def render() -> None:
     stamp = f"{datetime.now():%Y%m%d_%H%M}"
     c1, c2, _ = st.columns([2, 2, 3])
     c1.download_button(
-        "⬇ Descargar Excel",
+        ":material/download: Descargar Excel",
         data=excel,
         file_name=f"reporte_mrp_{stamp}.xlsx",
         mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
@@ -305,7 +305,7 @@ def render() -> None:
         width="stretch",
     )
     c2.download_button(
-        "⬇ Descargar PDF",
+        ":material/download: Descargar PDF",
         data=pdf,
         file_name=f"reporte_mrp_{stamp}.pdf",
         mime="application/pdf",

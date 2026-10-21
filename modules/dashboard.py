@@ -44,8 +44,8 @@ def render(user: dict) -> None:
     late = ordenes.late_orders(orders)
     attention = ordenes.attention_orders(orders)
 
-    chips = [f"📅 {DIAS[now.weekday()].capitalize()} {now.day} de {MESES[now.month - 1]}"]
-    chips.append(f"🧾 {totals.get('orders_open', 0)} orden(es) abierta(s)")
+    chips = [f":material/calendar_month: {DIAS[now.weekday()].capitalize()} {now.day} de {MESES[now.month - 1]}"]
+    chips.append(f":material/receipt_long: {totals.get('orders_open', 0)} orden(es) abierta(s)")
     if len(attention):
         chips.append(f"⏰ {len(attention)} atrasada(s)")
     ui.hero(
@@ -382,7 +382,7 @@ def _render_sites_map() -> None:
                         html.escape(site["name"]),
                         html.escape(site["address"] or "Sin dirección"),
                         f"{n} trabajador{'es' if n != 1 else ''}",
-                        "📍 en el mapa" if site.get("latitude") else "sin ubicación",
+                        ":material/location_on: en el mapa" if site.get("latitude") else "sin ubicación",
                     )
                 )
             st.markdown("".join(rows), unsafe_allow_html=True)
@@ -391,13 +391,13 @@ def _render_sites_map() -> None:
 def _icon_for(summary: str) -> str:
     text = summary.lower()
     for words, icon in [
-        (("eliminad",), "🗑️"), (("recepci", "stock", "movimiento", "despacho", "entrada", "salida"), "📦"),
-        (("orden",), "🧾"), (("proveedor",), "🏭"), (("material", "presupuesto"), "🧱"),
-        (("asistencia",), "📅"), (("trabajador", "obra", "cuadrilla", "acceso"), "👷"),
+        (("eliminad",), ":material/delete:"), (("recepci", "stock", "movimiento", "despacho", "entrada", "salida"), ":material/inventory_2:"),
+        (("orden",), ":material/receipt_long:"), (("proveedor",), ":material/factory:"), (("material", "presupuesto"), ":material/layers:"),
+        (("asistencia",), ":material/calendar_month:"), (("trabajador", "obra", "cuadrilla", "acceso"), ":material/engineering:"),
     ]:
         if any(w in text for w in words):
             return icon
-    return "✨"
+    return ":material/auto_awesome:"
 
 
 def _render_activity() -> None:
@@ -461,7 +461,7 @@ def _render_status_donut(totals: dict) -> None:
         _plot(fig, 220)
 
         st.markdown(
-            f'<div class="mrp-activity-item"><div>🟣 Con disponibilidad</div><b>{con_disponible}</b></div>'
-            f'<div class="mrp-activity-item"><div>⚪ Sin disponibilidad</div><b>{sin_disponible}</b></div>',
+            f'<div class="mrp-activity-item"><div><span class="mrp-dot mrp-dot-on"></span>Con disponibilidad</div><b>{con_disponible}</b></div>'
+            f'<div class="mrp-activity-item"><div><span class="mrp-dot"></span>Sin disponibilidad</div><b>{sin_disponible}</b></div>',
             unsafe_allow_html=True,
         )

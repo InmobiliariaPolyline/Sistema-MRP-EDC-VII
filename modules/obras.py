@@ -10,10 +10,11 @@ from db import repository as repo
 from modules import forms, inventario, materiales, ui
 from utils.reports import site_report_pdf
 from utils import audit
+from utils import icons
 from utils.geocode import google_maps_search_url
 
 SITE_KEY = "obras_site"
-NEW_STAGE = "➕ Nueva etapa…"
+NEW_STAGE = "＋ Nueva etapa…"
 NO_STAGE = "Sin etapa"
 ALL_STAGES = "Todas las etapas"
 
@@ -26,7 +27,7 @@ def _clear_budget_draft(site_id: str) -> None:
 
 def _delete_budget(budget_id: str, material_name: str, site_name: str) -> None:
     repo.delete_budget(budget_id)
-    ui.flash(f"«{material_name}» quitado del presupuesto de {site_name}.", "🗑️")
+    ui.flash(f"«{material_name}» quitado del presupuesto de {site_name}.", ":material/delete:")
 
 
 def site_stages(site_id: str) -> list[str]:
@@ -180,15 +181,15 @@ def _budget_dialog(site_id: str, site_name: str) -> None:
         _clear_budget_draft(site_id)
         summary = f"Presupuesto de «{site_name}»{f' · {stage}' if stage else ''}: {material['name']}"
         if current.empty:
-            ui.flash(f"{summary} × {qty:g}.", "🧮")
+            ui.flash(f"{summary} × {qty:g}.", ":material/calculate:")
         else:
             changes = audit.diff(
                 {"qty": float(current.iloc[0]["planned_qty"]), "price": float(current.iloc[0]["planned_unit_price"])},
                 {"qty": qty, "price": price}, {"qty": "Cantidad prevista", "price": "Precio estimado"},
             )
-            ui.log_change(summary, "presupuesto", str(current.iloc[0]["id"]), changes, icon="🧮")
+            ui.log_change(summary, "presupuesto", str(current.iloc[0]["id"]), changes, icon=":material/calculate:")
             if not changes:
-                ui.flash(f"{summary}: sin cambios.", "🧮", log=False)
+                ui.flash(f"{summary}: sin cambios.", ":material/calculate:", log=False)
         st.rerun()
 
 
@@ -257,17 +258,17 @@ def render() -> None:
         [
             ui.stat_card("🧮", f"{prog['planned']:,.0f}", "Presupuesto", "costo previsto de materiales"),
             ui.stat_card("🧾", f"{prog['ordered']:,.0f}", "Pedido hasta hoy", pct, warn=prog["planned"] > 0 and prog["ordered"] > prog["planned"]),
-            ui.stat_card("⚖️", f"{prog['planned'] - prog['ordered']:,.0f}", "Saldo del presupuesto", "presupuesto − pedido"),
+            ui.stat_card("⚖️", ui.signed(prog["planned"] - prog["ordered"], f"{prog['planned'] - prog['ordered']:,.0f}"), "Saldo del presupuesto", "presupuesto − pedido"),
             ui.stat_card("📐", over, "Sobre lo presupuestado", "materiales pedidos por encima de lo previsto", warn=over > 0),
         ]
     )
 
     st.download_button(
-        "📄 Reporte de la obra (PDF)", data=site_report(site, df, prog), file_name=f"reporte_obra_{site_name.replace(' ', '_')}.pdf",
+        ":material/description: Reporte de la obra (PDF)", data=site_report(site, df, prog), file_name=f"reporte_obra_{site_name.replace(' ', '_')}.pdf",
         mime="application/pdf", key=f"site_report_{site_id}",
         help="Presupuesto frente a lo pedido, recibido y despachado, por material y por etapa, con los vales de salida. Listo para imprimir.",
     )
-    tab_info, tab_materials, tab_workers, tab_progress = st.tabs(["📍 Información", "📦 Materiales", "👷 Trabajadores", "📈 Progreso"])
+    tab_info, tab_materials, tab_workers, tab_progress = st.tabs([":material/location_on: Información", ":material/inventory_2: Materiales", ":material/engineering: Trabajadores", ":material/trending_up: Progreso"])
     with tab_info:
         _tab_info(site)
     with tab_materials:
@@ -303,7 +304,7 @@ def _tab_info(site: dict) -> None:
     st.map(pd.DataFrame([{"lat": lat, "lon": lon}]), zoom=16)
     st.caption(f"Coordenadas: {lat:.6f}, {lon:.6f}")
     url = google_maps_search_url(coords=(lat, lon))
-    st.markdown(f'<a class="mrp-link" href="{url}" target="_blank" rel="noopener">🗺️ Abrir en Google Maps</a>', unsafe_allow_html=True)
+    st.markdown(icons.render_tokens(f'<a class="mrp-link" href="{url}" target="_blank" rel="noopener">🗺️ Abrir en Google Maps</a>'), unsafe_allow_html=True)
 
 
 def _tab_materials(site: dict, df: pd.DataFrame) -> None:
@@ -313,9 +314,9 @@ def _tab_materials(site: dict, df: pd.DataFrame) -> None:
     if b1.button("＋ Material al presupuesto", type="primary", width="stretch"):
         _clear_budget_draft(site_id)
         _budget_dialog(site_id, site_name)
-    if b2.button("🚚 Despachar material", width="stretch", help="Saca material del almacén hacia esta obra y genera el vale de salida."):
+    if b2.button(":material/local_shipping: Despachar material", width="stretch", help="Saca material del almacén hacia esta obra y genera el vale de salida."):
         inventario.dispatch_dialog(default_site_id=site_id)
-    if b3.button("↩️ Devolver material", width="stretch", help="El material que sobra en esta obra vuelve al almacén."):
+    if b3.button(":material/undo: Devolver material", width="stretch", help="El material que sobra en esta obra vuelve al almacén."):
         inventario._clear_return_draft()
         inventario.return_dialog(default_site_id=site_id)
 
@@ -362,7 +363,7 @@ def _tab_materials(site: dict, df: pd.DataFrame) -> None:
     names = {r["Material"]: r["material_id"] for r in df.to_dict("records")}
     i1, i2 = st.columns([4, 2])
     chosen = i1.selectbox("Material", list(names), key=f"obra_mat_info_{site_id}", help="Abre su ficha para consultar especificaciones y proveedores.")
-    if i2.button("ℹ️ Ver ficha", width="stretch", key=f"obra_mat_btn_{site_id}"):
+    if i2.button(":material/info: Ver ficha", width="stretch", key=f"obra_mat_btn_{site_id}"):
         materiales.info_dialog(names[chosen])
 
     budgeted = repo.list_budgets(site_id)
@@ -372,7 +373,7 @@ def _tab_materials(site: dict, df: pd.DataFrame) -> None:
                 c1, c2 = st.columns([6, 1])
                 where = f" · etapa {row['stage']}" if row.get("stage") else ""
                 c1.write(f"{row['material_name']} · {float(row['planned_qty']):g} {row['unit'] or ''}{where}")
-                if c2.button("🗑", key=f"del_budget_{row['id']}", help="Quitar del presupuesto"):
+                if c2.button(":material/delete:", key=f"del_budget_{row['id']}", help="Quitar del presupuesto"):
                     ui.confirm_delete(
                         f"¿Quitar «{row['material_name']}»{where} del presupuesto de «{site_name}»? Se eliminará su cantidad y costo previstos. Sus pedidos y despachos se conservan.",
                         lambda bid=row["id"], name=row["material_name"], sn=site_name: _delete_budget(bid, name, sn),
@@ -437,7 +438,7 @@ def _state(row: pd.Series) -> str:
     if row["Pedido"] > row["Presupuesto"]:
         return "Sobre lo presupuestado"
     if row["Pedido"] >= row["Presupuesto"]:
-        return "✅ Completo"
+        return "Completo"
     if row["Pedido"] == 0:
         return "Sin pedir"
     return f"{row['Pedido'] / row['Presupuesto'] * 100:.0f}% pedido"

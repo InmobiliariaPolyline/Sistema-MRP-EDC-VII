@@ -230,12 +230,12 @@ def _material_quotes(material_id: str, current_supplier_id: str, offers: pd.Data
     best = rows.iloc[0]
     table = pd.DataFrame(
         {
-            "Proveedor": [("⭐ " if i == 0 else "") + r["supplier_name"] + (" (este pedido)" if r["supplier_id"] == current_supplier_id else "") for i, r in enumerate(rows.to_dict("records"))],
+            "Proveedor": [("★ " if i == 0 else "") + r["supplier_name"] + (" (este pedido)" if r["supplier_id"] == current_supplier_id else "") for i, r in enumerate(rows.to_dict("records"))],
             "Precio": rows["price"].tolist(),
             "Disponible": ["Sí" if r["available"] else "No" for r in rows.to_dict("records")],
         }
     )
-    with st.expander(f"💡 Comparar cotizaciones ({len(rows)} proveedores)", expanded=best["supplier_id"] != current_supplier_id):
+    with st.expander(f":material/lightbulb: Comparar cotizaciones ({len(rows)} proveedores)", expanded=best["supplier_id"] != current_supplier_id):
         st.dataframe(table, hide_index=True, width="stretch", column_config={"Precio": st.column_config.NumberColumn(format="%.2f")})
         mine = rows[rows["supplier_id"] == current_supplier_id]
         if best["supplier_id"] != current_supplier_id and not mine.empty:
@@ -359,7 +359,7 @@ def _new_order_dialog() -> None:
         l1, l2, l3 = st.columns([6, 3, 1])
         l1.write(f"{line['material_name']}  ·  {line['quantity']:g} {line['unit'] or ''} × {line['unit_price']:,.2f}")
         l2.write(f"**{money.fmt(subtotal, terms['currency'])}**")
-        if l3.button("✖", key=f"oline_del_{index}", help="Quitar línea"):
+        if l3.button(":material/close:", key=f"oline_del_{index}", help="Quitar línea"):
             lines.pop(index)
             st.rerun(scope="fragment")
     if lines:
@@ -379,9 +379,9 @@ def _new_order_dialog() -> None:
         if len(totals) > 1:
             cheapest_name, cheapest_total = totals[0]
             mine = next((t for n, t in totals if n == supplier_name), None)
-            with st.expander("💡 Este mismo pedido con otros proveedores", expanded=cheapest_name != supplier_name):
+            with st.expander(":material/lightbulb: Este mismo pedido con otros proveedores", expanded=cheapest_name != supplier_name):
                 st.dataframe(
-                    pd.DataFrame({"Proveedor": [("⭐ " if i == 0 else "") + n for i, (n, _) in enumerate(totals)], "Total del pedido (sin IGV)": [t for _, t in totals]}),
+                    pd.DataFrame({"Proveedor": [("★ " if i == 0 else "") + n for i, (n, _) in enumerate(totals)], "Total del pedido (sin IGV)": [t for _, t in totals]}),
                     hide_index=True,
                     width="stretch",
                     column_config={"Total del pedido (sin IGV)": st.column_config.NumberColumn(format="%.2f")},
@@ -413,7 +413,7 @@ def _new_order_dialog() -> None:
             st.error(f"No se pudo crear la orden: {exc}")
             return
         _clear_order_draft()
-        ui.flash(f"Orden {code} creada.", "🧾")
+        ui.flash(f"Orden {code} creada.", ":material/receipt_long:")
         st.rerun()
 
 
@@ -599,10 +599,10 @@ def _edit_order_dialog(order: dict, items: pd.DataFrame) -> None:
         ) + audit.diff_lines(items.to_dict("records"), new_items)
         reminder = " Reenvía el pedido actualizado al proveedor." if order["status"] == "enviada" else ""
         if changes:
-            ui.log_change(f"Orden {order['code']} editada", "orden", oid, changes, icon="✏️")
-            st.session_state["_flash"] = (f"Orden {order['code']} actualizada.{reminder}", "✏️")
+            ui.log_change(f"Orden {order['code']} editada", "orden", oid, changes, icon=":material/edit:")
+            st.session_state["_flash"] = (f"Orden {order['code']} actualizada.{reminder}", ":material/edit:")
         else:
-            ui.flash(f"Orden {order['code']}: sin cambios.{reminder}", "✏️", log=False)
+            ui.flash(f"Orden {order['code']}: sin cambios.{reminder}", ":material/edit:", log=False)
         st.rerun()
 
 
@@ -611,7 +611,7 @@ def _duplicate(order: dict, items: pd.DataFrame) -> None:
     suppliers = repo.list_suppliers()
     match = suppliers[suppliers["id"] == order["supplier_id"]]
     if match.empty:
-        st.toast("El proveedor de esta orden ya no existe; no se puede duplicar.", icon="⚠️")
+        st.toast("El proveedor de esta orden ya no existe; no se puede duplicar.", icon=":material/warning:")
         return
     catalog = repo.get_supplier_catalog(order["supplier_id"])
     current = {}
@@ -653,11 +653,11 @@ def _delete_order(order_id: str, code: str) -> None:
     try:
         repo.delete_order(order_id)
     except ValueError as exc:  # p. ej. ya recibió material: el stock quedaría descuadrado
-        ui.flash(f"No se pudo eliminar {code}: {exc}", "⚠️", log=False)
+        ui.flash(f"No se pudo eliminar {code}: {exc}", ":material/warning:", log=False)
         return
     if st.session_state.get(SELECTED_KEY) == order_id:
         st.session_state[SELECTED_KEY] = None
-    ui.flash(f"Orden {code} eliminada.", "🗑️")
+    ui.flash(f"Orden {code} eliminada.", ":material/delete:")
 
 
 def _render_list() -> None:
@@ -680,15 +680,15 @@ def _render_list() -> None:
         max_value=60,
         value=alert_days(),
         key="alert_days_input",
-        help="Las órdenes abiertas con más días que esto se marcan con ⏰ aquí y en el dashboard.",
+        help="Las órdenes abiertas con más días que esto se marcan en rojo aquí y en el dashboard.",
     )
 
     stale = stale_orders(df)
     if not stale.empty:
-        st.warning(f"⏰ {len(stale)} orden(es) abierta(s) con más de {alert_days()} días sin cerrarse: {', '.join(stale['code'].tolist()[:6])}")
+        st.warning(f"{len(stale)} orden(es) abierta(s) con más de {alert_days()} días sin cerrarse: {', '.join(stale['code'].tolist()[:6])}", icon=":material/alarm:")
     late = late_orders(df)
     if not late.empty:
-        st.error(f"📅 {len(late)} orden(es) pasaron su fecha prometida de entrega: {', '.join(late['code'].tolist()[:6])}", icon=":material/event_busy:")
+        st.error(f"{len(late)} orden(es) pasaron su fecha prometida de entrega: {', '.join(late['code'].tolist()[:6])}", icon=":material/event_busy:")
     late_days = dict(zip(late["id"], late["days_late"])) if not late.empty else {}
 
     if status_label != ALL_STATUSES:
@@ -731,7 +731,7 @@ def _render_list() -> None:
                     st.session_state[SELECTED_KEY] = row["id"]
                     st.rerun()
             with c5:
-                if st.button("🗑", key=f"del_order_{row['id']}", help="Eliminar orden"):
+                if st.button(":material/delete:", key=f"del_order_{row['id']}", help="Eliminar orden"):
                     ui.confirm_delete(
                         f"¿Eliminar la orden {row['code']}? Se borran también sus líneas.",
                         lambda oid=row["id"], code=row["code"]: _delete_order(oid, code),
@@ -748,7 +748,7 @@ def _mark_sent_from_link(order_id: str, code: str, status: str) -> None:
         return
     try:
         repo.set_order_status(order_id, "enviada")
-        ui.flash(f"Orden {code}: marcada como enviada al abrir WhatsApp.", "📤")
+        ui.flash(f"Orden {code}: marcada como enviada al abrir WhatsApp.", ":material/send:")
     except Exception:  # abrir WhatsApp nunca debe fallar por esto
         pass
 
@@ -767,7 +767,7 @@ def _change_status(order_id: str, code: str, status: str) -> None:
     repo.set_order_status(order_id, status)
     ui.log_change(
         f"Orden {code}: {STATUSES[status][0].lower()}", "orden", order_id,
-        [{"field": "Estado", "before": STATUSES.get(old, (old,))[0] if old else None, "after": STATUSES[status][0]}], icon="🔄",
+        [{"field": "Estado", "before": STATUSES.get(old, (old,))[0] if old else None, "after": STATUSES[status][0]}], icon=":material/sync:",
     )
     st.rerun()
 
@@ -812,7 +812,7 @@ def _receive(order_id: str, code: str, receipts: dict[str, float], receipt: dict
     except ValueError as exc:
         st.error(f"No se pudo registrar la recepción: {exc}")
         return
-    ui.flash(f"Orden {code}: recepción registrada ({STATUSES[status][0].lower()}). El stock se actualizó.", "📦")
+    ui.flash(f"Orden {code}: recepción registrada ({STATUSES[status][0].lower()}). El stock se actualizó.", ":material/inventory_2:")
     st.rerun()
 
 
@@ -821,7 +821,7 @@ def _render_reception(order: dict, items: pd.DataFrame) -> None:
     pending = items[items["quantity"].astype(float) - items["received_qty"].astype(float) > 1e-9]
     if pending.empty:
         return
-    with st.expander("📦 Registrar recepción", expanded=order["status"] in ("enviada", "parcial")):
+    with st.expander(":material/inventory_2: Registrar recepción", expanded=order["status"] in ("enviada", "parcial")):
         forms.section("1. Indica lo que llegó", "Registra solo esta entrega. Las cantidades se sumarán al inventario al guardar.")
         records = pending.to_dict("records")
         keys = {r["id"]: f"recv_{r['id']}_{float(r['received_qty']):g}" for r in records}
@@ -879,7 +879,7 @@ def _render_receipts(order_id: str) -> None:
     receipts = repo.list_receipts(order_id)
     if receipts.empty:
         return
-    with st.expander(f"🧾 Recepciones registradas ({len(receipts)})"):
+    with st.expander(f":material/receipt_long: Recepciones registradas ({len(receipts)})"):
         for r in receipts.to_dict("records"):
             when = str(r["received_at"])[:16].replace("T", " ")
             pills = ui.pill(r["document_ref"], "blue") if r.get("document_ref") else ui.pill("sin documento", "gray")
@@ -915,14 +915,14 @@ def _render_detail(order_id: str) -> None:
         ]
     )
     if _sent_text(order.get("sent_at")):
-        st.caption(f"📤 Enviada al proveedor el {_sent_text(order['sent_at'])}.")
+        st.caption(f":material/send: Enviada al proveedor el {_sent_text(order['sent_at'])}.")
     late_by = _days_late(order)
     if order.get("expected_date") and status in OPEN_STATUSES:
         when = f"{str(order['expected_date'])[8:10]}/{str(order['expected_date'])[5:7]}/{str(order['expected_date'])[:4]}"
         if late_by:
             st.error(f"Entrega prometida para el {when}: lleva {late_by} día(s) de atraso.", icon=":material/event_busy:")
         else:
-            st.caption(f"📅 Entrega prometida para el {when}.")
+            st.caption(f":material/calendar_month: Entrega prometida para el {when}.")
     parts = [f"Valor de venta {money.fmt(order['net'], order.get('currency'))}"]
     if float(order.get("tax_rate") or 0):
         parts.append(f"IGV {float(order['tax_rate']):.0%} {money.fmt(order['tax'], order.get('currency'))}")
@@ -934,9 +934,9 @@ def _render_detail(order_id: str) -> None:
     st.caption(" · ".join(parts))
     if order.get("payment_terms"):
         due = money.due_date(order["created_at"], order["payment_terms"])
-        st.caption(f"💳 Condición de pago: {order['payment_terms']}" + (f" · pago pactado hasta el {due:%d/%m/%Y}" if due else "") + " (informativo: la compra y el pago se hacen fuera del sistema).")
+        st.caption(f":material/credit_card: Condición de pago: {order['payment_terms']}" + (f" · pago pactado hasta el {due:%d/%m/%Y}" if due else "") + " (informativo: la compra y el pago se hacen fuera del sistema).")
     if order.get("notes"):
-        st.caption(f"📝 {order['notes']}")
+        st.caption(f":material/edit_note: {order['notes']}")
 
     suppliers = repo.list_suppliers()
     supplier_rows = suppliers[suppliers["id"] == order["supplier_id"]]
@@ -981,18 +981,18 @@ def _render_detail(order_id: str) -> None:
 
     received_any = bool(not items.empty and (items["received_qty"].astype(float) > 0).any())
     b1, b2, b3, b4 = st.columns([3, 2.2, 2, 1.8])
-    if status == "pendiente" and b1.button("📤 Marcar como enviada", width="stretch"):
+    if status == "pendiente" and b1.button(":material/send: Marcar como enviada", width="stretch"):
         _change_status(order_id, order["code"], "enviada")
     if status in ("pendiente", "enviada", "parcial") and b2.button("Cancelar orden", width="stretch"):
         _change_status(order_id, order["code"], "cancelada")
-    if b3.button("🗑 Eliminar", width="stretch", disabled=received_any,
+    if b3.button(":material/delete: Eliminar", width="stretch", disabled=received_any,
                  help="Ya recibió material: no se puede eliminar. Cancélala si el pedido no continúa." if received_any else None):
         ui.confirm_delete(
             f"¿Eliminar la orden {order['code']}? Se borran también sus líneas.",
             lambda oid=order_id, code=order["code"]: _delete_order(oid, code),
         )
     if status in ("pendiente", "enviada") and not received_any and not items.empty:
-        if b4.button("✏️ Editar orden", width="stretch", help="Agrega, quita o cambia la cantidad de materiales, la obra o las notas mientras no haya recibido material."):
+        if b4.button(":material/edit: Editar orden", width="stretch", help="Agrega, quita o cambia la cantidad de materiales, la obra o las notas mientras no haya recibido material."):
             _clear_edit_draft(order_id)  # cada vez que se abre parte de lo guardado
             _edit_order_dialog(order, items)
 
@@ -1000,7 +1000,7 @@ def _render_detail(order_id: str) -> None:
         company = repo.get_company()
         d1, d2, d4, d3, _ = st.columns([1.7, 2.4, 1.9, 1.9, 0.6])
         d1.download_button(
-            "📄 PDF",
+            ":material/description: PDF",
             data=order_pdf(order, items, supplier, company),
             file_name=f"{order['code']}.pdf",
             mime="application/pdf",
@@ -1008,7 +1008,7 @@ def _render_detail(order_id: str) -> None:
         )
         phone = re.sub(r"\D", "", (supplier or {}).get("phone") or "")
         d2.link_button(
-            "💬 Enviar por WhatsApp",
+            ":material/chat: Enviar por WhatsApp",
             f"https://wa.me/{phone}?text={quote(order_whatsapp_text(order, items, company))}",
             width="stretch",
             on_click=_mark_sent_from_link,
@@ -1016,7 +1016,7 @@ def _render_detail(order_id: str) -> None:
             help="Abre WhatsApp con el pedido y, si la orden estaba pendiente, la marca como enviada con la hora." if status == "pendiente" else None,
         )
         d4.link_button(
-            "✉️ Correo",
+            ":material/mail: Correo",
             mailto_url((supplier or {}).get("email"), f"Pedido {order['code']}", order_whatsapp_text(order, items, company)),
             width="stretch",
             on_click=_mark_sent_from_link,

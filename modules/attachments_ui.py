@@ -21,7 +21,7 @@ def render(entity_type: str, entity_id: str, *, expanded: bool = False, key: str
     key = key or f"{entity_type}_{entity_id}"
     files = repo.list_attachments(entity_type, entity_id)
     count = len(files)
-    label = f"📎 Documentos adjuntos ({count})" if count else "📎 Documentos adjuntos"
+    label = f":material/attach_file: Documentos adjuntos ({count})" if count else ":material/attach_file: Documentos adjuntos"
     open_key, uploader_key = f"att_open_{key}", f"att_up_n_{key}"
     with st.expander(label, expanded=expanded or count > 0 and st.session_state.get(open_key) is not None):
         if files.empty:
@@ -38,7 +38,7 @@ def render(entity_type: str, entity_id: str, *, expanded: bool = False, key: str
             )
             if c2.button("Abrir", key=f"att_view_{row['id']}", width="stretch"):
                 st.session_state[open_key] = row["id"]
-            if c3.button("🗑", key=f"att_del_{row['id']}", help="Quitar documento"):
+            if c3.button(":material/delete:", key=f"att_del_{row['id']}", help="Quitar documento"):
                 ui.confirm_delete(
                     f"¿Quitar «{row['filename']}»? El archivo se borra y no se puede recuperar.",
                     lambda aid=row["id"], name=row["filename"]: _delete(aid, name),
@@ -58,7 +58,7 @@ def render(entity_type: str, entity_id: str, *, expanded: bool = False, key: str
                 st.error(str(exc))
                 return
             st.session_state[uploader_key] = n + 1  # vacía el selector de archivos
-            ui.flash(f"Documento «{upload.name}» adjuntado a su {rules.ENTITY_TYPES.get(entity_type, 'ficha')}.", "📎")
+            ui.flash(f"Documento «{upload.name}» adjuntado a su {rules.ENTITY_TYPES.get(entity_type, 'ficha')}.", ":material/attach_file:")
             st.rerun()
 
 
@@ -83,6 +83,6 @@ def _delete(attachment_id: str, name: str) -> None:
     try:
         repo.delete_attachment(attachment_id)
     except ValueError as exc:
-        ui.flash(f"No se pudo quitar «{name}»: {exc}", "⚠️", log=False)
+        ui.flash(f"No se pudo quitar «{name}»: {exc}", ":material/warning:", log=False)
         return
-    ui.flash(f"Documento «{name}» quitado.", "🗑️")
+    ui.flash(f"Documento «{name}» quitado.", ":material/delete:")

@@ -200,7 +200,7 @@ def dispatch_dialog(default_site_id: str | None = None) -> None:
     for index, line in enumerate(lines):
         left, right = st.columns([6, 1], vertical_alignment="center")
         left.write(f"**{line['material_name']}** · {line['quantity']:g} {line['unit'] or ''}")
-        if right.button("✖", key=f"dispatch_del_{index}", help="Quitar del vale"):
+        if right.button(":material/close:", key=f"dispatch_del_{index}", help="Quitar del vale"):
             lines.pop(index)
             st.rerun(scope="fragment")
 
@@ -308,7 +308,7 @@ def movement_dialog() -> None:
             return
         verb = {ENTRY: "Entrada", LOSS: "Merma", SUPPLIER_RETURN: "Devolución a proveedor"}[kind]
         _clear_movement_draft()
-        ui.flash(f"{verb} de {qty:g} × {material['name']} registrada.", "📦")
+        ui.flash(f"{verb} de {qty:g} × {material['name']} registrada.", ":material/inventory_2:")
         st.rerun()
 
 
@@ -405,7 +405,7 @@ def return_dialog(default_site_id: str | None = None) -> None:
             return
         ui.log(f"Devolución de {len(chosen)} material(es) desde «{site_name}» al almacén" + (f" (devuelve {returned_by.strip()})" if returned_by.strip() else "") + ".")
         _clear_return_draft()
-        ui.flash(f"Devolución registrada: {len(chosen)} material(es) volvieron al almacén desde {site_name}.", "↩️")
+        ui.flash(f"Devolución registrada: {len(chosen)} material(es) volvieron al almacén desde {site_name}.", ":material/undo:")
         st.rerun()
 
 
@@ -460,7 +460,7 @@ def count_dialog() -> None:
     c3.metric("Sin diferencia", len(counted) - len(diffs))
     if len(diffs):
         view = diffs.assign(Diferencia=diffs["Contado"] - diffs["Sistema"])[["Material", "Sistema", "Contado", "Diferencia", "Motivo de la diferencia"]]
-        st.dataframe(view, hide_index=True, width="stretch")
+        st.dataframe(ui.tint_frame(view, signed=["Diferencia"]), hide_index=True, width="stretch")
         if (diffs["Motivo de la diferencia"].fillna("").str.strip() == "").any():
             st.caption("Conviene anotar el motivo de cada diferencia; sirve para saber después por qué se ajustó.")
     note = st.text_input("Nota del conteo (opcional)", placeholder="Ej. Conteo mensual de octubre", max_chars=500, key="count_note")
@@ -481,7 +481,7 @@ def count_dialog() -> None:
             st.error(f"No se pudo guardar el conteo: {exc}")
             return
         ui.log(f"Toma de inventario {code} ({category}): {len(counted)} contado(s), {len(diffs)} con diferencia.")
-        ui.flash(f"Conteo {code} guardado: {len(counted)} material(es) contados, {len(diffs)} ajustado(s).", "🧮")
+        ui.flash(f"Conteo {code} guardado: {len(counted)} material(es) contados, {len(diffs)} ajustado(s).", ":material/calculate:")
         st.rerun()
 
 
@@ -493,9 +493,9 @@ def count_detail_dialog(count: dict) -> None:
     if count.get("note"):
         st.write(f"**Nota:** {count['note']}")
     st.dataframe(
-        lines[["material_name", "unit", "system_qty", "counted_qty", "difference", "reason"]].rename(
+        ui.tint_frame(lines[["material_name", "unit", "system_qty", "counted_qty", "difference", "reason"]].rename(
             columns={"material_name": "Material", "unit": "Unidad", "system_qty": "Sistema", "counted_qty": "Contado", "difference": "Diferencia", "reason": "Motivo"}
-        ),
+        ), signed=["Diferencia"]),
         hide_index=True, width="stretch",
     )
     attachments_ui.render("conteo", count["id"], key=f"conteo_{count['id']}")
@@ -633,14 +633,14 @@ def _render_kardex() -> None:
     if abs(final - float(material["stock"])) > 1e-6:
         st.warning(f"El saldo del kardex ({final:g}) no coincide con el stock actual ({float(material['stock']):g}). Revisa los movimientos.", icon=":material/warning:")
     st.dataframe(
-        table, hide_index=True, width="stretch",
+        ui.tint_frame(table, good=["Entrada"], bad=["Salida"]), hide_index=True, width="stretch",
         column_config={c: st.column_config.NumberColumn(format="%g") for c in ("Entrada", "Salida", "Saldo")},
     )
     name = f"kardex_{material['material_name']}".replace(" ", "_")[:60]
     d1, d2, _ = st.columns([2, 2, 3])
-    d1.download_button("⬇ Excel", data=to_excel({"Kardex": table}), file_name=f"{name}.xlsx", width="stretch",
+    d1.download_button(":material/download: Excel", data=to_excel({"Kardex": table}), file_name=f"{name}.xlsx", width="stretch",
                        mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet", key="kardex_xlsx")
-    d2.download_button("⬇ PDF", data=to_pdf(f"Kardex: {material['material_name']}", {f"{material['material_name']} ({unit})": table}), file_name=f"{name}.pdf",
+    d2.download_button(":material/download: PDF", data=to_pdf(f"Kardex: {material['material_name']}", {f"{material['material_name']} ({unit})": table}), file_name=f"{name}.pdf",
                        mime="application/pdf", width="stretch", key="kardex_pdf")
 
 

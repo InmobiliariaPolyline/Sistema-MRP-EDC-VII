@@ -1,0 +1,56 @@
+/* =========================================================================
+   05 · MOVIMIENTO — curvas, duraciones, animaciones de entrada y utilidades
+   Todo el sistema reutiliza estas variables: una sola «sensación» de movimiento.
+   Solo se animan transform y opacity (rápido en GPU) salvo los degradados.
+   ========================================================================= */
+:root {
+  --ease-out: cubic-bezier(.22, 1, .36, 1);
+  --ease-spring: cubic-bezier(.34, 1.56, .64, 1);
+  --ease-in-out: cubic-bezier(.65, 0, .35, 1);
+  --dur-fast: .14s;
+  --dur-base: .24s;
+  --dur-slow: .5s;
+}
+
+@keyframes mrpUp { from { opacity: 0; transform: translateY(14px); } to { opacity: 1; transform: none; } }
+@keyframes mrpUpA { from { opacity: 0; transform: translateY(14px); } to { opacity: 1; transform: none; } }
+@keyframes mrpUpB { from { opacity: 0; transform: translateY(14px); } to { opacity: 1; transform: none; } }
+@keyframes mrpDown { from { opacity: 0; transform: translateY(-10px); } to { opacity: 1; transform: none; } }
+@keyframes mrpPop { from { opacity: 0; transform: scale(.94); } to { opacity: 1; transform: none; } }
+@keyframes mrpFade { from { opacity: 0; } to { opacity: 1; } }
+@keyframes mrpSlideLeft { from { opacity: 0; transform: translateX(-16px); } to { opacity: 1; transform: none; } }
+@keyframes mrpSlideRight { from { opacity: 0; transform: translateX(16px); } to { opacity: 1; transform: none; } }
+@keyframes mrpShimmer { from { background-position: -140% 0; } to { background-position: 240% 0; } }
+@keyframes mrpPulse { 0%, 100% { box-shadow: 0 0 0 0 color-mix(in srgb, currentColor 45%, transparent); } 60% { box-shadow: 0 0 0 .45rem transparent; } }
+@keyframes mrpFloat { 0%, 100% { transform: translateY(0); } 50% { transform: translateY(-8px); } }
+@keyframes mrpFloatSlow { 0%, 100% { transform: translate(0, 0) scale(1); } 50% { transform: translate(18px, -22px) scale(1.06); } }
+@keyframes mrpSpin { to { transform: rotate(360deg); } }
+@keyframes mrpDraw { to { stroke-dashoffset: 0; } }
+@keyframes mrpGrow { from { transform: scaleX(0); } to { transform: scaleX(1); } }
+@keyframes mrpBreathe { 0%, 100% { opacity: .55; transform: scale(1); } 50% { opacity: 1; transform: scale(1.08); } }
+@keyframes mrpGradient { 0% { background-position: 0% 50%; } 50% { background-position: 100% 50%; } 100% { background-position: 0% 50%; } }
+@keyframes mrpShake { 0%, 100% { transform: none; } 20%, 60% { transform: translateX(-5px); } 40%, 80% { transform: translateX(5px); } }
+@keyframes mrpTick { from { transform: scale(.4) rotate(-20deg); opacity: 0; } to { transform: none; opacity: 1; } }
+
+/* entrada de cada pantalla: los bloques suben uno tras otro */
+[data-testid="stMainBlockContainer"] > [data-testid="stVerticalBlock"] > [data-testid="stElementContainer"],
+[data-testid="stMainBlockContainer"] > [data-testid="stVerticalBlock"] > [data-testid="stLayoutWrapper"] { animation: var(--mrp-enter, mrpUpA) var(--dur-slow) var(--ease-out) both; }
+[data-testid="stMainBlockContainer"] > [data-testid="stVerticalBlock"] > :nth-child(2) { animation-delay: .04s; }
+[data-testid="stMainBlockContainer"] > [data-testid="stVerticalBlock"] > :nth-child(3) { animation-delay: .08s; }
+[data-testid="stMainBlockContainer"] > [data-testid="stVerticalBlock"] > :nth-child(4) { animation-delay: .12s; }
+[data-testid="stMainBlockContainer"] > [data-testid="stVerticalBlock"] > :nth-child(5) { animation-delay: .16s; }
+[data-testid="stMainBlockContainer"] > [data-testid="stVerticalBlock"] > :nth-child(6) { animation-delay: .20s; }
+[data-testid="stMainBlockContainer"] > [data-testid="stVerticalBlock"] > :nth-child(n+7) { animation-delay: .24s; }
+
+/* listas de tarjetas, filas y pasos: entran en cascada */
+.mrp-activity-item, .mrp-timeline-item, .mrp-man-flow-card, .mrp-man-term, .mrp-man-state { animation: mrpUp var(--dur-slow) var(--ease-out) both; }
+.mrp-activity-item:nth-child(2), .mrp-timeline-item:nth-child(2), .mrp-man-flow-card:nth-child(2), .mrp-man-term:nth-child(2) { animation-delay: .05s; }
+.mrp-activity-item:nth-child(3), .mrp-timeline-item:nth-child(3), .mrp-man-flow-card:nth-child(3), .mrp-man-term:nth-child(3) { animation-delay: .10s; }
+.mrp-activity-item:nth-child(4), .mrp-timeline-item:nth-child(4), .mrp-man-flow-card:nth-child(4), .mrp-man-term:nth-child(4) { animation-delay: .15s; }
+.mrp-activity-item:nth-child(5), .mrp-timeline-item:nth-child(5), .mrp-man-flow-card:nth-child(5), .mrp-man-term:nth-child(5) { animation-delay: .20s; }
+.mrp-activity-item:nth-child(n+6), .mrp-timeline-item:nth-child(n+6), .mrp-man-flow-card:nth-child(n+6), .mrp-man-term:nth-child(n+6) { animation-delay: .25s; }
+
+/* utilidades reutilizables */
+.mrp-skeleton { border-radius: var(--r-md); background: linear-gradient(100deg, var(--mrp-field) 30%, var(--mrp-soft) 50%, var(--mrp-field) 70%); background-size: 240% 100%; animation: mrpShimmer 1.4s linear infinite; }
+.mrp-live-dot { display: inline-block; width: .5rem; height: .5rem; border-radius: 50%; background: currentColor; animation: mrpPulse 1.8s ease-out infinite; }
+.mrp-ico { transition: transform var(--dur-base) var(--ease-spring); }

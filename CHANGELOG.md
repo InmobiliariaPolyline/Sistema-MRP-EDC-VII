@@ -6,6 +6,19 @@ Formato de cada parche: **Agregado** · **Corregido** · **Problemas y causa** �
 
 ---
 
+## Parche 062 — Interfaz remasterizada: iconos, movimiento y acceso renovado · 2026-10-21
+
+**Qué cambió**
+- **Sin emojis:** todos se sustituyeron por iconos vectoriales propios que toman el color del tema (tarjetas, estados vacíos, línea de tiempo, enlaces, avisos y botones usan iconos Material). Un test impide que vuelva a colarse un emoji sin icono.
+- **Valores con color según su signo:** el saldo del presupuesto, las diferencias de inventario y el kardex (entradas en verde, salidas en rojo) cambian de color con el valor; ceros y vacíos quedan neutros.
+- **Movimiento:** una sola «sensación» (curvas, duraciones y ~25 animaciones) en `05_motion.css`: entrada en cascada de cada pantalla (se reproduce al navegar, no en cada clic), tarjetas que se elevan, brillo en los botones primarios, menú con indicador que se desliza, pestañas, desplegables, diálogos, avisos que vibran si son errores, gráficos con transición. Todo se apaga con «reducir movimiento» del sistema.
+- **Pantalla de carga nueva:** marca que se dibuja sola, anillos giratorios, barra con brillo, porcentaje y mensajes que cambian, todo en CSS (sin saltos).
+- **Acceso renovado:** panel de marca con malla de color animada, órbitas, tarjetas que entran en cascada y contador de proveedores; formulario de cristal con entrada escalonada.
+- **Sistema visual:** nuevas variables (acento secundario, cristal, anillo de foco, rejilla), hero con aurora animada, tarjetas con halo y raya que crece, sidebar con brillo y marca animada, gráficos con paleta propia (sin el recuadro oscuro del treemap).
+- Pruebas nuevas en `tests/test_visual_system.py`.
+
+---
+
 ## Parche 061 — Manual de usuario ilustrado · 2026-10-21
 
 El colaborador aportó el módulo «Manual de Usuario» (solo texto en pestañas y desplegables). Se rediseñó para que se vea como el resto del sistema y se entienda de un vistazo.

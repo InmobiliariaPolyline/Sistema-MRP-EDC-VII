@@ -14,7 +14,7 @@ from modules import form_assist, live_validation, login, session, ui
 
 st.set_page_config(
     page_title="Sistema MRP",
-    page_icon="📦",
+    page_icon=":material/inventory_2:",
     layout="wide",
     initial_sidebar_state="expanded",
     menu_items={"Get help": None, "Report a bug": None, "About": "Sistema MRP · materiales, proveedores y compras de obra."},

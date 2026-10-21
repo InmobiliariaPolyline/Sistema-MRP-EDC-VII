@@ -75,7 +75,7 @@ GUIDES: dict[str, dict] = {
                     {"title": "Agrega un material", "text": "Pulsa **＋ Nuevo material**. La **categoría** y el **nombre** juntos identifican al material: no pueden repetirse.", "where": "Botón de arriba a la derecha"},
                     {"title": "Elige su métrica de cómputo", "text": "Es la unidad en que lo presupuestas, lo pides y lo cuentas (por ejemplo *Volumen (m³)* o *Peso (kg)*). Elígela de la lista; así «m3» y «m³» no quedan como dos cosas distintas."},
                     {"title": "Define el stock mínimo (opcional)", "text": "Es la cantidad por debajo de la cual conviene reponer. Con ella, el tablero avisa y la sugerencia de compra lo repone."},
-                    {"title": "Consulta su ficha", "text": "Pulsa **ℹ️** en un material para ver su densidad, sus precios por proveedor, su stock y en qué obras se usa.", "where": "Botón ℹ️ de cada fila"},
+                    {"title": "Consulta su ficha", "text": "Pulsa el botón de **información** de un material para ver su densidad, sus precios por proveedor, su stock y en qué obras se usa.", "where": "Botón ℹ️ de cada fila"},
                 ],
             }
         ],

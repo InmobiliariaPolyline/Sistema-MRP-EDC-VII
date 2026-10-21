@@ -99,7 +99,7 @@ _SCRIPT = r"""
     const hit=value&&value!==norm(el.__mrpInit)?list.find(n=>norm(n)===value):null;
     if(!hit){if(note)note.remove();return;}
     if(!note){note=D.createElement('div');note.className='mrp-dup';host.appendChild(note);}
-    const msg='⚠ Ya existe «'+hit+'». '+(label==='Nombre'?'Si es otra categoría puedes continuar.':'Revisa antes de guardar para no duplicarlo.');
+    const msg='Ya existe «'+hit+'». '+(label==='Nombre'?'Si es otra categoría puedes continuar.':'Revisa antes de guardar para no duplicarlo.');
     if(note.textContent!==msg)note.textContent=msg;
   }
 

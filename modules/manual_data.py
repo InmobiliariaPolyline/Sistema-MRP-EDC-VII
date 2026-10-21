@@ -210,7 +210,7 @@ CHAPTERS: list[dict] = [
                     {"title": "Stock mínimo (opcional)", "text": "Con él, el tablero avisa cuando el stock llega a ese nivel y la sugerencia de compra lo repone."},
                     {"title": "Guarda", "text": "Usa **Revisar datos** si quieres ver un resumen antes de guardar."},
                 ],
-                "tips": ["Pulsa **ℹ️** en un material para ver su ficha: precios por proveedor, stock y en qué obras se usa."],
+                "tips": ["Pulsa el botón de **información** de un material para ver su ficha: precios por proveedor, stock y en qué obras se usa."],
                 "not_does": ["Que un material no tenga proveedor es normal: el catálogo es todo lo que puedes almacenar, no solo lo que ya cotizaste."],
             },
             {
@@ -782,7 +782,7 @@ CHAPTERS: list[dict] = [
                         {"buttons": [("Los básicos", "ghost", 1), ("Seleccionar todo", "ghost"), ("Limpiar selección", "ghost")]},
                         {"stats": [("Conjuntos", "9"), ("Registros", "842"), ("Con información", "8")]},
                         {"sec": "2. Descarga tu reporte"},
-                        {"buttons": [("⬇ Descargar Excel", "primary", 2), ("⬇ Descargar PDF", "ghost", 2)]},
+                        {"buttons": [("Descargar Excel", "primary", 2), ("Descargar PDF", "ghost", 2)]},
                     ],
                 },
                 "steps": [

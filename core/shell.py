@@ -11,6 +11,7 @@ import streamlit as st
 from core.version import APP_VERSION
 from db.client import using_service_key
 from db.repository import USING_LOCAL
+from utils import icons
 from modules import (
     asistencia, dashboard, historial, inventario, login, manual_Usuario, materiales, obras, ordenes, proveedores, reportes,
     respaldo, security, sistema, trabajadores, ui,
@@ -94,6 +95,7 @@ def render(user: dict) -> None:
 
 def _select_route(label: str) -> None:
     st.session_state["mrp_active_route"] = label
+    st.session_state["_mrp_nav"] = st.session_state.get("_mrp_nav", 0) + 1
 
 
 def _render_brand(user: dict) -> None:
@@ -101,7 +103,7 @@ def _render_brand(user: dict) -> None:
     name = html.escape(user["name"])
     st.markdown(
         '<div class="mrp-brand">'
-        '<div class="mrp-brand-badge">📦</div>'
+        f'<div class="mrp-brand-badge">{icons.brand_mark(26, animated=True)}</div>'
         '<div><div class="mrp-brand-name">Sistema MRP</div>'
         '<div class="mrp-brand-sub">Materiales y proveedores</div></div>'
         "</div>"

@@ -155,7 +155,7 @@ def _password_tab(user: dict) -> None:
     except Exception as exc:
         ui.db_error(exc, "No se pudo cambiar la contraseña. Inténtalo de nuevo.")
         return
-    ui.flash("Contraseña actualizada.", "🔑")
+    ui.flash("Contraseña actualizada.", ":material/key:")
     st.rerun()
 
 
@@ -220,9 +220,9 @@ def _company_tab(user: dict) -> None:
         {"field": COMPANY_LABELS[k], "before": "(oculto)" if k == "ruc" else audit.fmt(company.get(k)), "after": "(oculto)" if k == "ruc" else audit.fmt(new.get(k))}
         for k in changed
     ]
-    ui.log_change("Datos de la empresa editados", "empresa", None, changes, icon="🏢")
+    ui.log_change("Datos de la empresa editados", "empresa", None, changes, icon=":material/business:")
     if not changes:
-        st.toast("Sin cambios.", icon="ℹ️")
+        st.toast("Sin cambios.", icon=":material/info:")
     _rerun_dialog()
 
 

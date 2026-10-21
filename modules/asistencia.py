@@ -139,7 +139,7 @@ def _render_roll_call() -> None:
     for worker_id, row in zip(worker_ids, visible):
         drafts[worker_id] = {field: row[field] for field in ("Estado", "Obra", "Nota")}
 
-    if st.button("✅ Marcar pendientes presentes", key="att_mark_present", width="stretch",
+    if st.button(":material/check_circle: Marcar pendientes presentes", key="att_mark_present", width="stretch",
                  help="Completa solo las filas visibles con «—» y conserva obras, notas y otros estados. No guarda registros."):
         marked = 0
         for worker_id, row in zip(worker_ids, visible):
@@ -190,7 +190,7 @@ def _render_roll_call() -> None:
                 worker_id, site_by_name.get(site_name), day_key, status, note,
             )
         _discard_visible_drafts(day_key, worker_ids)
-        ui.flash(f"Asistencia del {day:%d/%m/%Y} guardada ({len(records)} registros).", "📋")
+        ui.flash(f"Asistencia del {day:%d/%m/%Y} guardada ({len(records)} registros).", ":material/assignment:")
         st.rerun()
 
 

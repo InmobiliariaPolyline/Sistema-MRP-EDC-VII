@@ -10,7 +10,7 @@ from modules import forms, inventario, ui
 from utils import audit, units
 
 ALL_CATEGORIES = "Todas las categorías"
-OTHER_METRIC = "➕ Otra métrica…"
+OTHER_METRIC = "＋ Otra métrica…"
 MATERIAL_LABELS = {
     "category": "Categoría", "name": "Nombre", "density": "Densidad", "metric_label": "Métrica de cómputo", "min_stock": "Stock mínimo",
 }
@@ -115,7 +115,7 @@ def _save(values: tuple[str, str, float | None, str, float], material_id: str | 
             {"category": category, "name": name, "density": density, "metric_label": metric_label, "min_stock": min_stock},
             MATERIAL_LABELS,
         )
-        ui.log_change(f"Material «{name}» editado", "material", material_id, changes, icon="✏️")
+        ui.log_change(f"Material «{name}» editado", "material", material_id, changes, icon=":material/edit:")
         if not changes:
             ui.flash(f"Material «{name}» guardado (sin cambios).", log=False)
     else:
@@ -225,7 +225,7 @@ def info_dialog(material_id: str) -> None:
 
 def _delete_material(material_id: str, name: str) -> None:
     repo.delete_material(material_id)
-    ui.flash(f"Material «{name}» eliminado.", "🗑️")
+    ui.flash(f"Material «{name}» eliminado.", ":material/delete:")
 
 
 def _best_prices() -> dict[str, dict]:
@@ -299,13 +299,13 @@ def _render_table() -> None:
                             pills += " " + ui.pill(f"Mejor: {offer['price']:,.2f} · {offer['supplier']}", "green")
                         st.markdown(pills, unsafe_allow_html=True)
                     with c0:
-                        if st.button("ℹ️", key=f"info_material_{row['id']}", help="Ver información del material"):
+                        if st.button(":material/info:", key=f"info_material_{row['id']}", help="Ver información del material"):
                             info_dialog(row["id"])
                     with c3:
-                        if st.button("✏️", key=f"edit_material_{row['id']}", help="Editar material"):
+                        if st.button(":material/edit:", key=f"edit_material_{row['id']}", help="Editar material"):
                             _edit_material_dialog(row)
                     with c4:
-                        if st.button("🗑", key=f"del_material_{row['id']}", help="Eliminar material"):
+                        if st.button(":material/delete:", key=f"del_material_{row['id']}", help="Eliminar material"):
                             ui.confirm_delete(
                                 f"¿Eliminar el material «{row['name']}»? También se quitará de los catálogos de los proveedores.",
                                 lambda mid=row["id"], nm=row["name"]: _delete_material(mid, nm),

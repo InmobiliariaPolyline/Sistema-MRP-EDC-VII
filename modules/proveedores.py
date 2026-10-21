@@ -133,7 +133,7 @@ def _save(values: tuple, supplier_id: str | None, before: dict | None = None) ->
         after = {"name": name, "contact_name": contact_name, "phone": phone, "email": email, "notes": notes,
                  "lead_time_days": lead_time, "min_order_amount": min_order, "ruc": ruc}
         changes = audit.diff(before, after, SUPPLIER_LABELS)
-        ui.log_change(f"Proveedor «{name}» editado", "proveedor", supplier_id, changes, icon="✏️")
+        ui.log_change(f"Proveedor «{name}» editado", "proveedor", supplier_id, changes, icon=":material/edit:")
         if not changes:
             ui.flash(f"Proveedor «{name}» guardado (sin cambios).", log=False)
     else:
@@ -184,7 +184,7 @@ def _delete_supplier(supplier_id: str, name: str) -> None:
     repo.delete_supplier(supplier_id)
     if st.session_state.get(SELECTED_KEY) == supplier_id:
         st.session_state[SELECTED_KEY] = None
-    ui.flash(f"Proveedor «{name}» eliminado.", "🗑️")
+    ui.flash(f"Proveedor «{name}» eliminado.", ":material/delete:")
 
 
 def _render_cards() -> None:
@@ -225,10 +225,10 @@ def _render_cards() -> None:
                     st.session_state[SELECTED_KEY] = row["id"]
                     st.rerun()
             with c4:
-                if st.button("✏️", key=f"edit_supplier_{row['id']}", help="Editar proveedor"):
+                if st.button(":material/edit:", key=f"edit_supplier_{row['id']}", help="Editar proveedor"):
                     _edit_supplier_dialog(row)
             with c5:
-                if st.button("🗑", key=f"del_supplier_{row['id']}", help="Eliminar proveedor"):
+                if st.button(":material/delete:", key=f"del_supplier_{row['id']}", help="Eliminar proveedor"):
                     ui.confirm_delete(
                         f"¿Eliminar al proveedor «{row['name']}»? Se borra también su catálogo de materiales; las órdenes de compra ya creadas se conservan.",
                         lambda sid=row["id"], nm=row["name"]: _delete_supplier(sid, nm),
@@ -309,7 +309,7 @@ def _import_prices_dialog(supplier: dict) -> None:
             except Exception:
                 st.error("No se pudieron guardar los precios. Tus datos del archivo se conservan; inténtalo de nuevo.")
                 return
-            ui.flash(f"Lista de «{supplier['name']}» importada: {applied} precio(s) aplicado(s).", "📥")
+            ui.flash(f"Lista de «{supplier['name']}» importada: {applied} precio(s) aplicado(s).", ":material/download:")
             st.rerun()
 
     unmatched = result[result["estado"].isin(["sin coincidencia", "sin precio válido"])]
@@ -335,9 +335,9 @@ def _render_supplier_detail(supplier_id: str) -> None:
     if b1.button("← Volver"):
         st.session_state[SELECTED_KEY] = None
         st.rerun()
-    if b2.button("✏️ Editar"):
+    if b2.button(":material/edit: Editar"):
         _edit_supplier_dialog(supplier)
-    if b3.button("📥 Importar precios", help="Carga de una vez la lista de precios (Excel o CSV) que te mandó el proveedor."):
+    if b3.button(":material/download: Importar precios", help="Carga de una vez la lista de precios (Excel o CSV) que te mandó el proveedor."):
         _import_prices_dialog(supplier)
 
     ui.page_header("Ficha de proveedor", supplier["name"])
@@ -458,7 +458,7 @@ def _render_supplier_detail(supplier_id: str) -> None:
                             {"offered": offered, "available": available if offered else None, "price": price if offered else None},
                             {"offered": "Lo ofrece", "available": "Disponible", "price": "Precio"},
                         )
-                        ui.log_change(f"Catálogo de «{supplier['name']}»: {mat['name']}", "catalogo", f"{supplier_id}:{mat['id']}", changes, icon="🏷️", flash_message=True)
+                        ui.log_change(f"Catálogo de «{supplier['name']}»: {mat['name']}", "catalogo", f"{supplier_id}:{mat['id']}", changes, icon=":material/sell:", flash_message=True)
                         st.rerun()
 
 
