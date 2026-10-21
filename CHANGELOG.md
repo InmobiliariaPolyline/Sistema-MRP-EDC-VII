@@ -6,6 +6,18 @@ Formato de cada parche: **Agregado** · **Corregido** · **Problemas y causa** �
 
 ---
 
+## Parche 067 — Logotipo de proveedores y botones de contacto · 2026-10-21
+
+**Agregado**
+- **Logotipo del proveedor:** al crear o editar un proveedor se puede subir una imagen (PNG, JPG o WEBP, hasta 4 MB). Se reduce sola a 160 px, conserva la transparencia y la proporción, y se guarda dentro del propio registro. Se ve en su tarjeta, en su ficha y en la **orden de compra en PDF** (arriba a la derecha de la tarjeta del proveedor). Hay opción de quitarlo y el historial anota «con/sin logotipo».
+- **Botones de contacto con diseño propio:** **Llamar** en celeste, **WhatsApp** en verde con su logo, y el correo dividido en **Gmail** (rojo) y **Outlook** (azul), cada uno con el logo de su aplicación, destello al pasar el cursor y menú animado.
+- **Mensajes preestablecidos:** WhatsApp, Gmail y Outlook se despliegan con seis mensajes listos: solicitar cotización, consultar disponibilidad, pedir lista de precios, seguimiento de un pedido, coordinar entrega en obra y pedir factura o comprobante. Saludan por el nombre de la persona de contacto y firman con la empresa. Al elegir uno se abre la aplicación con el texto escrito; el sistema no envía nada. Outlook además ofrece abrir la app de correo del equipo.
+- Un celular de 9 dígitos (sin código de país) abre WhatsApp con el 51 de Perú.
+
+**Hay que hacer:** correr `db/migrations/046_logo_proveedor.sql` en el SQL Editor de Supabase (agrega la columna `suppliers.logo`). Sin ese SQL todo lo demás funciona, pero al guardar un logotipo avisará que falta correrlo.
+
+---
+
 ## Parche 066 — Sellos nuevos y mejor espaciado en los PDF · 2026-10-21
 
 **Qué cambió**

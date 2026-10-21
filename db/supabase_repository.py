@@ -163,11 +163,23 @@ def list_suppliers() -> pd.DataFrame:
     res = get_client().table("suppliers").select("*").order("name").execute()
     df = _df(
         res.data or [],
-        columns=["id", "name", "contact_name", "phone", "email", "notes", "created_at", "updated_at", "lead_time_days", "min_order_amount", "ruc"],
+        columns=["id", "name", "contact_name", "phone", "email", "notes", "created_at", "updated_at", "lead_time_days", "min_order_amount", "ruc", "logo"],
     )
-    for col in ("lead_time_days", "min_order_amount", "ruc"):  # sin dato = None (nunca NaN), igual que en la base local
+    for col in ("lead_time_days", "min_order_amount", "ruc", "logo"):  # sin dato = None (nunca NaN), igual que en la base local
         df[col] = df[col].astype(object).where(df[col].notna(), None)
     return df
+
+
+def set_supplier_logo(supplier_id: str, logo: str | None) -> None:
+    """Guarda (o quita, con None) el logotipo del proveedor: una imagen ya reducida como data URL (ver utils/logo.py).
+    Necesita el SQL del parche 066 (`046_logo_proveedor.sql`)."""
+    try:
+        get_client().table("suppliers").update({"logo": logo}).eq("id", supplier_id).execute()
+    except Exception as exc:
+        if _is_missing(exc):
+            raise _need_sql("046_logo_proveedor.sql") from exc
+        raise
+    _invalidate_suppliers()
 
 
 def upsert_supplier(

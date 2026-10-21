@@ -9,6 +9,7 @@ import streamlit as st
 from db import repository as repo
 from modules import forms, ui
 from utils import audit, pricelist, pricing, ratings
+from utils import logo as logo_rules
 from utils import ruc as ruc_rules
 
 SELECTED_KEY = "selected_supplier_id"
@@ -17,9 +18,18 @@ CATALOG_STATES = [ALL_CATALOG, "Ofrecidos", "Disponibles", "Sin precio", "Precio
 PRICE_AGE_KEY = "price_max_age"
 SUPPLIER_LABELS = {
     "name": "Nombre", "contact_name": "Contacto", "phone": "Teléfono", "email": "Correo", "notes": "Notas",
-    "lead_time_days": "Plazo de entrega (días)", "min_order_amount": "Mínimo de compra", "ruc": "RUC",
+    "lead_time_days": "Plazo de entrega (días)", "min_order_amount": "Mínimo de compra", "ruc": "RUC", "logo": "Logotipo",
 }
 PRICE_MAX = 10000000.0
+
+
+def company_name() -> str | None:
+    """Nombre con el que la empresa firma sus mensajes a proveedores (razón social o nombre comercial)."""
+    try:
+        company = repo.get_company() or {}
+    except Exception:
+        return None
+    return company.get("trade_name") or company.get("legal_name") or None
 
 
 def max_age() -> int:
@@ -70,6 +80,16 @@ def _supplier_form(supplier: dict | None) -> tuple:
         "RUC (opcional)", value=(supplier.get("ruc") or "") if supplier else "", placeholder="11 dígitos, ej. 20100070970", max_chars=14,
         help="RUC del proveedor: sale en la orden de compra y sirve a tesorería para cuadrar las facturas.",
     )
+    key = supplier["id"] if supplier else "new"
+    current_logo = (supplier.get("logo") if supplier else None) or None
+    forms.section("Logotipo", "Opcional. Una imagen de la empresa (PNG, JPG o WEBP) para reconocerla de un vistazo en la lista, su ficha y las órdenes.")
+    logo_cols = st.columns([1, 4], vertical_alignment="center")
+    logo_cols[0].markdown(ui.avatar(name or "?", current_logo), unsafe_allow_html=True)
+    logo_upload = logo_cols[1].file_uploader(
+        "Logotipo del proveedor (opcional)", type=logo_rules.TYPES, key=f"supplier_logo_{key}",
+        help="Se reduce solo a un tamaño liviano. Si no subes nada, se conserva el actual.",
+    )
+    remove_logo = bool(current_logo) and st.checkbox("Quitar el logotipo actual", key=f"supplier_logo_remove_{key}")
     forms.section("Contacto", "Todos estos datos son opcionales. Facilitan las llamadas, WhatsApp y el correo.")
     c1, c2 = st.columns(2)
     contact_name = c1.text_input(
@@ -108,14 +128,21 @@ def _supplier_form(supplier: dict | None) -> tuple:
     )
     return (
         name.strip(), contact_name.strip() or None, phone.strip() or None, email.strip() or None, notes.strip() or None,
-        int(lead_time) or None, float(min_order) or None, ruc_rules.clean(ruc) or None, ruc,
+        int(lead_time) or None, float(min_order) or None, ruc_rules.clean(ruc) or None, ruc, logo_upload, remove_logo,
     )
 
 
 def _save(values: tuple, supplier_id: str | None, before: dict | None = None) -> None:
-    name, contact_name, phone, email, notes, lead_time, min_order, ruc, ruc_text = values
+    name, contact_name, phone, email, notes, lead_time, min_order, ruc, ruc_text, logo_upload, remove_logo = values
     if forms.errors(ruc_rules.issues(ruc_text, "RUC")):
         return
+    new_logo = None
+    if logo_upload is not None:       # se valida y reduce antes de guardar nada, para no dejar el proveedor a medias
+        try:
+            new_logo = logo_rules.process(logo_upload.getvalue())
+        except logo_rules.LogoError as exc:
+            st.error(f"Logotipo: {exc}")
+            return
     if forms.errors(forms.validate({
         "Nombre del proveedor": name,
         "Persona de contacto (opcional)": contact_name,
@@ -129,9 +156,23 @@ def _save(values: tuple, supplier_id: str | None, before: dict | None = None) ->
     except Exception as exc:
         ui.db_error(exc, "No se pudo guardar el proveedor. Tus datos se conservan; inténtalo de nuevo.")
         return
+    if new_logo or remove_logo:
+        target = supplier_id
+        if not target:
+            created = repo.list_suppliers()
+            target = next((r["id"] for r in reversed(created.sort_values("created_at").to_dict("records")) if r["name"] == name), None)
+        try:
+            if target:
+                repo.set_supplier_logo(target, new_logo)
+        except Exception as exc:
+            ui.db_error(exc, "El proveedor se guardó, pero no se pudo guardar su logotipo.")
+            return
     if before:
         after = {"name": name, "contact_name": contact_name, "phone": phone, "email": email, "notes": notes,
                  "lead_time_days": lead_time, "min_order_amount": min_order, "ruc": ruc}
+        had_logo = bool(before.get("logo"))      # en el historial va solo «con/sin logotipo», nunca la imagen
+        before = {**before, "logo": "con logotipo" if had_logo else "sin logotipo"}
+        after["logo"] = "con logotipo" if (new_logo or (had_logo and not remove_logo)) else "sin logotipo"
         changes = audit.diff(before, after, SUPPLIER_LABELS)
         ui.log_change(f"Proveedor «{name}» editado", "proveedor", supplier_id, changes, icon=":material/edit:")
         if not changes:
@@ -165,9 +206,13 @@ def _supplier_dialog_form(supplier: dict | None) -> None:
     if cancel:
         st.rerun()
     if preview:
-        name, contact, phone, email, notes, lead_time, min_order, ruc, _ = values
+        name, contact, phone, email, notes, lead_time, min_order, ruc, _, logo_upload, remove_logo = values
         forms.section("Vista previa", "Estos datos todavía no se han guardado.")
         with st.container(border=True):
+            if logo_upload is not None:
+                st.image(logo_upload, width=72)
+            elif remove_logo:
+                st.caption("Se quitará el logotipo actual.")
             st.write(name or "Nombre pendiente")
             st.caption(contact or "Sin persona de contacto")
             st.write(f"Teléfono: {phone or 'sin registrar'}")
@@ -212,14 +257,15 @@ def _render_cards() -> None:
         return
     df = ui.paginate(df, key="suppliers_directory")
     scores = {r["supplier_id"]: r for r in supplier_ratings().to_dict("records")}
+    company = company_name()
 
     for row in df.to_dict("records"):
         with st.container(border=True):
             c1, c3, c4, c5 = st.columns([6, 2.2, 1, 1])
             with c1:
                 sub = row["contact_name"] or row["phone"] or "Sin contacto"
-                st.markdown(ui.row_name_sub(ui.avatar(row["name"]), row["name"], sub), unsafe_allow_html=True)
-                st.markdown(ui.contact_links(row["phone"], row["email"]) + " " + rating_pill(scores.get(row["id"])), unsafe_allow_html=True)
+                st.markdown(ui.row_name_sub(ui.avatar(row["name"], row.get("logo")), row["name"], sub), unsafe_allow_html=True)
+                st.markdown(ui.contact_links(row["phone"], row["email"], row["contact_name"], company) + " " + rating_pill(scores.get(row["id"])), unsafe_allow_html=True)
             with c3:
                 if st.button("Catálogo", key=f"open_{row['id']}", width="stretch"):
                     st.session_state[SELECTED_KEY] = row["id"]
@@ -352,7 +398,10 @@ def _render_supplier_detail(supplier_id: str) -> None:
             ui.stat_card("🧾", f"{float(supplier['min_order_amount']):,.2f}" if supplier.get("min_order_amount") else "—", "Mínimo de compra"),
         ]
     )
-    st.markdown(ui.contact_links(supplier["phone"], supplier["email"]), unsafe_allow_html=True)
+    st.markdown(
+        '<div class="mrp-ficha-id">' + ui.avatar(supplier["name"], supplier.get("logo")) + ui.contact_links(supplier["phone"], supplier["email"], supplier["contact_name"], company_name()) + "</div>",
+        unsafe_allow_html=True,
+    )
     _render_rating(supplier_id)
     if supplier["notes"]:
         forms.section("Notas del proveedor")

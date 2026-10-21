@@ -9,11 +9,11 @@
 [data-testid="stLayoutWrapper"] > [data-testid="stVerticalBlock"]:has(.mrp-panel-title) { background: var(--mrp-surface); box-shadow: var(--mrp-shadow); transition: box-shadow var(--dur-base) var(--ease-out), border-color var(--dur-base) var(--ease-out); }
 [data-testid="stLayoutWrapper"] > [data-testid="stVerticalBlock"]:has(.mrp-panel-title):hover { box-shadow: var(--mrp-shadow-lg); border-color: color-mix(in srgb, var(--mrp-accent) 32%, var(--mrp-border)) !important; }
 [data-testid="stLayoutWrapper"] > [data-testid="stVerticalBlock"]:has(.mrp-row) {
-  background: var(--mrp-surface); box-shadow: var(--mrp-shadow); position: relative; overflow: hidden;
+  background: var(--mrp-surface); box-shadow: var(--mrp-shadow); position: relative;
   transition: transform var(--dur-base) var(--ease-out), border-color var(--dur-base), box-shadow var(--dur-base), background var(--dur-base);
 }
 [data-testid="stLayoutWrapper"] > [data-testid="stVerticalBlock"]:has(.mrp-row)::before {
-  content: ""; position: absolute; inset: 0 auto 0 0; width: 3px; background: var(--mrp-grad); transform: scaleY(0); transform-origin: top; transition: transform var(--dur-base) var(--ease-out);
+  content: ""; position: absolute; inset: 0 auto 0 0; width: 3px; border-radius: var(--r-lg) 0 0 var(--r-lg); background: var(--mrp-grad); transform: scaleY(0); transform-origin: top; transition: transform var(--dur-base) var(--ease-out);
 }
 [data-testid="stLayoutWrapper"] > [data-testid="stVerticalBlock"]:has(.mrp-row):hover {
   background: var(--mrp-hover); border-color: color-mix(in srgb, var(--mrp-accent) 55%, var(--mrp-border)) !important; box-shadow: var(--mrp-shadow-lg); transform: translateY(-2px);

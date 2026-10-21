@@ -23,7 +23,7 @@ import streamlit as st
 
 from db import repository as repo
 
-VERSION = 1
+VERSION = 2
 
 
 def existing_names() -> dict[str, list[str]]:
@@ -151,6 +151,10 @@ _SCRIPT = r"""
     focusDialog();charts();
   }
   P.__mrpAssistScan=scan;
+  /* menús de contacto (WhatsApp, Gmail, Outlook): uno abierto a la vez; se cierran al hacer clic fuera, con Esc o al elegir un mensaje */
+  D.addEventListener('click',e=>{D.querySelectorAll('details.mrp-menu[open]').forEach(d=>{if(!d.contains(e.target)||e.target.closest('.mrp-menu-list a'))d.removeAttribute('open');});},true);
+  D.addEventListener('keydown',e=>{if(e.key==='Escape')D.querySelectorAll('details.mrp-menu[open]').forEach(d=>d.removeAttribute('open'));},true);
+  D.addEventListener('toggle',e=>{if(e.target.matches&&e.target.matches('details.mrp-menu')&&e.target.open)D.querySelectorAll('details.mrp-menu[open]').forEach(d=>{if(d!==e.target)d.removeAttribute('open');});},true);
   D.addEventListener('input',()=>setTimeout(scan,30),true);D.addEventListener('focusout',()=>setTimeout(scan,30),true);
   P.addEventListener('resize',()=>{clearTimeout(P.__mrpChartT);P.__mrpChartT=setTimeout(charts,200);});
   let timer;new MutationObserver(()=>{clearTimeout(timer);timer=setTimeout(scan,120);}).observe(D.body,{childList:true,subtree:true});scan();

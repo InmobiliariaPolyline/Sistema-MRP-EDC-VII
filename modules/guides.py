@@ -40,8 +40,9 @@ GUIDES: dict[str, dict] = {
             {
                 "title": "Registrar un proveedor",
                 "steps": [
-                    {"title": "Crea la ficha", "text": "Pulsa **＋ Nuevo proveedor** y escribe su nombre. Es lo único obligatorio.", "where": "Botón de arriba a la derecha"},
-                    {"title": "Agrega cómo contactarlo", "text": "Escribe el teléfono **con código de país** (por ejemplo `51987654321`) para que el botón de WhatsApp funcione. Agrega también correo y persona de contacto."},
+                    {"title": "Crea la ficha", "text": "Pulsa **＋ Nuevo proveedor** y escribe su nombre. Es lo único obligatorio. Si quieres, sube su **logotipo** (PNG, JPG o WEBP): se reduce solo y sirve para reconocerlo de un vistazo.", "where": "Botón de arriba a la derecha"},
+                    {"title": "Agrega cómo contactarlo", "text": "Escribe el teléfono (un celular de 9 dígitos o con código de país, por ejemplo `51987654321`), el correo y la persona de contacto. En su tarjeta tendrás **Llamar** (celeste), **WhatsApp** (verde), **Gmail** y **Outlook**."},
+                    {"title": "Usa los mensajes ya escritos", "text": "WhatsApp, Gmail y Outlook se despliegan con mensajes listos: solicitar cotización, consultar disponibilidad, pedir lista de precios, seguimiento de un pedido, coordinar entrega o pedir un comprobante. Al elegir uno se abre la aplicación con el texto escrito; tú lo revisas y lo envías."},
                     {"title": "Anota su RUC y sus condiciones", "text": "El **RUC** (11 dígitos; el sistema comprueba que esté bien escrito) sale en la orden de compra. El **plazo de entrega** y el **monto mínimo de compra** ayudan a la sugerencia de compra."},
                 ],
             },
@@ -62,7 +63,7 @@ GUIDES: dict[str, dict] = {
             },
         ],
         "example": {"title": "Llegó la lista de precios de Ferretería Norte", "steps": ["Entra a **Proveedores** y abre **Catálogo** de Ferretería Norte.", "Pulsa **Importar precios** y sube su Excel.", "Revisa la tabla de cambios y aplícala.", "Los precios nuevos ya sirven para las órdenes y la sugerencia de compra."]},
-        "tips": ["Cada cambio de precio queda guardado en el historial de precios.", "En la tarjeta del proveedor tienes botones para llamar, escribir por WhatsApp o enviar un correo."],
+        "tips": ["Cada cambio de precio queda guardado en el historial de precios.", "En la tarjeta del proveedor tienes botones para llamar, escribir por WhatsApp o redactar un correo en Gmail u Outlook, con mensajes ya escritos."],
         "warnings": ["El precio que usa una orden es el del catálogo en ese momento. Si cambia después, las órdenes ya creadas no se tocan."],
     },
     "Materiales": {

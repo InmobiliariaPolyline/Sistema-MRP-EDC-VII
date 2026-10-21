@@ -150,3 +150,30 @@ def brand_mark(size: int = 24, animated: bool = False) -> str:
         '<circle class="mrp-mark-d" cx="24" cy="24" r="2.6" fill="currentColor" stroke="none"/>'
         "</svg>"
     )
+
+
+# Logos de las aplicaciones de contacto, dibujados a mano (formas simples con sus colores de marca; no son emojis ni imágenes externas).
+BRAND = {
+    "whatsapp": (
+        '<circle cx="12" cy="12" r="11" fill="#25D366"/>'
+        '<path d="M12 5.4a6.6 6.6 0 0 0-5.7 9.9L5.4 18.6l3.4-.9A6.6 6.6 0 1 0 12 5.4z" fill="none" stroke="#fff" stroke-width="1.5" stroke-linejoin="round"/>'
+        '<path d="M9.7 9.2c.2-.3.6-.3.8 0l.7 1.1c.1.2.1.4 0 .6l-.4.5c.5 1 1.3 1.8 2.3 2.3l.5-.4c.2-.1.4-.1.6 0l1.1.7c.3.2.3.6 0 .8-.7.8-1.7 1-2.7.6-2.1-.8-3.7-2.4-4.5-4.5-.3-1 0-1.9.6-2.7z" fill="#fff"/>'
+    ),
+    "gmail": (
+        '<rect x="2.2" y="4.6" width="19.6" height="14.8" rx="2.4" fill="#fff" stroke="#DADCE0" stroke-width=".9"/>'
+        '<path d="M3.4 7.2 12 13.4l8.6-6.2" fill="none" stroke="#EA4335" stroke-width="2.3" stroke-linecap="round" stroke-linejoin="round"/>'
+        '<path d="M3.4 18.2V7.2M20.6 18.2V7.2" stroke="#EA4335" stroke-width="2.3" stroke-linecap="round"/>'
+        '<path d="M3.4 18.2v-6M20.6 18.2v-6" stroke="#4285F4" stroke-width="2.3" stroke-linecap="round" opacity="0"/>'
+    ),
+    "outlook": (
+        '<rect x="2" y="3.4" width="20" height="17.2" rx="3.2" fill="#0A64AD"/>'
+        '<rect x="12.2" y="7.2" width="7.6" height="9.6" rx="1.2" fill="#fff" opacity=".95"/>'
+        '<path d="m12.6 8.2 3.4 2.8 3.4-2.8" fill="none" stroke="#0A64AD" stroke-width="1.3" stroke-linecap="round" stroke-linejoin="round"/>'
+        '<ellipse cx="8.2" cy="12" rx="3.1" ry="3.7" fill="none" stroke="#fff" stroke-width="2"/>'
+    ),
+}
+
+
+def brand(name: str, size: int = 18) -> str:
+    """Logo de WhatsApp, Gmail u Outlook como `<svg>` en línea."""
+    return f'<svg class="mrp-brand-ico" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" width="{size}" height="{size}" aria-hidden="true">{BRAND[name]}</svg>'

@@ -140,6 +140,7 @@ def order_pdf(order: dict, items: pd.DataFrame, supplier: dict | None = None, co
          ("Teléfono", supplier.get("phone"), "phone"), ("Correo", supplier.get("email"), "mail")],
         columns=1, title="Proveedor", w=half,
     )
+    pdf.logo(supplier.get("logo"), pdf.l_margin + half - 19, y0 + 4, 14)     # el logotipo del proveedor, arriba a la derecha de su tarjeta
     pdf.set_y(y0)
     buyer = company.get("trade_name") or company.get("legal_name")
     h2 = pdf.info_card(

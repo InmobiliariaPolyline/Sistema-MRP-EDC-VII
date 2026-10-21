@@ -222,6 +222,7 @@ CHAPTERS: list[dict] = [
                         {"sec": "Identificación"},
                         {"field": "Nombre del proveedor", "kind": "text", "placeholder": "Ej. Ferretería Norte", "mark": 1},
                         {"field": "RUC (opcional)", "kind": "text", "value": "20100070970", "mark": 2},
+                        {"field": "Logotipo del proveedor (opcional)", "kind": "text", "placeholder": "Arrastra una imagen aquí o pulsa «Browse files»", "mark": 1},
                         {"sec": "Contacto"},
                         {"fields": [
                             {"field": "Persona de contacto (opcional)", "kind": "text", "value": "Ana Ruiz", "mark": 3},
@@ -237,9 +238,9 @@ CHAPTERS: list[dict] = [
                     ],
                 },
                 "steps": [
-                    {"title": "Escribe el nombre", "text": "Es lo único obligatorio."},
+                    {"title": "Escribe el nombre y sube su logotipo", "text": "El nombre es lo único obligatorio. El **logotipo** es opcional (PNG, JPG o WEBP): se reduce solo y se ve en su tarjeta, su ficha y la orden de compra."},
                     {"title": "Anota su RUC", "text": "11 dígitos, validados. Sale en la orden de compra y ayuda a tesorería a cuadrar las facturas."},
-                    {"title": "Agrega cómo contactarlo", "text": "Escribe el teléfono **con código de país** (por ejemplo `51987654321`) para que el botón de WhatsApp funcione."},
+                    {"title": "Agrega cómo contactarlo", "text": "Escribe el teléfono (celular de 9 dígitos o con código de país) y el correo. En su tarjeta aparecen **Llamar** (celeste), **WhatsApp** (verde), **Gmail** y **Outlook**; los tres últimos se despliegan con mensajes ya escritos (cotizar, disponibilidad, precios, seguimiento, entrega, comprobantes)."},
                     {"title": "Condiciones de compra (opcionales)", "text": "El **plazo de entrega** y el **monto mínimo** ayudan a la sugerencia de compra: calcula cuándo llegaría y avisa si el pedido no alcanza el mínimo."},
                     {"title": "Guarda", "text": "Después podrás cargar su catálogo y sus precios."},
                 ],

@@ -14,6 +14,7 @@ from modules.guides import guide_for
 
 from modules import ui_styles
 from utils import audit as audit_text
+from utils import contact as contact_utils
 from utils import icons
 
 
@@ -222,7 +223,10 @@ def panel_header(eyebrow: str, title: str) -> None:
     st.markdown(f'{eyebrow_html(eyebrow)}<div class="mrp-panel-title">{title}</div>', unsafe_allow_html=True)
 
 
-def avatar(name: str) -> str:
+def avatar(name: str, logo: str | None = None) -> str:
+    """Círculo con la inicial del nombre; con `logo` (data URL de utils/logo.py) muestra la imagen del proveedor."""
+    if logo and str(logo).startswith("data:image/"):
+        return f'<div class="mrp-avatar mrp-logo"><img src="{html.escape(str(logo), quote=True)}" alt="{html.escape(name or "Logotipo", quote=True)}" loading="lazy"></div>'
     initial = (name or "?").strip()[:1].upper() or "?"
     return f'<div class="mrp-avatar">{initial}</div>'
 
@@ -392,17 +396,45 @@ def filter_df(df: pd.DataFrame, query: str, columns: list[str]) -> pd.DataFrame:
     return df[mask]
 
 
-def contact_links(phone: str | None, email: str | None) -> str:
-    """Enlaces de contacto rápido: llamar (tel:), WhatsApp (wa.me) y correo."""
-    parts = []
+def contact_links(phone: str | None, email: str | None, contact: str | None = None, company: str | None = None) -> str:
+    """Botones de contacto rápido con el aspecto de lo que representan: llamar (celeste), WhatsApp (verde), Gmail y Outlook.
+    WhatsApp, Gmail y Outlook se despliegan con mensajes ya escritos (cotizar, disponibilidad, precios, seguimiento, entrega,
+    comprobantes): al elegir uno se abre la aplicación con el texto listo. El sistema no envía nada: lo revisa y envía la persona."""
+    presets = contact_utils.messages(contact, company)
+    buttons = []
     if phone:
-        dial = re.sub(r"[^\d+]", "", phone)
-        wa = re.sub(r"\D", "", phone)
-        parts.append(f'<a class="mrp-link" href="tel:{dial}">{icons.svg("phone", 14, 2)} Llamar</a>')
-        if wa:
-            parts.append(f'<a class="mrp-link" href="https://wa.me/{wa}" target="_blank" rel="noopener">{icons.svg("chat", 14, 2)} WhatsApp</a>')
+        buttons.append(f'<a class="mrp-cbtn call" href="tel:{contact_utils.dial_number(phone)}">{icons.svg("phone", 16, 2.1)}<span>Llamar</span></a>')
+        if contact_utils.whatsapp_number(phone):
+            items = "".join(
+                f'<a href="{html.escape(contact_utils.whatsapp_url(phone, p["body"]), quote=True)}" target="_blank" rel="noopener">'
+                f'<b>{html.escape(p["label"])}</b><small>{html.escape(p["hint"])}</small></a>'
+                for p in presets
+            )
+            buttons.append(_menu("wa", icons.brand("whatsapp", 18), "WhatsApp", "Abrir WhatsApp con un mensaje listo", items))
     if email:
-        parts.append(f'<a class="mrp-link" href="mailto:{html.escape(email, quote=True)}">{icons.svg("mail", 14, 2)} Correo</a>')
-    if not parts:
+        gmail = "".join(
+            f'<a href="{html.escape(contact_utils.gmail_url(email, p["subject"], p["body"]), quote=True)}" target="_blank" rel="noopener">'
+            f'<b>{html.escape(p["label"])}</b><small>{html.escape(p["hint"])}</small></a>'
+            for p in presets
+        )
+        outlook = "".join(
+            f'<a href="{html.escape(contact_utils.outlook_url(email, p["subject"], p["body"]), quote=True)}" target="_blank" rel="noopener">'
+            f'<b>{html.escape(p["label"])}</b><small>{html.escape(p["hint"])}</small></a>'
+            for p in presets
+        ) + (
+            f'<a class="app" href="{html.escape(contact_utils.mailto_url(email, presets[0]["subject"], presets[0]["body"]), quote=True)}">'
+            f'<b>Abrir en la app de correo</b><small>Con el programa instalado en este equipo</small></a>'
+        )
+        buttons.append(_menu("gmail", icons.brand("gmail", 18), "Gmail", "Redactar en Gmail con un mensaje listo", gmail))
+        buttons.append(_menu("outlook", icons.brand("outlook", 18), "Outlook", "Redactar en Outlook con un mensaje listo", outlook))
+    if not buttons:
         return '<div class="mrp-row-sub">Sin datos de contacto</div>'
-    return '<div class="mrp-links">' + "".join(parts) + "</div>"
+    return '<div class="mrp-contact">' + "".join(buttons) + "</div>"
+
+
+def _menu(kind: str, icon_html: str, label: str, title: str, items: str) -> str:
+    """Botón que despliega una lista de mensajes (HTML puro con <details>, sin JavaScript propio)."""
+    return (
+        f'<details class="mrp-menu {kind}"><summary class="mrp-cbtn {kind}" title="{html.escape(title, quote=True)}">{icon_html}<span>{label}</span>'
+        f'<i class="mrp-menu-chev"></i></summary><div class="mrp-menu-list"><div class="mrp-menu-head">Elige un mensaje</div>{items}</div></details>'
+    )

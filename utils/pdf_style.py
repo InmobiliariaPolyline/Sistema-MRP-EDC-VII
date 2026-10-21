@@ -288,6 +288,24 @@ class BrandPDF(FPDF):
                 self.polygon([(cursor, y + h), (cursor + step / 2, y + h), (cursor + step / 2 + h, y), (cursor + h, y)], style="F")
                 cursor += step
 
+    def logo(self, data_url: str | None, x: float, y: float, box: float = 14.0) -> bool:
+        """Dibuja un logotipo (data URL de utils/logo.py) dentro de un cuadrado de `box` mm sin deformarlo. False si no hay o no sirve."""
+        from PIL import Image
+
+        from utils import logo as logo_utils
+
+        data = logo_utils.to_bytes(data_url)
+        if not data:
+            return False
+        try:
+            width, height = Image.open(io.BytesIO(data)).size
+        except Exception:
+            return False
+        scale = min(box / width, box / height)
+        w, h = width * scale, height * scale
+        self.image(io.BytesIO(data), x=x + (box - w) / 2, y=y + (box - h) / 2, w=w, h=h)
+        return True
+
     def dashed(self, x1: float, y: float, x2: float, color: tuple[int, int, int] = BORDER, dash: float = 1.6, gap: float = 1.4) -> None:
         self.set_draw_color(*color)
         self.set_line_width(0.3)

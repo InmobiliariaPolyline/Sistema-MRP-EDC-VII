@@ -1,0 +1,58 @@
+/* =========================================================================
+   56 · CONTACTO — botones con el aspecto de lo que representan (llamar,
+   WhatsApp, Gmail, Outlook), menús de mensajes y logotipo del proveedor
+   ========================================================================= */
+.mrp-contact { display: flex; flex-wrap: wrap; gap: .5rem; margin-top: .55rem; }
+.mrp-cbtn {
+  position: relative; display: inline-flex; align-items: center; gap: .5rem; padding: .48rem .95rem .48rem .75rem; border-radius: var(--r-full); border: 1px solid transparent;
+  font-size: var(--fs-sm); font-weight: 750; letter-spacing: -.005em; line-height: 1; text-decoration: none !important; cursor: pointer; user-select: none; list-style: none; overflow: hidden;
+  transition: transform var(--dur-base) var(--ease-spring), box-shadow var(--dur-base), filter var(--dur-base);
+}
+.mrp-cbtn::-webkit-details-marker { display: none; }
+.mrp-cbtn::after { content: ""; position: absolute; inset: 0; background: linear-gradient(105deg, transparent 30%, rgba(255, 255, 255, .38) 50%, transparent 70%); transform: translateX(-120%); transition: transform .7s var(--ease-out); pointer-events: none; }
+.mrp-cbtn:hover { transform: translateY(-2px); }
+.mrp-cbtn:hover::after { transform: translateX(120%); }
+.mrp-cbtn:active { transform: translateY(0) scale(.97); }
+.mrp-cbtn .mrp-ico, .mrp-cbtn .mrp-brand-ico { flex: 0 0 auto; transition: transform var(--dur-base) var(--ease-spring); }
+.mrp-cbtn:hover .mrp-ico, .mrp-cbtn:hover .mrp-brand-ico { transform: rotate(-8deg) scale(1.15); }
+
+.mrp-cbtn.call { color: #fff !important; background: linear-gradient(135deg, #38BDF8, #0284C7); box-shadow: 0 10px 22px -12px rgba(2, 132, 199, .9); }
+.mrp-cbtn.call:hover { box-shadow: 0 14px 28px -10px rgba(2, 132, 199, 1); filter: brightness(1.05); }
+.mrp-cbtn.wa { color: #fff; background: linear-gradient(135deg, #25D366, #0E9F6E); box-shadow: 0 10px 22px -12px rgba(18, 140, 126, .95); }
+.mrp-cbtn.wa:hover { box-shadow: 0 14px 28px -10px rgba(18, 140, 126, 1); filter: brightness(1.05); }
+.mrp-cbtn.wa .mrp-brand-ico { filter: drop-shadow(0 1px 1px rgba(0, 0, 0, .18)); }
+.mrp-cbtn.gmail { color: #B3261E; background: var(--mrp-surface); border-color: #F2C7C3; box-shadow: 0 8px 18px -14px rgba(234, 67, 53, .9); }
+.mrp-cbtn.gmail:hover { background: #FDECEA; border-color: #EA4335; box-shadow: 0 12px 24px -12px rgba(234, 67, 53, 1); }
+.mrp-cbtn.outlook { color: #fff; background: linear-gradient(135deg, #2B88D8, #0A64AD); box-shadow: 0 10px 22px -12px rgba(10, 100, 173, .95); }
+.mrp-cbtn.outlook:hover { box-shadow: 0 14px 28px -10px rgba(10, 100, 173, 1); filter: brightness(1.06); }
+
+/* menú con los mensajes ya escritos */
+.mrp-menu { position: relative; display: inline-block; }
+.mrp-menu-chev { width: .4rem; height: .4rem; margin: -.15rem 0 0 .1rem; border-right: 2px solid currentColor; border-bottom: 2px solid currentColor; transform: rotate(45deg); opacity: .8; transition: transform var(--dur-base) var(--ease-spring); }
+.mrp-menu[open] .mrp-menu-chev { transform: rotate(225deg); margin-top: .25rem; }
+.mrp-menu[open] > summary { filter: brightness(1.04); box-shadow: 0 0 0 4px var(--mrp-ring); }
+.mrp-menu-list {
+  position: absolute; z-index: 60; top: calc(100% + .45rem); left: 0; min-width: 17.5rem; max-width: min(22rem, 86vw); padding: .4rem; border-radius: 1rem;
+  background: var(--mrp-raised); border: 1px solid var(--mrp-border); box-shadow: var(--mrp-shadow-lg); transform-origin: top left; animation: mrpPop var(--dur-base) var(--ease-spring);
+}
+.mrp-menu.outlook .mrp-menu-list { left: auto; right: 0; transform-origin: top right; }
+.mrp-menu-head { padding: .35rem .65rem .45rem; font-size: .66rem; font-weight: 800; letter-spacing: .09em; text-transform: uppercase; color: var(--mrp-muted); }
+.mrp-menu-list a { --k: var(--mrp-accent); display: block; padding: .5rem .7rem; border-radius: .7rem; border-left: 3px solid transparent; text-decoration: none !important; color: var(--mrp-text) !important; transition: background var(--dur-fast), border-color var(--dur-fast), transform var(--dur-fast) var(--ease-out); }
+.mrp-menu.wa .mrp-menu-list a { --k: #16A34A; }
+.mrp-menu.gmail .mrp-menu-list a { --k: #EA4335; }
+.mrp-menu.outlook .mrp-menu-list a { --k: #0A64AD; }
+.mrp-menu-list a:hover { background: color-mix(in srgb, var(--k) 10%, transparent); border-left-color: var(--k); transform: translateX(3px); }
+.mrp-menu-list a b { display: block; font-size: var(--fs-sm); font-weight: 750; }
+.mrp-menu-list a small { display: block; margin-top: .1rem; font-size: .72rem; color: var(--mrp-muted); }
+.mrp-menu-list a.app { margin-top: .25rem; border-top: 1px dashed var(--mrp-border); border-radius: 0 0 .7rem .7rem; }
+/* el menú abierto queda por encima de las tarjetas que siguen */
+[data-testid="stLayoutWrapper"]:has(details.mrp-menu[open]), [data-testid="stElementContainer"]:has(details.mrp-menu[open]) { position: relative; z-index: 50; }
+
+/* logotipo del proveedor */
+.mrp-avatar.mrp-logo { padding: 0; width: 3rem; height: 3rem; min-width: 3rem; border-radius: .95rem; background: #fff; border: 1px solid var(--mrp-border); overflow: hidden; box-shadow: var(--mrp-shadow); }
+.mrp-avatar.mrp-logo img { width: 100%; height: 100%; object-fit: contain; padding: .22rem; display: block; }
+.mrp-row:hover .mrp-avatar.mrp-logo { background: #fff; transform: scale(1.07) rotate(-2deg); }
+.mrp-ficha-id { display: flex; flex-wrap: wrap; align-items: center; gap: 1rem; }
+.mrp-ficha-id .mrp-avatar { width: 4.2rem; height: 4.2rem; min-width: 4.2rem; border-radius: 1.2rem; font-size: 1.6rem; }
+.mrp-ficha-id .mrp-contact { margin-top: 0; }
+@media (max-width: 640px) { .mrp-menu-list { left: 0 !important; right: auto !important; min-width: 15rem; } }

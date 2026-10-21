@@ -253,6 +253,7 @@ def _init_db() -> None:
             ("audit_log", "entity_id", "text"),
             ("audit_log", "changes", "text"),
             ("suppliers", "ruc", "text"),
+            ("suppliers", "logo", "text"),
             ("purchase_orders", "prices_include_tax", "integer not null default 0"),
             ("purchase_orders", "payment_terms", "text"),
             ("suppliers", "lead_time_days", "integer"),
@@ -357,7 +358,7 @@ def delete_material(material_id: str) -> None:
 def list_suppliers() -> pd.DataFrame:
     with _connect() as conn:
         df = pd.read_sql_query("select * from suppliers order by name", conn)
-    for col in ["id", "name", "contact_name", "phone", "email", "notes", "created_at", "updated_at", "lead_time_days", "min_order_amount", "ruc"]:
+    for col in ["id", "name", "contact_name", "phone", "email", "notes", "created_at", "updated_at", "lead_time_days", "min_order_amount", "ruc", "logo"]:
         if col not in df.columns:
             df[col] = None
     return df.astype(object).where(pd.notnull(df), None)
@@ -421,6 +422,12 @@ def upsert_supplier(
                 "insert into suppliers (id, name, contact_name, phone, email, notes, lead_time_days, min_order_amount, ruc) values (?, ?, ?, ?, ?, ?, ?, ?, ?)",
                 (str(uuid.uuid4()), name, contact_name, phone, email, notes, lead_time_days, min_order_amount, ruc),
             )
+
+
+def set_supplier_logo(supplier_id: str, logo: str | None) -> None:
+    """Guarda (o quita, con None) el logotipo del proveedor: una imagen ya reducida como data URL (ver utils/logo.py)."""
+    with _connect() as conn:
+        conn.execute("update suppliers set logo = ? where id = ?", (logo, supplier_id))
 
 
 def delete_supplier(supplier_id: str) -> None:
