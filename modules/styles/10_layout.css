@@ -16,6 +16,7 @@
 }
 [data-testid="stExpander"] { background: var(--mrp-surface); border: 1px solid var(--mrp-border) !important; border-radius: var(--r-lg) !important; box-shadow: var(--mrp-shadow); overflow: hidden; }
 [data-testid="stExpander"] summary, [data-testid="stExpander"] summary p { color: var(--mrp-text); font-weight: 600; }
+[data-testid="stExpander"] details, [data-testid="stExpander"] details summary { background: transparent; }
 [data-testid="stDataFrame"] { border: 1px solid var(--mrp-border); border-radius: var(--r-lg); overflow: hidden; box-shadow: var(--mrp-shadow); }
 [data-testid="stPlotlyChart"] { min-height: 16rem; }
 [data-testid="stDeckGlJsonChart"] { border-radius: var(--r-lg); overflow: hidden; }
