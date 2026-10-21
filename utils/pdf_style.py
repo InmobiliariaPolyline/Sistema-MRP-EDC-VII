@@ -6,6 +6,7 @@ para verse como una sola familia y respetar los mismos márgenes, colores y tipo
 from __future__ import annotations
 
 import io
+import math
 
 from pathlib import Path
 
@@ -238,6 +239,7 @@ class BrandPDF(FPDF):
             label, title, meta or [], chip, icon
         )
         self._cover_done = True
+        self._draw_watermark()
 
     def _meta_right(self, meta: list[tuple[str, str]], y: float, key_color, value_color, width: float = 62, limit: int = 3) -> None:
         right = self.w - self.r_margin
@@ -428,6 +430,7 @@ class BrandPDF(FPDF):
         self.set_line_width(0.2)
         self.line(self.l_margin, 13, self.w - self.r_margin, 13)
         self.set_y(18)
+        self._draw_watermark()
 
     def footer(self) -> None:
         self.set_y(-12)
@@ -467,10 +470,18 @@ class BrandPDF(FPDF):
             return 0.0
         x0 = self.l_margin if x is None else x
         width = self.usable if w is None else w
-        pad, row_h = 4.0, 10.5
+        pad = 4.0
+        col_w = (width - pad * 2) / columns
         rows = -(-len(items) // columns)
+        # un valor que no cabe en una línea se parte en dos (en vez de cortarlo con «…»); esa fila crece
+        self.font(9, semi=True)
+        values = []
+        for key, value, icon in items:
+            room = col_w - 8 - (6 if icon else 0)
+            values.append(self.wrap(value, room, max_lines=2) if self.get_string_width(_safe(value)) > room else [_safe(value)])
+        row_heights = [10.5 + (3.9 if any(len(values[r * columns + c]) > 1 for c in range(columns) if r * columns + c < len(items)) else 0.0) for r in range(rows)]
         title_h = 7.5 if title else 0.0
-        height = pad * 2 + rows * row_h + title_h - 1.5
+        height = pad * 2 + sum(row_heights) + title_h - 1.5
         y0 = self.get_y()
         if y0 + height > self.h - 20:
             self.add_page()
@@ -484,10 +495,9 @@ class BrandPDF(FPDF):
             self.set_xy(x0 + pad + 1, cy - 0.5)
             self.cell(width - pad * 2, 4, _safe(title).upper())
             cy += title_h
-        col_w = (width - pad * 2) / columns
         for index, (key, value, icon) in enumerate(items):
             col, row = index % columns, index // columns
-            cx, ry = x0 + pad + 1 + col * col_w, cy + row * row_h
+            cx, ry = x0 + pad + 1 + col * col_w, cy + sum(row_heights[:row])
             text_x = cx
             if icon:
                 self.icon(icon, cx, ry + 0.9, 4.2, MUTED, 2.0)
@@ -495,10 +505,12 @@ class BrandPDF(FPDF):
             self.font(6.8, semi=True, color=MUTED)
             self.set_xy(text_x, ry)
             self.cell(col_w - 7, 3.4, _safe(key).upper())
-            self.font(9, semi=True)
-            self.set_xy(text_x, ry + 3.6)
-            self.cell(col_w - 7, 4.6, self.fit(value, col_w - 8))
-        self.set_y(y0 + height + 4)
+            lines = values[index]
+            self.font(9 if len(lines) == 1 else 8.4, semi=True)
+            for n, line in enumerate(lines):
+                self.set_xy(text_x, ry + 3.6 + n * 4.1)
+                self.cell(col_w - 7, 4.4, line)
+        self.set_y(y0 + height + 3)
         return height
 
     def kpis(self, cards: list[dict], per_row: int | None = None, h: float = 21.0) -> None:
@@ -594,7 +606,12 @@ class BrandPDF(FPDF):
             x = self.l_margin
             for c, (value, w, a) in enumerate(zip(row, cols, align)):
                 tone = (tones or {}).get(r, {}).get(c)
-                if tone and _safe(value):
+                if columns[c] == "Verif.":
+                    self.set_draw_color(*self.accent)
+                    self.set_line_width(0.35)
+                    self.set_fill_color(*WHITE)
+                    self.rect(x + (w - 4.2) / 2, y + (row_h - 4.2) / 2, 4.2, 4.2, style="DF", round_corners=True, corner_radius=0.9)
+                elif tone and _safe(value):
                     self.chip(x + 1.4 if a == "L" else x + w - 1.4, y + (row_h - 5) / 2, self.fit(value, w - 3), tone, size=6.8, h=5, align=a if a == "R" else "L")
                 else:
                     colored = (colors or {}).get((r, c))
@@ -630,7 +647,7 @@ class BrandPDF(FPDF):
         self.cell(width / 2, 9, _safe(total[0]).upper())
         self.font(11.5, bold=True, color=WHITE)
         self.cell(width / 2 - 8, 9, _safe(total[1]), align="R")
-        self.set_y(y + h + 5)
+        self.set_y(y + h + 3)
 
     def note_box(self, title: str, text: str, icon: str = "note", tone: str = "warn") -> None:
         """Recuadro de color con un texto (notas, observaciones)."""
@@ -653,13 +670,13 @@ class BrandPDF(FPDF):
         for i, line in enumerate(lines):
             self.set_xy(self.l_margin + 12, y + 7 + i * 4.4)
             self.cell(self.usable - 16, 4.4, line)
-        self.set_y(y + h + 4)
+        self.set_y(y + h + 3)
 
     def signatures(self, labels: list[tuple[str, str | None]]) -> None:
         """Líneas de firma: cada una con su rol y, opcionalmente, el nombre de quien firma."""
-        if self.get_y() + 33 > self.h - 18:   # el bloque (7 de aire + 26 de firmas) tiene que caber entero
+        if self.get_y() + 26 > self.h - 18:   # el bloque (4 de aire + 22 de firmas) tiene que caber entero
             self.add_page()
-        self.ln(7)
+        self.ln(4)
         y = self.get_y()
         n = len(labels)
         gap = 10.0
@@ -668,12 +685,205 @@ class BrandPDF(FPDF):
             x = self.l_margin + i * (w + gap)
             self.set_draw_color(*MUTED)
             self.set_line_width(0.3)
-            self.line(x, y + 14, x + w, y + 14)
+            self.line(x, y + 11, x + w, y + 11)
             self.font(8, semi=True)
-            self.set_xy(x, y + 15.2)
+            self.set_xy(x, y + 12.2)
             self.cell(w, 4, _safe(role), align="C")
             if name:
                 self.font(7.5, color=MUTED)
-                self.set_xy(x, y + 19.4)
+                self.set_xy(x, y + 16.4)
                 self.cell(w, 4, self.fit(name, w), align="C")
-        self.set_y(y + 26)
+        self.set_y(y + 22)
+
+    # --------------------------------------------------------------------------------------------- gráficos y visuales
+    def watermark(self, text: str, tone: str = "bad") -> None:
+        """Texto grande en diagonal, muy tenue, detrás del contenido (p. ej. «CANCELADA»). Se repite en cada página."""
+        self._watermark = (text, tone)
+        self._draw_watermark()
+
+    def _draw_watermark(self) -> None:
+        mark = getattr(self, "_watermark", None)
+        if not mark:
+            return
+        text, tone = mark
+        fg, _ = self.tone(tone)
+        keep_x, keep_y = self.get_x(), self.get_y()
+        size = 62 if self.w < 250 else 54
+        self.font(size, bold=True, color=fg)
+        width = self.get_string_width(_safe(text).upper())
+        cx, cy = self.w / 2, self.h / 2
+        with self.rotation(35, cx, cy):
+            with self._alpha(0.07):
+                self.set_xy(cx - width / 2, cy - size * 0.18)
+                self.cell(width, size * 0.36, _safe(text).upper(), align="C")
+        self.set_xy(keep_x, keep_y)
+
+    def donut(self, cx: float, cy: float, r: float, fraction: float | None, tone: str = "accent", label: str | None = None, sub: str | None = None, thickness: float = 0.30) -> None:
+        """Anillo de avance con la cifra al centro (`fraction` de 0 a 1; None = sin dato)."""
+        fg, _ = self.tone(tone)
+        value = max(0.0, min(fraction or 0.0, 1.0))
+        self.set_fill_color(*BORDER)
+        self.circle(cx, cy, r, style="F")
+        if value >= 0.999:
+            self.set_fill_color(*fg)
+            self.circle(cx, cy, r, style="F")
+        elif value > 0:
+            self.set_fill_color(*fg)
+            steps = max(int(360 * value / 3), 2)      # el sector se arma con un polígono: a las 12 en punto y en sentido horario
+            points = [(cx, cy)] + [
+                (cx + r * math.cos(math.radians(-90 + 360 * value * i / steps)), cy + r * math.sin(math.radians(-90 + 360 * value * i / steps)))
+                for i in range(steps + 1)
+            ]
+            self.polygon(points, style="F")
+        self.set_fill_color(*WHITE)
+        self.circle(cx, cy, r * (1 - thickness), style="F")
+        if label:
+            self.font(r * 0.95, bold=True, color=fg if fraction is not None else MUTED)
+            self.set_xy(cx - r, cy - r * 0.42)
+            self.cell(r * 2, r * 0.55, _safe(label), align="C")
+        if sub:
+            self.font(max(r * 0.38, 5.5), color=MUTED)
+            self.set_xy(cx - r, cy + r * 0.2)
+            self.cell(r * 2, r * 0.4, _safe(sub), align="C")
+
+    def hbars(self, x: float, y: float, w: float, items: list[tuple[str, float, str, str]], row_h: float = 8.5, label_w: float = 34.0) -> float:
+        """Barras horizontales comparativas. Cada ítem: (etiqueta, valor, tono, texto del valor). Devuelve el alto usado."""
+        top = max((v for _, v, _, _ in items), default=0) or 1.0
+        value_w = 30.0
+        track = w - label_w - value_w - 4
+        for index, (label, value, tone, text) in enumerate(items):
+            ry = y + index * row_h
+            fg, _ = self.tone(tone)
+            self.font(8, semi=True, color=TEXT)
+            self.set_xy(x, ry)
+            self.cell(label_w, row_h - 1, self.fit(label, label_w - 1))
+            self.set_fill_color(*BORDER)
+            self.rect(x + label_w, ry + 1.6, track, row_h - 4.2, style="F", round_corners=True, corner_radius=(row_h - 4.2) / 2)
+            self.set_fill_color(*fg)
+            self.rect(x + label_w, ry + 1.6, max(track * (value / top), 1.6), row_h - 4.2, style="F", round_corners=True, corner_radius=(row_h - 4.2) / 2)
+            self.font(8.4, bold=True, color=fg)
+            self.set_xy(x + label_w + track + 3, ry)
+            self.cell(value_w, row_h - 1, _safe(text), align="R")
+        return len(items) * row_h
+
+    def linechart(self, x: float, y: float, w: float, h: float, values: list[float], tone: str = "accent") -> None:
+        """Línea con área sombreada y puntos (p. ej. la evolución del saldo de un material). Marca el mínimo y el máximo."""
+        values = [float(v) for v in values]
+        if len(values) < 2:
+            return
+        fg, bg = self.tone(tone)
+        lo, hi = min(values + [0.0]), max(values)
+        span = (hi - lo) or 1.0
+        pad_x, pad_y = 3.0, 4.0
+        pts = [(x + pad_x + i / (len(values) - 1) * (w - pad_x * 2), y + h - pad_y - (v - lo) / span * (h - pad_y * 2)) for i, v in enumerate(values)]
+        self.set_draw_color(*BORDER)
+        self.set_line_width(0.15)
+        for k in range(3):
+            gy = y + pad_y + k * (h - pad_y * 2) / 2
+            self.set_dash_pattern(dash=0.8, gap=1.2)
+            self.line(x + pad_x, gy, x + w - pad_x, gy)
+        self.set_dash_pattern()
+        with self._alpha(0.35):
+            self.set_fill_color(*bg)
+            self.polygon([(pts[0][0], y + h - pad_y - (0 - lo) / span * (h - pad_y * 2))] + pts + [(pts[-1][0], y + h - pad_y - (0 - lo) / span * (h - pad_y * 2))], style="F")
+        self.set_draw_color(*fg)
+        self.set_line_width(0.6)
+        self.polyline(pts)
+        self.set_fill_color(*fg)
+        for px, py in pts:
+            self.circle(px, py, 0.9, style="F")
+        for idx, label in ((values.index(max(values)), f"máx. {max(values):,.0f}"), (values.index(min(values)), f"mín. {min(values):,.0f}")):
+            if idx == values.index(max(values)) and label.startswith("mín") and min(values) == max(values):
+                continue
+            px, py = pts[idx]
+            self.font(6.8, semi=True, color=fg)
+            self.set_xy(min(max(px - 12, x), x + w - 24), py - 4.6 if label.startswith("máx") else py + 1.2)
+            self.cell(24, 3.4, label, align="C")
+
+    def timeline(self, steps: list[tuple[str, str, str]], title: str | None = None) -> None:
+        """Línea de tiempo horizontal. Cada paso: (nombre, texto, estado) con estado «done», «current» o «todo»."""
+        h = 22.0 if title else 18.0
+        y = self.get_y()
+        if y + h > self.h - 20:
+            self.add_page()
+            y = self.get_y()
+        self.box(self.l_margin, y, self.usable, h, fill=WHITE)
+        top = y + 4.0
+        if title:
+            self.font(8, semi=True, color=self.accent_dark)
+            self.set_xy(self.l_margin + 5, y + 3)
+            self.cell(80, 4, _safe(title).upper())
+            top = y + 8.2
+        n = len(steps)
+        inner = self.usable - 24
+        gap = inner / max(n - 1, 1)
+        x0 = self.l_margin + 12
+        for i in range(n - 1):
+            done = steps[i][2] == "done" and steps[i + 1][2] in ("done", "current")
+            self.set_draw_color(*(self.accent if done else BORDER))
+            self.set_line_width(0.8)
+            self.line(x0 + i * gap + 2.6, top + 2.6, x0 + (i + 1) * gap - 2.6, top + 2.6)
+        for i, (name, text, state) in enumerate(steps):
+            cx = x0 + i * gap
+            if state == "done":
+                self.set_fill_color(*self.accent)
+                self.circle(cx, top + 2.6, 2.6, style="F")
+                self.icon("check", cx - 1.6, top + 1.0, 3.2, WHITE, 3.0)
+            elif state == "current":
+                self.set_fill_color(*self.soft)
+                self.circle(cx, top + 2.6, 3.0, style="F")
+                self.set_fill_color(*self.accent)
+                self.circle(cx, top + 2.6, 1.5, style="F")
+            else:
+                self.set_fill_color(*WHITE)
+                self.set_draw_color(*BORDER)
+                self.set_line_width(0.5)
+                self.circle(cx, top + 2.6, 2.4, style="D")
+            self.font(7.6, semi=True, color=TEXT if state != "todo" else MUTED)
+            self.set_xy(cx - gap / 2, top + 6.2)
+            self.cell(gap, 3.6, self.fit(name, gap - 2), align="C")
+            self.font(6.8, color=MUTED)
+            self.set_xy(cx - gap / 2, top + 9.8)
+            self.cell(gap, 3.2, self.fit(text, gap - 2), align="C")
+        self.set_y(y + h + 3)
+
+    def index_card(self, items: list[tuple[str, int]], title: str = "Contenido") -> None:
+        """Índice del documento: cada sección con su número, su nombre y cuántos registros trae (con una barrita proporcional)."""
+        if not items:
+            return
+        columns = 2 if len(items) > 3 else 1
+        rows = -(-len(items) // columns)
+        row_h = 8.2
+        h = 12 + rows * row_h
+        y = self.get_y()
+        if y + h > self.h - 20:
+            self.add_page()
+            y = self.get_y()
+        self.box(self.l_margin, y, self.usable, h, fill=WHITE)
+        self.set_fill_color(*self.accent)
+        self.rect(self.l_margin, y + 3.5, 0.9, h - 7, style="F")
+        self.font(8, semi=True, color=self.accent_dark)
+        self.set_xy(self.l_margin + 5, y + 3.2)
+        self.cell(60, 4, _safe(title).upper())
+        top = max(count for _, count in items) or 1
+        col_w = (self.usable - 10) / columns
+        for index, (name, count) in enumerate(items):
+            col, row = index // rows, index % rows
+            cx, cy = self.l_margin + 5 + col * col_w, y + 10 + row * row_h
+            self.set_fill_color(*self.soft)
+            self.circle(cx + 2.6, cy + 3, 2.6, style="F")
+            self.font(7, bold=True, color=self.accent_dark)
+            self.set_xy(cx, cy + 1.2)
+            self.cell(5.2, 3.6, str(index + 1), align="C")
+            self.font(8.4, semi=True)
+            self.set_xy(cx + 7, cy + 1)
+            self.cell(col_w * 0.5, 4, self.fit(name, col_w * 0.5 - 1))
+            bar_x, bar_w = cx + 7 + col_w * 0.5, col_w * 0.25
+            self.set_fill_color(*BORDER)
+            self.rect(bar_x, cy + 2.2, bar_w, 1.8, style="F", round_corners=True, corner_radius=0.9)
+            self.set_fill_color(*self.accent)
+            self.rect(bar_x, cy + 2.2, max(bar_w * count / top, 1.2), 1.8, style="F", round_corners=True, corner_radius=0.9)
+            self.font(7.6, bold=True, color=MUTED)
+            self.set_xy(bar_x + bar_w + 1.5, cy + 1.2)
+            self.cell(col_w * 0.2, 3.6, f"{count:,}")
+        self.set_y(y + h + 5)

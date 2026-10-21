@@ -70,8 +70,23 @@ def to_pdf(title: str, sections: dict[str, pd.DataFrame], label: str = "Reporte 
         label, title,
         [("Generado", f"{clock.now():%d/%m/%Y %H:%M}"), ("Contenido", f"{len(sections)} conjunto(s) · {total_rows:,} registro(s)")], icon=icon,
     )
+    if len(sections) > 1:
+        pdf.index_card([(name, len(df)) for name, df in sections.items()])
     for heading, df in sections.items():
         pdf.section(heading, "list", f"{len(df):,}")
+        if style == "minimal" and "Saldo" in df.columns and len(df) >= 2:
+            balances = [float(v) for v in df["Saldo"] if v == v and v is not None]
+            if len(balances) >= 2:
+                top = pdf.get_y()
+                pdf.box(pdf.l_margin, top, pdf.usable, 40, fill=PAPER_COLOR)
+                pdf.font(7.6, semi=True, color=pdf.accent_dark)
+                pdf.set_xy(pdf.l_margin + 5, top + 3)
+                pdf.cell(80, 4, "EVOLUCIÓN DEL SALDO")
+                pdf.font(7.6, color=MUTED_TEXT)
+                pdf.set_xy(pdf.w - pdf.r_margin - 85, top + 3)
+                pdf.cell(80, 4, f"{len(balances)} movimientos · saldo final {balances[-1]:,.0f}", align="R")
+                pdf.linechart(pdf.l_margin + 3, top + 8, pdf.usable - 6, 30, balances, tone="good")
+                pdf.set_y(top + 45)
         if df.empty:
             pdf.font(9, color=MUTED_TEXT)
             pdf.cell(0, 7, "Sin registros.", new_x="LMARGIN", new_y="NEXT")
@@ -142,6 +157,23 @@ def order_pdf(order: dict, items: pd.DataFrame, supplier: dict | None = None, co
          ("Enviada el", _date(order.get("sent_at"), True), "truck"), ("Tratamiento del IGV", money.TAX_MODES[money.tax_mode(tax_rate, include)][0].replace(" (18 %)", ""), "scale")],
         columns=3, title="Entrega y pago",
     )
+
+    ordered_value = sum(float(r["quantity"]) * float(r["unit_price"]) for r in items.to_dict("records"))
+    received_value = sum(min(float(r.get("received_qty") or 0), float(r["quantity"])) * float(r["unit_price"]) for r in items.to_dict("records"))
+    share = received_value / ordered_value if ordered_value else 0.0
+    status = order.get("status")
+    pdf.timeline(
+        [
+            ("Emitida", _date(order["created_at"]), "done"),
+            ("Enviada", _date(order.get("sent_at")) or "Pendiente", "done" if _date(order.get("sent_at")) else ("current" if status == "pendiente" else "todo")),
+            ("Recepción", "Completa" if status == "recibida" else f"Parcial · {share:.0%}" if status == "parcial" else (f"Prometida {_date(order.get('expected_date'))}" if _date(order.get("expected_date")) else "Por recibir"),
+             "done" if status == "recibida" else "current" if status in ("enviada", "parcial") else "todo"),
+            ("Pago pactado", f"hasta el {due:%d/%m/%Y}" if due else (order.get("payment_terms") or "Informativo"), "todo"),
+        ],
+        title="Seguimiento del pedido",
+    )
+    if status == "cancelada":
+        pdf.watermark("Cancelada", "bad")
 
     pdf.section("Materiales del pedido", "box", len(items))
     rows, tones, subtotal = [], {}, 0.0
@@ -229,10 +261,13 @@ def dispatch_pdf(voucher: dict, lines: pd.DataFrame) -> bytes:
         columns=2, title="Datos del despacho",
     )
     pdf.section("Materiales entregados", "box", len(lines))
-    rows = [[str(i + 1), r["material_name"], r.get("unit") or "", f"{float(r['quantity']):,.2f}"] for i, r in enumerate(lines.to_dict("records"))]
-    pdf.table(["N.º", "Material", "Unidad", "Cantidad"], rows, [0.8, 7, 1.6, 1.8], ["L", "L", "L", "R"], row_h=7.2, size=8.6)
+    rows = [[str(i + 1), r["material_name"], r.get("unit") or "", f"{float(r['quantity']):,.2f}", ""] for i, r in enumerate(lines.to_dict("records"))]
+    pdf.table(["N.º", "Material", "Unidad", "Cantidad", "Verif."], rows, [0.8, 6.4, 1.5, 1.7, 1.0], ["L", "L", "L", "R", "L"], row_h=7.6, size=8.6)
+    pdf.font(7, color=MUTED_TEXT)
+    pdf.set_x(pdf.l_margin)
+    pdf.cell(0, 4, "Quien recibe marca cada casilla al verificar el material.", align="R", new_x="LMARGIN", new_y="NEXT")
     pdf.stamp("Entregado", pdf.l_margin + 6, pdf.get_y() + 1, "teal")
-    pdf.ln(17)
+    pdf.ln(21)
     pdf.note_box("Nota del vale", voucher.get("note"), icon="note", tone="info")
     pdf.signatures([("Entrega (almacén)", voucher.get("actor")), ("Recibe", voucher.get("requested_by")), ("V.° B.° de obra", None)])
     pdf.font(7.2, color=MUTED_TEXT)
@@ -287,6 +322,30 @@ def site_report_pdf(site: dict, prog: dict, materials: pd.DataFrame, stages: lis
             {"label": "Avance", "value": f"{consumed * 100:.0f} %" if consumed is not None else "—", "sub": f"{over} material(es) sobre lo presupuestado" if over else "dentro de lo previsto", "icon": "chart", "fraction": consumed or 0, "tone": "warn" if over else "accent"},
         ]
     )
+
+    top = pdf.get_y()
+    card_h = 44.0
+    if top + card_h > pdf.h - 20:
+        pdf.add_page()
+        top = pdf.get_y()
+    pdf.box(pdf.l_margin, top, pdf.usable, card_h, fill=PAPER_COLOR)
+    pdf.font(8, semi=True, color=pdf.accent_dark)
+    pdf.set_xy(pdf.l_margin + 5, top + 3.4)
+    pdf.cell(100, 4, "COMPARACIÓN DE IMPORTES (S/, SIN IGV)")
+    pdf.hbars(
+        pdf.l_margin + 5, top + 10, pdf.usable * 0.64,
+        [("Presupuesto", planned, "accent", f"S/ {planned:,.0f}"), ("Pedido", ordered, "warn" if planned and ordered > planned else "info", f"S/ {ordered:,.0f}"),
+         ("Recibido", received, "teal", f"S/ {received:,.0f}"), ("Despachado", dispatched, "good", f"S/ {dispatched:,.0f}")],
+        row_h=8.4, label_w=30,
+    )
+    ring_x = pdf.l_margin + pdf.usable * 0.64 + (pdf.usable * 0.36) / 2 + 4
+    share_dispatched = dispatched / planned if planned else None
+    pdf.donut(ring_x, top + card_h / 2 + 1, 15, share_dispatched, tone="good" if share_dispatched is not None and share_dispatched <= 1 else "warn",
+              label=f"{share_dispatched * 100:.0f} %" if share_dispatched is not None else "—", sub="despachado")
+    pdf.font(7.2, color=MUTED_TEXT)
+    pdf.set_xy(ring_x - 30, top + card_h - 6)
+    pdf.cell(60, 3, "del presupuesto de la obra", align="C")
+    pdf.set_y(top + card_h + 5)
 
     pdf.section("Materiales", "box", len(materials))
     if materials.empty:

@@ -6,6 +6,19 @@ Formato de cada parche: **Agregado** · **Corregido** · **Problemas y causa** �
 
 ---
 
+## Parche 065 — PDF: gráficos, seguimiento y valores en dos líneas · 2026-10-21
+
+**Qué cambió**
+- **Valores largos en dos líneas:** el «Tratamiento del IGV» (y cualquier dato largo de las tarjetas) ya no se corta con «…»: pasa a dos líneas y su fila crece lo justo.
+- **Orden de compra:** barra de **Seguimiento del pedido** (Emitida → Enviada → Recepción con % → Pago pactado) y marca de agua diagonal «CANCELADA» en todas las páginas cuando corresponde. Ajustes de espacio para que siga cabiendo en una página.
+- **Vale de salida:** columna **Verif.** con casillas para marcar al revisar el material.
+- **Reporte de obra:** tarjeta con **comparación de importes** (presupuesto, pedido, recibido, despachado) en barras y un **anillo** con el % despachado.
+- **Kardex:** gráfico de línea con la **evolución del saldo** (mínimo y máximo marcados).
+- **Reporte general:** **índice** al inicio con cada sección, su número y cuántos registros trae.
+- Piezas nuevas en `BrandPDF`: `donut`, `hbars`, `linechart`, `timeline`, `index_card` y `watermark`. Pruebas con valores extremos (sin datos, un solo punto, línea plana, fracciones fuera de rango).
+
+---
+
 ## Parche 064 — PDF con identidad propia por tipo de documento · 2026-10-21
 
 Antes todos los PDF eran la misma plantilla en violeta. Ahora cada familia de documentos tiene su color y su portada.

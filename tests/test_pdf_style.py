@@ -151,5 +151,53 @@ class DiversityTests(unittest.TestCase):
         self.assertTrue(reports.to_pdf("Kardex: Cemento", sections, label="Kardex de inventario", theme="green", style="minimal", icon="list").startswith(b"%PDF"))
 
 
+class VisualPiecesTests(unittest.TestCase):
+    def _pdf(self):
+        pdf = BrandPDF("Doc", "D-1", theme="blue", style="poster")
+        pdf.add_page()
+        return pdf
+
+    def test_charts_and_cards_render_with_edge_values(self):
+        pdf = self._pdf()
+        for fraction in (None, 0, 0.25, 0.5, 0.999, 1, 1.7):
+            pdf.donut(40, 60, 12, fraction, label="x", sub="y")
+        pdf.hbars(10, 100, 120, [("Uno", 10, "accent", "10"), ("Dos", 0, "good", "0")])
+        pdf.hbars(10, 120, 120, [])
+        pdf.linechart(10, 140, 120, 30, [1, 5, 3, 9])
+        pdf.linechart(10, 140, 120, 30, [4])               # con un solo punto no dibuja nada y no falla
+        pdf.linechart(10, 180, 120, 30, [7, 7, 7])         # línea plana: no divide entre cero
+        pdf.index_card([("A", 3), ("B", 0), ("C", 1), ("D", 8)])
+        pdf.index_card([])
+        pdf.timeline([("Emitida", "hoy", "done"), ("Enviada", "—", "current"), ("Recepción", "—", "todo")], title="Seguimiento")
+        self.assertTrue(bytes(pdf.output()).startswith(b"%PDF"))
+
+    def test_watermark_repeats_on_every_page_and_keeps_the_cursor(self):
+        pdf = self._pdf()
+        pdf.cover("L", "T", [], None)
+        pdf.watermark("Cancelada")
+        pdf.set_xy(25, 90)
+        pdf.watermark("Cancelada")
+        self.assertEqual((round(pdf.get_x()), round(pdf.get_y())), (25, 90))
+        for _ in range(90):
+            pdf.table(["A"], [["fila"]] * 3, [1])
+        self.assertGreater(pdf.page_no(), 1)
+
+    def test_long_values_wrap_in_two_lines_instead_of_being_cut(self):
+        pdf = self._pdf()
+        short = pdf.info_card([("Condición", "Crédito 30 días", None), ("IGV", "Los precios NO incluyen IGV: se suma 18 %", None)], columns=3)
+        tall = pdf.info_card([("Condición", "Crédito 30 días", None), ("IGV", "Los precios NO incluyen IGV: se suma 18 % y además otra cosa larga", None)], columns=3)
+        plain = pdf.info_card([("Condición", "Crédito 30 días", None), ("IGV", "Sin IGV", None)], columns=3)
+        self.assertGreater(short, plain)       # la fila con un valor largo es más alta
+        self.assertGreaterEqual(tall, short)
+
+    def test_reports_with_charts_generate(self):
+        sections = {"A": pd.DataFrame({"Saldo": [1.0, 4.0, 2.0], "Entrada": [1.0, 3.0, None], "Salida": [None, None, 2.0], "Diferencia": [1, -1, 0]}), "B": pd.DataFrame({"x": [1]})}
+        self.assertTrue(reports.to_pdf("Kardex: X", sections, theme="green", style="minimal").startswith(b"%PDF"))
+        order = {"code": "OC-1", "status": "cancelada", "created_at": "2026-10-01T10:00:00", "supplier_name": "S", "currency": "PEN", "tax_rate": 0.18,
+                 "prices_include_tax": False, "payment_terms": "Contado", "exchange_rate": 1}
+        items = pd.DataFrame([{"material_name": "M", "unit": "u", "quantity": 2, "unit_price": 5.0, "received_qty": 1}])
+        self.assertTrue(reports.order_pdf(order, items).startswith(b"%PDF"))
+
+
 if __name__ == "__main__":
     unittest.main()
