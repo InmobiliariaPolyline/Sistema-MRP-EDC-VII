@@ -70,3 +70,9 @@ a.mrp-link:hover .mrp-ico { transform: scale(1.2) rotate(-6deg); }
 [data-testid="stMetric"]:hover { transform: translateY(-3px); box-shadow: var(--mrp-shadow-lg); border-color: color-mix(in srgb, var(--mrp-accent) 40%, var(--mrp-border)); }
 [data-testid="stMetricLabel"] p { font-size: var(--fs-xs); text-transform: uppercase; letter-spacing: .07em; font-weight: 700; color: var(--mrp-muted) !important; }
 [data-testid="stMetricDelta"] { font-weight: 700; }
+
+/* precio más bajo de un material: icono de descuento que rebota al pasar el cursor */
+.mrp-best { display: inline-flex; align-items: center; gap: .35rem; cursor: help; }
+.mrp-best b { font-weight: 800; }
+.mrp-best .mrp-ico { flex: 0 0 auto; animation: mrpBreathe 3s ease-in-out infinite; }
+.mrp-pill:hover .mrp-best .mrp-ico { animation: none; transform: rotate(-12deg) scale(1.25); }

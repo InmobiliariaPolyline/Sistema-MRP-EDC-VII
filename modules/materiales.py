@@ -7,7 +7,7 @@ import streamlit as st
 
 from db import repository as repo
 from modules import forms, inventario, ui
-from utils import audit, units
+from utils import audit, icons, units
 
 ALL_CATEGORIES = "Todas las categorías"
 OTHER_METRIC = "＋ Otra métrica…"
@@ -291,7 +291,10 @@ def _render_table() -> None:
                         pills = ui.pill(row["metric_label"] or "Sin métrica", "purple")
                         offer = best.get(row["id"])
                         if offer:
-                            pills += " " + ui.pill(f"Mejor: {offer['price']:,.2f} · {offer['supplier']}", "green")
+                            tip = html.escape(f"{offer['supplier']} tiene el precio más bajo de este material entre tus proveedores")
+                            pills += " " + ui.pill(
+                                f'<span class="mrp-best" title="{tip}">{icons.svg("discount", 16, 2.1)}<b>Más barato</b> S/ {offer["price"]:,.2f} · {html.escape(offer["supplier"])}</span>', "green",
+                            )
                         st.markdown(pills, unsafe_allow_html=True)
                     with c0:
                         if st.button(":material/info:", key=f"info_material_{row['id']}", help="Ver información del material"):

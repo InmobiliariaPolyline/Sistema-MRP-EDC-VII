@@ -77,6 +77,7 @@ ICONS.update({
     "refresh": '<path d="M20 12 A8 8 0 1 1 17.5 6.3"/><polyline points="20,4 20,9 15,9"/>',
     "upload": '<line x1="12" y1="16" x2="12" y2="5"/><polyline points="7,9 12,4 17,9"/><line x1="5" y1="20" x2="19" y2="20"/>',
     "eye": '<path d="M2 12 C5 7 8.5 5 12 5 C15.5 5 19 7 22 12 C19 17 15.5 19 12 19 C8.5 19 5 17 2 12 Z"/><circle cx="12" cy="12" r="3"/>',
+    "discount": '<circle cx="12" cy="12" r="9.5"/><line x1="8" y1="16" x2="16" y2="8"/><circle cx="8.8" cy="8.8" r="1.5"/><circle cx="15.2" cy="15.2" r="1.5"/>',
     "arrow_down": '<line x1="12" y1="5" x2="12" y2="19"/><polyline points="6,13 12,19 18,13"/>',
     "arrow_up": '<line x1="12" y1="19" x2="12" y2="5"/><polyline points="6,11 12,5 18,11"/>',
 })
