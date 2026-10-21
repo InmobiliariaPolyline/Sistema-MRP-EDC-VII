@@ -6,6 +6,23 @@ Formato de cada parche: **Agregado** · **Corregido** · **Problemas y causa** �
 
 ---
 
+## Parche 069 — Búsqueda de direcciones más precisa · 2026-10-21
+
+La búsqueda de la ubicación de una obra seguía siendo la de OpenStreetMap «a secas». Se midió contra 24 lugares conocidos del Perú escritos como los escribiría una persona (con abreviaturas, sin tildes, con errores): **antes acertaba a la primera 12 de 24 y ahora 18 de 24; entre los candidatos mostrados, de 14 a 21.**
+
+**Qué cambió**
+- Se busca **solo en Perú** (antes un «Plaza de Armas» o «Av. Venezuela» podía caer en otro país).
+- **Variantes de la misma dirección** cuando la primera no responde: abreviaturas expandidas (Av., Jr., Cdra., Urb., Mz., Sta., Gral.), sin el nombre del local, sin el número de puerta y asumiendo Lima si no se escribe ciudad.
+- **Segundo buscador de respaldo (Photon)**, también con datos de OpenStreetMap, que tolera errores de escritura y prioriza lo cercano a Lima.
+- **Orden de los candidatos:** primero el que trae el número de puerta escrito y, si no se nombra otra ciudad, los del área de Lima (nunca se descarta ninguno).
+- Alias de lugares con otro nombre en el mapa (p. ej. la Plaza de Armas de Lima es «Plaza Mayor»).
+- Respeta el límite de 1 consulta por segundo de OpenStreetMap, recuerda los resultados para no repetirlos y no memoriza como «no existe» un corte de internet.
+- `scripts/probar_direcciones.py`: banco de pruebas para medir el buscador y afinarlo con tus propias obras. Pruebas sin red en `tests/test_geocode.py`.
+
+**Límite que sigue:** si OpenStreetMap no tiene los números de puerta de una zona, solo conoce el eje de la calle y el punto cae a unos cientos de metros; ahí lo exacto sigue siendo pegar el enlace de Google Maps o las coordenadas.
+
+---
+
 ## Parche 068 — Mensajes de WhatsApp para trabajadores y mejor formato · 2026-10-21
 
 **Qué cambió**
