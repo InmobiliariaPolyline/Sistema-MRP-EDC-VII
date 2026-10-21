@@ -1,6 +1,6 @@
 """Módulo de Obras: presupuesto de materiales por obra frente a lo que ya se
 pidió, recibió y despachó desde el almacén."""
-from datetime import date, timedelta
+from datetime import timedelta
 import math
 
 import pandas as pd
@@ -12,6 +12,7 @@ from utils.reports import site_report_pdf
 from utils import audit
 from utils import icons
 from utils.geocode import google_maps_search_url
+from utils import clock
 
 SITE_KEY = "obras_site"
 NEW_STAGE = "＋ Nueva etapa…"
@@ -287,7 +288,7 @@ def _tab_info(site: dict) -> None:
 
     st.markdown(f'<div class="mrp-panel-title">{site["name"]}</div>', unsafe_allow_html=True)
     st.write(f"**Dirección:** {site['address'] or 'sin dirección registrada'}")
-    st.write(f"**Registrada el:** {str(site['created_at'])[:10]}  ·  **Trabajadores:** {n_workers}  ·  **Órdenes de compra:** {n_orders}")
+    st.write(f"**Registrada el:** {clock.local(site['created_at'], False)}  ·  **Trabajadores:** {n_workers}  ·  **Órdenes de compra:** {n_orders}")
 
     lat_raw, lon_raw = site.get("latitude"), site.get("longitude")
     if pd.isna(lat_raw) or pd.isna(lon_raw):
@@ -386,7 +387,7 @@ def _tab_workers(site: dict) -> None:
     if workers.empty:
         ui.empty_state("Esta obra no tiene trabajadores asignados", "Asigna trabajadores desde el módulo Trabajadores para ver aquí sus jornadas.", icon="👷")
         return
-    today = date.today()
+    today = clock.today()
     attendance = repo.list_attendance((today - timedelta(days=29)).isoformat(), today.isoformat())
     worked = {}
     if not attendance.empty:

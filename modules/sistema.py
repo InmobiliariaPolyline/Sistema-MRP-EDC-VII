@@ -8,7 +8,7 @@ from __future__ import annotations
 
 import platform
 import re
-from datetime import datetime
+
 from pathlib import Path
 
 import pandas as pd
@@ -19,6 +19,7 @@ from db import repository as repo
 from db.client import using_service_key
 from db.repository import USING_LOCAL
 from modules import ui
+from utils import clock
 
 CHANGELOG = Path(__file__).resolve().parent.parent / "CHANGELOG.md"
 FLOW = [
@@ -55,7 +56,7 @@ def environment() -> dict:
     return {
         "version": APP_VERSION, "data": data, "security": security[0], "security_tone": security[1],
         "streamlit": st.__version__, "pandas": pd.__version__, "python": platform.python_version(),
-        "system": platform.system(), "now": datetime.now().strftime("%d/%m/%Y %H:%M"),
+        "system": platform.system(), "now": clock.now().strftime("%d/%m/%Y %H:%M"),
     }
 
 

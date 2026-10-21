@@ -11,10 +11,11 @@ import streamlit as st
 from db import repository as repo
 from modules import ui
 from utils import attachments as rules
+from utils import clock
 
 
 def _stamp(value) -> str:
-    return str(value)[:16].replace("T", " ")
+    return clock.local(value)
 
 
 def render(entity_type: str, entity_id: str, *, expanded: bool = False, key: str | None = None) -> None:

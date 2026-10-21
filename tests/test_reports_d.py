@@ -29,7 +29,7 @@ class KardexTests(unittest.TestCase):
         ))
         self.assertEqual(table["Saldo"].tolist(), [50.0, 38.0, 40.0, 35.0])
         self.assertEqual(table["Documento"].tolist(), ["OC-0001", "VS-0001", "", "CT-0001"])
-        self.assertEqual(table.iloc[0]["Fecha"], "2026-10-01 09:00")
+        self.assertEqual(table.iloc[0]["Fecha"], "2026-10-01 04:00")   # la base guarda UTC: 09:00 UTC son las 04:00 en Lima
         self.assertIn("Juan", table.iloc[1]["Detalle"])
         self.assertTrue(pd.isna(table.iloc[0]["Salida"]) and pd.isna(table.iloc[1]["Entrada"]))
 

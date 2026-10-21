@@ -1,12 +1,13 @@
 """Módulo de Asistencia: pasar lista por día (quién fue a qué obra) y ver el
 resumen por trabajador y por obra."""
-from datetime import date, timedelta
+from datetime import timedelta
 
 import pandas as pd
 import streamlit as st
 
 from db import repository as repo
 from modules import forms, ui
+from utils import clock
 
 STATUSES = ["presente", "tardanza", "permiso", "ausente"]
 BLANK = "—"
@@ -68,7 +69,7 @@ def _render_roll_call() -> None:
 
     forms.section("1. Fecha y trabajadores", "El filtro usa la obra asignada a cada trabajador. Puedes cambiar la obra de la jornada en la tabla.")
     c1, c2 = st.columns([2, 3])
-    day = c1.date_input("Fecha", value=date.today(), max_value=date.today(), key="att_date")
+    day = c1.date_input("Fecha", value=clock.today(), max_value=clock.today(), key="att_date")
     site_filter = c2.selectbox("Mostrar", [ALL_WORKERS] + sites["name"].tolist(), key="att_filter",
                                help="Filtra por la obra en la que están asignados.")
     if site_filter != ALL_WORKERS:
@@ -167,7 +168,7 @@ def _render_roll_call() -> None:
     if save.button("Guardar asistencia", type="primary", width="stretch", key="att_save"):
         issues = []
         records = []
-        if day > date.today():
+        if day > clock.today():
             issues.append("Fecha: no puedes registrar una jornada futura.")
         for worker_id, row in zip(worker_ids, visible):
             status = row["Estado"]
@@ -197,7 +198,7 @@ def _render_roll_call() -> None:
 def _render_summary() -> None:
     c1, c2 = st.columns([2, 3])
     days = c1.selectbox("Periodo", [7, 15, 30, 90], index=2, format_func=lambda d: f"Últimos {d} días", key="att_days")
-    end = date.today()
+    end = clock.today()
     start = end - timedelta(days=days - 1)
     records = repo.list_attendance(start.isoformat(), end.isoformat())
     if records.empty:

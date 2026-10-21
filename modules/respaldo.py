@@ -1,6 +1,6 @@
 """Módulo Respaldo: descarga una copia completa de la base (todas las tablas) en un ZIP,
 con cifrado opcional, y explica cómo restaurarla."""
-from datetime import datetime
+
 
 import streamlit as st
 
@@ -8,6 +8,7 @@ from core.version import APP_VERSION
 from db import repository as repo
 from modules import forms, security, ui
 from utils.backup import to_zip
+from utils import clock
 
 LAST_KEY = "_last_backup"
 
@@ -40,7 +41,7 @@ def render() -> None:
                 ui.db_error(exc, "No se pudo generar el respaldo. Inténtalo de nuevo.")
                 return
             st.session_state[LAST_KEY] = {
-                "data": data, "stamp": datetime.now(), "encrypted": encrypt,
+                "data": data, "stamp": clock.now(), "encrypted": encrypt,
                 "rows": {name: len(df) for name, df in tables.items()},
             }
             ui.log(f"Respaldo generado ({sum(len(d) for d in tables.values())} filas, {'cifrado' if encrypt else 'sin cifrar'}).")

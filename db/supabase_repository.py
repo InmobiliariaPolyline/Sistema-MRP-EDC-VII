@@ -1537,7 +1537,9 @@ def _dashboard_totals_slow() -> dict:
     stock = levels["stock"].astype(float)
     minimum = levels["min_stock"].astype(float)
     dispatches = list_dispatches()
-    month = pd.Timestamp.now().strftime("%Y-%m")
+    from utils import clock
+
+    month = clock.now().strftime("%Y-%m")
     dispatches_month = int((dispatches["created_at"].astype(str).str[:7] == month).sum()) if not dispatches.empty else 0
 
     return {

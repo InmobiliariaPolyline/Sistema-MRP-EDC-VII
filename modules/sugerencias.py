@@ -20,6 +20,7 @@ import streamlit as st
 from db import repository as repo
 from modules import forms, ui
 from utils import money, pricing
+from utils import clock
 
 OPEN_STATUSES = ("pendiente", "enviada", "parcial")
 COLUMNS = [
@@ -68,7 +69,7 @@ def incoming_by_material(orders: pd.DataFrame, items: pd.DataFrame) -> dict[str,
 def supplier_summary(chosen: list[dict], suppliers: pd.DataFrame, today: date | None = None) -> list[dict]:
     """Por proveedor: líneas elegidas, total estimado, monto mínimo de compra, cuánto falta para llegar a él
     y la fecha aproximada de llegada (hoy + su plazo habitual). `chosen`: dicts con supplier_id, quantity, unit_price."""
-    today = today or date.today()
+    today = today or clock.today()
     info = {r["id"]: r for r in suppliers.to_dict("records")} if not suppliers.empty else {}
     totals: dict[str, dict] = {}
     for line in chosen:

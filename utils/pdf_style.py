@@ -6,13 +6,14 @@ para verse como una sola familia y respetar los mismos márgenes, colores y tipo
 from __future__ import annotations
 
 import io
-from datetime import datetime
+
 from pathlib import Path
 
 from fpdf import FPDF
 
 from core.version import APP_VERSION
 from utils.icons import ICONS as _ICONS
+from utils import clock
 
 FONTS = Path(__file__).resolve().parent / "fonts"
 
@@ -204,7 +205,7 @@ class BrandPDF(FPDF):
         self.line(self.l_margin, self.get_y(), self.w - self.r_margin, self.get_y())
         self.font(7, color=MUTED)
         self.set_xy(self.l_margin, self.get_y() + 1.6)
-        self.cell(self.usable * 0.7, 4, f"Generado el {datetime.now():%d/%m/%Y a las %H:%M}  ·  Sistema MRP  ·  {APP_VERSION}")
+        self.cell(self.usable * 0.7, 4, f"Generado el {clock.now():%d/%m/%Y a las %H:%M}  ·  Sistema MRP  ·  {APP_VERSION}")
         self.cell(self.usable * 0.3, 4, f"Página {self.page_no()} de {{nb}}", align="R")
 
     # --------------------------------------------------------------------------------------------- bloques

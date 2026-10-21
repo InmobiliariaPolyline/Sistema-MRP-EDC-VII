@@ -19,6 +19,7 @@ from utils import audit, money, pricing
 from utils.mail import mailto_url
 from utils.reports import order_pdf, order_whatsapp_text
 from utils.timeago import age_days
+from utils import clock
 
 SELECTED_KEY = "selected_order_id"
 LINES_KEY = "_order_lines"
@@ -70,7 +71,7 @@ def _days_late(row) -> int:
     if not expected or str(expected) in ("None", "nan", "NaT") or row.get("status") not in OPEN_STATUSES:
         return 0
     try:
-        return max((date.today() - date.fromisoformat(str(expected)[:10])).days, 0)
+        return max((clock.today() - date.fromisoformat(str(expected)[:10])).days, 0)
     except ValueError:
         return 0
 
@@ -104,7 +105,7 @@ def _terms_inputs(
     c1, c2, c3 = st.columns([2, 2, 2])
     picked = c1.date_input(
         "Fecha prometida de entrega (opcional)", value=default_date, key=f"{prefix}_date", format="DD/MM/YYYY",
-        min_value=date.today() if not default_date or default_date >= date.today() else None,
+        min_value=clock.today() if not default_date or default_date >= clock.today() else None,
         help="Cuándo prometió entregar el proveedor. Si pasa y la orden sigue abierta, se marca como atrasada.",
     )
     currencies = list(money.CURRENCIES)
@@ -155,7 +156,7 @@ def _totals_block(subtotal: float, terms: dict) -> None:
         st.caption("Sin IGV (operación exonerada o inafecta).")
     if cur != money.BASE:
         st.caption(f"Equivale a {money.fmt(amounts['total_base'], money.BASE)} al tipo de cambio {terms['exchange_rate']:g}.")
-    due = money.due_date(date.today(), terms.get("payment_terms"))
+    due = money.due_date(clock.today(), terms.get("payment_terms"))
     if terms.get("payment_terms"):
         st.caption(f"Condición de pago: {terms['payment_terms']}" + (f" · pago pactado hasta el {due:%d/%m/%Y} si se emite hoy." if due else "."))
 
@@ -706,7 +707,7 @@ def _render_list() -> None:
         with st.container(border=True):
             c1, c2, c3, c4, c5 = st.columns([4, 3, 2, 1.6, 1])
             with c1:
-                date = str(row["created_at"])[:10]
+                date = clock.local(row["created_at"], False)
                 n = int(row["items_count"])
                 sub = f"{row['code']} · {date} · {n} línea{'s' if n != 1 else ''}"
                 st.markdown(ui.row_name_sub(ui.avatar(row["supplier_name"]), row["supplier_name"], sub), unsafe_allow_html=True)
@@ -757,7 +758,8 @@ def _sent_text(value) -> str:
     text = str(value or "")
     if not text or text in ("None", "nan", "NaT"):
         return ""
-    return f"{text[8:10]}/{text[5:7]}/{text[:4]} {text[11:16]}".strip()
+    local = clock.local(text)
+    return f"{local[8:10]}/{local[5:7]}/{local[:4]} {local[11:16]}".strip()
 
 
 def _change_status(order_id: str, code: str, status: str) -> None:
@@ -881,7 +883,7 @@ def _render_receipts(order_id: str) -> None:
         return
     with st.expander(f":material/receipt_long: Recepciones registradas ({len(receipts)})"):
         for r in receipts.to_dict("records"):
-            when = str(r["received_at"])[:16].replace("T", " ")
+            when = clock.local(r["received_at"])
             pills = ui.pill(r["document_ref"], "blue") if r.get("document_ref") else ui.pill("sin documento", "gray")
             st.markdown(f"**{when}** · registró {r.get('actor') or 'sistema'} &nbsp; {pills}", unsafe_allow_html=True)
             detail = " · ".join(x for x in [r.get("delivered_by") and f"entregó {r['delivered_by']}", r.get("notes") and f"observaciones: {r['notes']}"] if x)
@@ -910,7 +912,7 @@ def _render_detail(order_id: str) -> None:
         [
             ui.stat_card("🏭", order["supplier_name"], "Proveedor"),
             ui.stat_card("🏗️", order["site_name"] or "—", "Obra destino"),
-            ui.stat_card("📅", str(order["created_at"])[:10], "Fecha"),
+            ui.stat_card("📅", clock.local(order["created_at"], False), "Fecha"),
             ui.stat_card("💰", money.fmt(order["total"], order.get("currency")), "Importe total (con IGV)" if float(order.get("tax_rate") or 0) else "Importe total"),
         ]
     )

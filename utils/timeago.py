@@ -1,17 +1,18 @@
 """Formato relativo de fechas ("hace 5 min", "hace 2 h", "hace 3 d")."""
 from __future__ import annotations
 
-from datetime import datetime
+
+from utils import clock
 
 
 def time_ago(value: str | None) -> str:
     if not value:
         return ""
     try:
-        text = value.replace("Z", "+00:00")
-        dt = datetime.fromisoformat(text)
-        now = datetime.now(dt.tzinfo) if dt.tzinfo else datetime.now()
-        seconds = max((now - dt).total_seconds(), 0)
+        dt = clock.parse(value)
+        if dt is None:
+            return ""
+        seconds = max((clock.now() - dt).total_seconds(), 0)
     except (ValueError, TypeError):
         return ""
 
@@ -35,8 +36,9 @@ def age_days(value: str | None) -> int:
     if not value:
         return 0
     try:
-        dt = datetime.fromisoformat(str(value).replace("Z", "+00:00"))
-        now = datetime.now(dt.tzinfo) if dt.tzinfo else datetime.now()
-        return max((now - dt).days, 0)
+        dt = clock.parse(value)
+        if dt is None:
+            return 0
+        return max((clock.now() - dt).days, 0)
     except (ValueError, TypeError):
         return 0

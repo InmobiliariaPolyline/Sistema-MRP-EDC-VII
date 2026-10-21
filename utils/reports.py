@@ -4,7 +4,7 @@ Todos los PDF usan `utils/pdf_style.BrandPDF` (fuente Inter, colores de la app, 
 from __future__ import annotations
 
 import io
-from datetime import datetime
+
 
 import pandas as pd
 
@@ -12,6 +12,7 @@ from utils import money
 from utils.pdf_style import BrandPDF
 from utils.pdf_style import MUTED as MUTED_TEXT
 from utils.pdf_style import PAPER as PAPER_COLOR
+from utils import clock
 
 
 def _cell_text(value) -> str:
@@ -33,6 +34,7 @@ def _date(value, with_time: bool = False) -> str:
     text = str(value or "")
     if len(text) < 10 or text in ("None", "nan", "NaT"):
         return ""
+    text = clock.local(text)
     out = f"{text[8:10]}/{text[5:7]}/{text[:4]}"
     return f"{out} {text[11:16]}" if with_time and len(text) >= 16 else out
 
@@ -66,7 +68,7 @@ def to_pdf(title: str, sections: dict[str, pd.DataFrame]) -> bytes:
     pdf.add_page()
     pdf.cover(
         "Reporte del sistema", title,
-        [("Generado", f"{datetime.now():%d/%m/%Y %H:%M}"), ("Contenido", f"{len(sections)} conjunto(s) · {total_rows:,} registro(s)")], icon="chart",
+        [("Generado", f"{clock.now():%d/%m/%Y %H:%M}"), ("Contenido", f"{len(sections)} conjunto(s) · {total_rows:,} registro(s)")], icon="chart",
     )
     for heading, df in sections.items():
         pdf.section(heading, "list", f"{len(df):,}")
@@ -224,7 +226,7 @@ def dispatch_pdf(voucher: dict, lines: pd.DataFrame) -> bytes:
 
 def dispatch_text(voucher: dict, lines: pd.DataFrame) -> str:
     """Texto del vale de salida para el cuerpo de un correo o mensaje."""
-    out = [f"Vale de salida {voucher['code']} · {str(voucher['created_at'])[:10]}", f"Obra: {voucher.get('site_name')}"]
+    out = [f"Vale de salida {voucher['code']} · {clock.local(voucher['created_at'], False)}", f"Obra: {voucher.get('site_name')}"]
     if voucher.get("stage"):
         out.append(f"Etapa: {voucher['stage']}")
     if voucher.get("requested_by"):
@@ -247,7 +249,7 @@ def site_report_pdf(site: dict, prog: dict, materials: pd.DataFrame, stages: lis
     pdf.add_page()
     pdf.cover(
         "Reporte de obra", site["name"],
-        [("Dirección", str(site.get("address") or "Sin dirección registrada")), ("Generado", f"{datetime.now():%d/%m/%Y %H:%M}")],
+        [("Dirección", str(site.get("address") or "Sin dirección registrada")), ("Generado", f"{clock.now():%d/%m/%Y %H:%M}")],
         (f"{workers} trabajador(es)", "gray"), icon="building",
     )
     planned, ordered = float(prog.get("planned") or 0), float(prog.get("ordered") or 0)

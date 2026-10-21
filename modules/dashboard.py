@@ -2,7 +2,7 @@
 estadísticas, analítica de compras, avance por obra, asistencia, actividad
 reciente y mapa de obras."""
 import html
-from datetime import date, datetime, timedelta, timezone
+from datetime import datetime, timedelta
 
 import pandas as pd
 import plotly.graph_objects as go
@@ -11,6 +11,7 @@ import streamlit as st
 from db import repository as repo
 from modules import obras, ordenes, ui
 from utils.timeago import time_ago
+from utils import clock
 
 MESES = [
     "enero", "febrero", "marzo", "abril", "mayo", "junio",
@@ -24,7 +25,7 @@ CONFIG = {"displayModeBar": False}
 
 
 def _now() -> datetime:
-    return datetime.now(timezone(timedelta(hours=-5)))
+    return clock.now()
 
 
 def _saludo() -> str:
@@ -330,7 +331,7 @@ def _site_progress_chart() -> None:
 
 
 def _attendance_chart() -> None:
-    today = date.today()
+    today = clock.today()
     records = repo.list_attendance((today - timedelta(days=13)).isoformat(), today.isoformat())
     if records.empty:
         _empty_chart("Aún no hay asistencia registrada en los últimos 14 días.")

@@ -12,6 +12,7 @@ from __future__ import annotations
 from datetime import date, datetime
 
 import pandas as pd
+from utils import clock
 
 WEIGHT_TIME, WEIGHT_QTY = 0.6, 0.4
 PARTIAL_GRACE_DAYS = 30
@@ -48,7 +49,7 @@ def label(score: float | None) -> str:
 
 def rate_suppliers(orders: pd.DataFrame, items: pd.DataFrame, receipts: pd.DataFrame, today: date | None = None) -> pd.DataFrame:
     """Una fila por proveedor con órdenes (sin contar las canceladas). Ver el docstring del módulo."""
-    today = today or date.today()
+    today = today or clock.today()
     if orders is None or orders.empty:
         return pd.DataFrame(columns=COLUMNS)
     last_receipt: dict[str, date] = {}

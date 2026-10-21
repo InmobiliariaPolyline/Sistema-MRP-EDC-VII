@@ -3,6 +3,8 @@ from __future__ import annotations
 
 from datetime import datetime
 
+from utils import clock
+
 DEFAULT_MAX_AGE_DAYS = 90
 
 
@@ -10,11 +12,12 @@ def price_age_days(updated_at, now: datetime | None = None) -> int | None:
     """Días desde que se actualizó el precio, o None si no se sabe (precio cargado antes de llevar fecha)."""
     if updated_at is None or str(updated_at) in ("", "None", "nan", "NaT"):
         return None
-    try:
-        moment = datetime.fromisoformat(str(updated_at).replace("Z", "+00:00"))
-    except ValueError:
+    moment = clock.parse(updated_at)
+    if moment is None:
         return None
-    current = now or (datetime.now(moment.tzinfo) if moment.tzinfo else datetime.now())
+    current = now or clock.now()
+    if current.tzinfo is None:       # quien pasa una hora sin zona la compara tal cual con la fecha guardada
+        moment = moment.replace(tzinfo=None)
     return max((current - moment).days, 0)
 
 

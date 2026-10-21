@@ -15,6 +15,7 @@ from utils import kardex
 from utils.mail import mailto_url
 from utils.reports import dispatch_pdf, dispatch_text, to_excel, to_pdf
 from utils.timeago import time_ago
+from utils import clock
 
 ENTRY = "Entrada (ajuste / compra directa)"
 LOSS = "Merma o salida sin obra (préstamo, pérdida…)"
@@ -229,7 +230,7 @@ def dispatch_dialog(default_site_id: str | None = None) -> None:
 def voucher_dialog(voucher: dict) -> None:
     lines = repo.list_dispatch_lines(voucher["id"])
     st.markdown(f"**{voucher['code']}** · {voucher['site_name']}")
-    st.caption(f"{str(voucher['created_at'])[:16].replace('T', ' ')} · registrado por {voucher.get('actor') or 'sistema'}")
+    st.caption(f"{clock.local(voucher['created_at'])} · registrado por {voucher.get('actor') or 'sistema'}")
     st.write(f"**Solicitado por:** {voucher.get('requested_by') or 'sin indicar'}")
     if voucher.get("stage"):
         st.write(f"**Etapa de la obra:** {voucher['stage']}")
@@ -489,7 +490,7 @@ def count_dialog() -> None:
 def count_detail_dialog(count: dict) -> None:
     lines = repo.list_count_lines(count["id"])
     st.markdown(f"**{count['code']}**")
-    st.caption(f"{str(count['created_at'])[:16].replace('T', ' ')} · registrado por {count.get('actor') or 'sistema'}")
+    st.caption(f"{clock.local(count['created_at'])} · registrado por {count.get('actor') or 'sistema'}")
     if count.get("note"):
         st.write(f"**Nota:** {count['note']}")
     st.dataframe(
@@ -644,7 +645,7 @@ def _render_vouchers() -> None:
         with st.container(border=True):
             c1, c2, c3 = st.columns([5, 3, 1.6])
             with c1:
-                sub = f"{row['code']} · {str(row['created_at'])[:16].replace('T', ' ')} · {int(row['lines_count'])} material(es)"
+                sub = f"{row['code']} · {clock.local(row['created_at'])} · {int(row['lines_count'])} material(es)"
                 st.markdown(ui.row_name_sub(ui.avatar(row["site_name"]), row["site_name"], sub), unsafe_allow_html=True)
             with c2:
                 who = row.get("requested_by") or "sin solicitante"
@@ -695,7 +696,7 @@ def _render_counts() -> None:
         with st.container(border=True):
             c1, c2, c3 = st.columns([5, 3, 1.6])
             with c1:
-                sub = f"{str(row['created_at'])[:16].replace('T', ' ')} · {int(row['lines_count'])} contado(s)"
+                sub = f"{clock.local(row['created_at'])} · {int(row['lines_count'])} contado(s)"
                 st.markdown(ui.row_name_sub(ui.avatar(row["code"]), row["code"], sub), unsafe_allow_html=True)
             with c2:
                 adjusted = int(row["adjusted_count"])

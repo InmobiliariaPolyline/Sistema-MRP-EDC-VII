@@ -11,9 +11,10 @@ from __future__ import annotations
 import io
 import json
 import zipfile
-from datetime import datetime
+
 
 import pandas as pd
+from utils import clock
 
 try:  # cifrado AES opcional
     import pyzipper
@@ -26,7 +27,7 @@ MANIFEST = "manifest.json"
 def to_zip(tables: dict[str, pd.DataFrame], password: str | None = None, app_version: str = "") -> bytes:
     """ZIP con un CSV por tabla y el manifiesto. Con `password`, cifrado AES-256."""
     manifest = {
-        "generated_at": datetime.now().isoformat(timespec="seconds"),
+        "generated_at": clock.now().isoformat(timespec="seconds"),
         "app_version": app_version,
         "encrypted": bool(password),
         "tables": {name: int(len(df)) for name, df in tables.items()},

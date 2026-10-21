@@ -6,6 +6,7 @@ import streamlit as st
 
 from db import repository as repo
 from modules import ui
+from utils import clock
 from utils.timeago import time_ago
 
 
@@ -50,7 +51,7 @@ def render() -> None:
         changes = entry.get("changes") or []
         row = ui.activity_item(
             html.escape(entry["summary"]),
-            f"{stamp[:16].replace('T', ' ')} · {time_ago(stamp.replace(' ', 'T'))}",
+            f"{clock.local(stamp)} · {time_ago(stamp)}",
             html.escape(entry["actor"]),
         )
         st.markdown('<div class="mrp-panel">' + row + "</div>", unsafe_allow_html=True)

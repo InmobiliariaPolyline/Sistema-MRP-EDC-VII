@@ -1,6 +1,6 @@
 """Módulo de Reportes: elige qué datos incluir y descárgalos en Excel (una
 hoja por conjunto de datos) o en PDF (una tabla por conjunto de datos)."""
-from datetime import date, datetime, timedelta
+from datetime import timedelta
 
 import pandas as pd
 import streamlit as st
@@ -10,6 +10,7 @@ from modules import forms, inventario, ui
 from modules.ordenes import STATUSES
 from modules.proveedores import supplier_ratings
 from utils.reports import to_excel, to_pdf
+from utils import clock
 
 
 def _pick(df: pd.DataFrame, mapping: dict[str, str]) -> pd.DataFrame:
@@ -75,7 +76,7 @@ def _orders() -> pd.DataFrame:
             "total": "Importe total",
         },
     )
-    df["Fecha"] = df["Fecha"].map(lambda v: str(v)[:10] if v is not None and v == v else "")
+    df["Fecha"] = df["Fecha"].map(lambda v: clock.local(v, False) if v is not None and v == v else "")
     df["Entrega prometida"] = df["Entrega prometida"].map(lambda v: str(v)[:10] if v is not None and v == v else "")
     df["Estado"] = df["Estado"].map(lambda v: STATUSES.get(v, (v,))[0] if v is not None else "")
     df["Condición de pago"] = df["Condición de pago"].map(lambda v: v if isinstance(v, str) else "")
@@ -112,7 +113,7 @@ def _movements() -> pd.DataFrame:
             "site_name": "Obra", "stage": "Etapa", "voucher_code": "Vale", "order_code": "Orden", "count_code": "Conteo", "actor": "Registró", "note": "Nota",
         },
     )
-    df["Fecha"] = df["Fecha"].map(lambda v: str(v)[:16].replace("T", " ") if v is not None and v == v else "")
+    df["Fecha"] = df["Fecha"].map(lambda v: clock.local(v) if v is not None and v == v else "")
     df["Motivo"] = df["Motivo"].map(lambda v: inventario.TYPE_LABELS.get(v, (v or "",))[0] if v == v else "")
     return df
 
@@ -122,7 +123,7 @@ def _vouchers() -> pd.DataFrame:
         repo.list_dispatches(limit=5000),
         {"code": "Vale", "created_at": "Fecha", "site_name": "Obra", "stage": "Etapa", "requested_by": "Solicitó", "actor": "Registró", "lines_count": "Materiales", "note": "Nota"},
     )
-    df["Fecha"] = df["Fecha"].map(lambda v: str(v)[:16].replace("T", " ") if v is not None and v == v else "")
+    df["Fecha"] = df["Fecha"].map(lambda v: clock.local(v) if v is not None and v == v else "")
     return df
 
 
@@ -133,7 +134,7 @@ def _voucher_lines() -> pd.DataFrame:
         moves,
         {"voucher_code": "Vale", "created_at": "Fecha", "site_name": "Obra", "stage": "Etapa", "material_name": "Material", "unit": "Unidad", "quantity": "Cantidad", "requested_by": "Solicitó"},
     )
-    df["Fecha"] = df["Fecha"].map(lambda v: str(v)[:16].replace("T", " ") if v is not None and v == v else "")
+    df["Fecha"] = df["Fecha"].map(lambda v: clock.local(v) if v is not None and v == v else "")
     return df.sort_values(["Vale", "Material"]).reset_index(drop=True) if not df.empty else df
 
 
@@ -142,7 +143,7 @@ def _price_history() -> pd.DataFrame:
         repo.list_price_history(limit=5000),
         {"recorded_at": "Fecha", "supplier_name": "Proveedor", "material_name": "Material", "price": "Precio", "source": "Origen"},
     )
-    df["Fecha"] = df["Fecha"].map(lambda v: str(v)[:16].replace("T", " ") if v is not None and v == v else "")
+    df["Fecha"] = df["Fecha"].map(lambda v: clock.local(v) if v is not None and v == v else "")
     return df
 
 
@@ -168,7 +169,7 @@ def _counts() -> pd.DataFrame:
         repo.list_inventory_counts(limit=1000),
         {"code": "Conteo", "created_at": "Fecha", "actor": "Registró", "lines_count": "Materiales contados", "adjusted_count": "Con ajuste", "note": "Nota"},
     )
-    df["Fecha"] = df["Fecha"].map(lambda v: str(v)[:16].replace("T", " ") if v is not None and v == v else "")
+    df["Fecha"] = df["Fecha"].map(lambda v: clock.local(v) if v is not None and v == v else "")
     return df
 
 
@@ -181,7 +182,7 @@ def _receipts() -> pd.DataFrame:
         receipts,
         {"received_at": "Fecha", "order_code": "Orden", "document_ref": "Guía o factura", "delivered_by": "Entregó", "notes": "Observaciones", "actor": "Registró"},
     )
-    df["Fecha"] = df["Fecha"].map(lambda v: str(v)[:16].replace("T", " ") if v is not None and v == v else "")
+    df["Fecha"] = df["Fecha"].map(lambda v: clock.local(v) if v is not None and v == v else "")
     return df
 
 
@@ -197,12 +198,12 @@ def _ratings() -> pd.DataFrame:
 
 def _audit() -> pd.DataFrame:
     df = _pick(repo.list_audit(limit=3000), {"created_at": "Fecha", "actor": "Usuario", "summary": "Acción"})
-    df["Fecha"] = df["Fecha"].map(lambda v: str(v)[:16].replace("T", " ") if v is not None and v == v else "")
+    df["Fecha"] = df["Fecha"].map(lambda v: clock.local(v) if v is not None and v == v else "")
     return df
 
 
 def _attendance() -> pd.DataFrame:
-    today = date.today()
+    today = clock.today()
     return _pick(
         repo.list_attendance((today - timedelta(days=90)).isoformat(), today.isoformat()),
         {"work_date": "Fecha", "worker_name": "Trabajador", "site_name": "Obra", "status": "Estado", "note": "Nota"},
@@ -294,7 +295,7 @@ def render() -> None:
         excel = _excel_file(frames)
         pdf = _pdf_file(frames)
 
-    stamp = f"{datetime.now():%Y%m%d_%H%M}"
+    stamp = f"{clock.now():%Y%m%d_%H%M}"
     c1, c2, _ = st.columns([2, 2, 3])
     c1.download_button(
         ":material/download: Descargar Excel",

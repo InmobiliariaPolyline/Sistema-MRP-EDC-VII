@@ -4,6 +4,7 @@ from __future__ import annotations
 from typing import Callable
 
 import pandas as pd
+from utils import clock
 
 def _text(value) -> str:
     """Texto de un dato opcional: vacío si falta (None o NaN)."""
@@ -29,7 +30,7 @@ def build(movements: pd.DataFrame, type_label: Callable[[str | None, str], str] 
         detail = " · ".join(_text(move.get(k)) for k in ("site_name", "stage", "requested_by", "note") if _text(move.get(k)))
         rows.append(
             {
-                "Fecha": str(move["created_at"])[:16].replace("T", " "),
+                "Fecha": clock.local(move["created_at"]),
                 "Tipo": label(move.get("movement_type") if _text(move.get("movement_type")) else None, move["kind"]),
                 "Documento": document,
                 "Detalle": detail,
