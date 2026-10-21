@@ -199,5 +199,41 @@ class VisualPiecesTests(unittest.TestCase):
         self.assertTrue(reports.order_pdf(order, items).startswith(b"%PDF"))
 
 
+class StampTests(unittest.TestCase):
+    def _pdf(self):
+        pdf = BrandPDF("Doc", "D-1")
+        pdf.add_page()
+        return pdf
+
+    def test_rect_stamp_reports_its_size_and_can_be_centered(self):
+        pdf = self._pdf()
+        w, h = pdf.stamp("Recibida parcial", center=(100, 100), sub="OC-1 · 21/10/2026", size=12)
+        self.assertEqual((w, h), pdf.stamp_size("Recibida parcial", 12, "OC-1 · 21/10/2026"))
+        self.assertGreater(w, 40)
+        w2, h2 = pdf.stamp("Ok", 20, 20)
+        self.assertLess(w2, w)
+        pdf.set_xy(33, 44)
+        pdf.stamp("Cancelada", 20, 150, tone="bad", icon="x")
+        self.assertEqual((round(pdf.get_x()), round(pdf.get_y())), (33, 44))
+
+    def test_round_seal_fits_any_word_and_keeps_the_cursor(self):
+        pdf = self._pdf()
+        pdf.set_xy(12, 34)
+        for word in ("Ok", "Entregado", "Recibido parcialmente por el almacén"):
+            pdf.seal(word, 60, 100, r=15, sub="21/10/2026")
+        self.assertEqual((round(pdf.get_x()), round(pdf.get_y())), (12, 34))
+
+    def test_signatures_with_seal_reserve_room_and_stay_on_one_page(self):
+        pdf = self._pdf()
+        pdf.set_y(pdf.h - 60)     # poco sitio: con sello no cabe y pasa a la página siguiente entero
+        pdf.signatures([("Entrega", "Luis"), ("Recibe", "Juan")], seal={"text": "Entregado", "tone": "teal", "r": 15})
+        self.assertEqual(pdf.page_no(), 2)
+        pdf2 = self._pdf()
+        pdf2.set_y(60)
+        pdf2.signatures([("Entrega", "Luis"), ("Recibe", "Juan")], seal={"text": "Entregado", "tone": "teal", "r": 15, "sub": "hoy"})
+        self.assertEqual(pdf2.page_no(), 1)
+        self.assertTrue(bytes(pdf2.output()).startswith(b"%PDF"))
+
+
 if __name__ == "__main__":
     unittest.main()

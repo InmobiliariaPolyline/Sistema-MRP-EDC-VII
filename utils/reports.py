@@ -199,7 +199,9 @@ def order_pdf(order: dict, items: pd.DataFrame, supplier: dict | None = None, co
         detail.append(("IGV", "Exonerado / inafecto"))
     stamp_y = pdf.get_y()
     pdf.totals(detail, ("Importe total", f"{sym} {amounts['total']:,.2f}"))
-    pdf.stamp(status_text, pdf.l_margin + 6, stamp_y + 6, status_tone if status_tone != "gray" else "accent")
+    free = pdf.usable - 78      # el sello va centrado en el hueco que deja el cuadro de totales
+    pdf.stamp(status_text, tone=status_tone if status_tone != "gray" else "accent", center=(pdf.l_margin + free / 2 - 2, stamp_y + 13),
+              size=11.5, sub=f"{order['code']} · {_date(order['created_at'])}", icon="x" if status == "cancelada" else "check")
     if currency != money.BASE and float(order.get("exchange_rate") or 0) > 0:
         pdf.font(8, color=MUTED_TEXT)
         pdf.set_x(pdf.l_margin)
@@ -266,10 +268,11 @@ def dispatch_pdf(voucher: dict, lines: pd.DataFrame) -> bytes:
     pdf.font(7, color=MUTED_TEXT)
     pdf.set_x(pdf.l_margin)
     pdf.cell(0, 4, "Quien recibe marca cada casilla al verificar el material.", align="R", new_x="LMARGIN", new_y="NEXT")
-    pdf.stamp("Entregado", pdf.l_margin + 6, pdf.get_y() + 1, "teal")
-    pdf.ln(21)
     pdf.note_box("Nota del vale", voucher.get("note"), icon="note", tone="info")
-    pdf.signatures([("Entrega (almacén)", voucher.get("actor")), ("Recibe", voucher.get("requested_by")), ("V.° B.° de obra", None)])
+    pdf.signatures(
+        [("Entrega (almacén)", voucher.get("actor")), ("Recibe", voucher.get("requested_by")), ("V.° B.° de obra", None)],
+        seal={"text": "Entregado", "tone": "teal", "r": 15, "sub": _date(voucher["created_at"])},
+    )
     pdf.font(7.2, color=MUTED_TEXT)
     pdf.set_x(pdf.l_margin)
     pdf.cell(0, 4, "Con su firma, quien recibe confirma haber verificado la cantidad y el estado del material.", align="C")
@@ -319,7 +322,7 @@ def site_report_pdf(site: dict, prog: dict, materials: pd.DataFrame, stages: lis
             {"label": "Recibido", "value": f"S/ {received:,.0f}", "sub": "en almacén", "icon": "box", "tone": "teal"},
             {"label": "Despachado", "value": f"S/ {dispatched:,.0f}", "sub": "valorizado", "icon": "truck", "tone": "good"},
             {"label": "Saldo", "value": f"S/ {planned - ordered:,.0f}", "sub": "presupuesto − pedido", "icon": "scale", "tone": "warn" if planned - ordered < 0 else "accent"},
-            {"label": "Avance", "value": f"{consumed * 100:.0f} %" if consumed is not None else "—", "sub": f"{over} material(es) sobre lo presupuestado" if over else "dentro de lo previsto", "icon": "chart", "fraction": consumed or 0, "tone": "warn" if over else "accent"},
+            {"label": "Avance", "value": f"{consumed * 100:.0f} %" if consumed is not None else "—", "sub": f"{over} sobre lo presupuestado" if over else "dentro de lo previsto", "icon": "chart", "fraction": consumed or 0, "tone": "warn" if over else "accent"},
         ]
     )
 

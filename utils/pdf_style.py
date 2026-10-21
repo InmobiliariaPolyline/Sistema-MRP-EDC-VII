@@ -196,22 +196,85 @@ class BrandPDF(FPDF):
             cursor += narrow
         return cursor - x
 
-    def stamp(self, text: str, x: float, y: float, tone: str = "accent", angle: float = -11, size: float = 15, opacity: float = 0.22) -> None:
-        """Sello inclinado (tipo «ENTREGADO», «RECIBIDA»): borde doble y letras grandes, translúcido para no tapar el texto."""
+    def stamp_size(self, text: str, size: float = 14, sub: str | None = None) -> tuple[float, float]:
+        """Ancho y alto (mm) que ocupa un sello rectangular, para poder centrarlo o dejarle sitio."""
+        self.font(size, bold=True)
+        icon = size * 0.62
+        return self.get_string_width(_safe(text).upper()) + icon + 13, size * 0.5 + (4.6 if sub else 0) + 6.5
+
+    def stamp(
+        self, text: str, x: float | None = None, y: float | None = None, tone: str = "accent", angle: float = -9, size: float = 14, opacity: float = 0.62,
+        sub: str | None = None, icon: str = "check", center: tuple[float, float] | None = None,
+    ) -> tuple[float, float]:
+        """Sello de tinta rectangular: doble borde, icono, la palabra grande y, debajo, una línea chica (fecha o código).
+        Va inclinado y translúcido para que no tape lo que hay debajo. Con `center` se centra en ese punto (en vez de usar x, y).
+        Devuelve su ancho y alto sin inclinar."""
         fg, _ = self.tone(tone)
         keep_x, keep_y = self.get_x(), self.get_y()
-        self.font(size, bold=True, color=fg)
         text = _safe(text).upper()
-        w, h = self.get_string_width(text) + 10, size * 0.62 + 5
+        w, h = self.stamp_size(text, size, sub)
+        if center is not None:
+            x, y = center[0] - w / 2, center[1] - h / 2
+        x, y = x or 0.0, y or 0.0
+        ic = size * 0.62
         with self.rotation(angle, x + w / 2, y + h / 2):
             with self._alpha(opacity):
                 self.set_draw_color(*fg)
-                self.set_line_width(0.9)
-                self.rect(x, y, w, h, style="D", round_corners=True, corner_radius=2)
+                self.set_line_width(1.0)
+                self.rect(x, y, w, h, style="D", round_corners=True, corner_radius=2.4)
                 self.set_line_width(0.3)
-                self.rect(x + 1.3, y + 1.3, w - 2.6, h - 2.6, style="D", round_corners=True, corner_radius=1.4)
-                self.set_xy(x, y)
-                self.cell(w, h, text, align="C")
+                self.rect(x + 1.5, y + 1.5, w - 3, h - 3, style="D", round_corners=True, corner_radius=1.5)
+                # icono en un círculo, a la izquierda
+                icon_y = y + (h - ic) / 2 - (1.6 if sub else 0)
+                self.set_line_width(0.7)
+                self.circle(x + 5.2 + ic / 2, icon_y + ic / 2, ic / 2 + 0.9, style="D")
+                self.icon(icon, x + 5.2 + ic * 0.15, icon_y + ic * 0.15, ic * 0.7, fg, 2.6)
+                # palabra
+                self.font(size, bold=True, color=fg)
+                tx = x + 5.2 + ic + 3.6
+                self.set_xy(tx, y + (h - size * 0.5) / 2 - (2.3 if sub else 0.2))
+                self.cell(w - (tx - x) - 4, size * 0.5, text, align="C")
+                if sub:
+                    self.font(max(size * 0.45, 6), semi=True, color=fg)
+                    self.set_xy(tx, y + h - 4.8 - 1.5)
+                    self.cell(w - (tx - x) - 4, 3.6, self.fit(_safe(sub), w - (tx - x) - 5), align="C")
+        self.set_xy(keep_x, keep_y)
+        return w, h
+
+    def seal(self, text: str, cx: float, cy: float, r: float = 15.0, tone: str = "accent", angle: float = -12, sub: str | None = None, icon: str = "check", opacity: float = 0.6) -> None:
+        """Sello redondo de oficina (p. ej. el «ENTREGADO» del almacén sobre su firma): anillos, icono arriba, palabra en una banda
+        y una línea chica abajo. Centrado en (cx, cy)."""
+        fg, _ = self.tone(tone)
+        keep_x, keep_y = self.get_x(), self.get_y()
+        text = _safe(text).upper()
+        with self.rotation(angle, cx, cy):
+            with self._alpha(opacity):
+                self.set_draw_color(*fg)
+                self.set_line_width(1.0)
+                self.circle(cx, cy, r, style="D")
+                self.set_line_width(0.3)
+                self.circle(cx, cy, r - 1.5, style="D")
+                self.set_dash_pattern(dash=0.6, gap=1.0)
+                self.circle(cx, cy, r - 3.2, style="D")
+                self.set_dash_pattern()
+                self.icon(icon, cx - r * 0.2, cy - r * 0.78, r * 0.4, fg, 2.7)
+                # banda central con la palabra: más opaca que los anillos para que se lea bien
+                size = 11.0
+                self.font(size, bold=True, color=WHITE)
+                while size > 6 and self.get_string_width(text) > r * 2 - 11:   # la palabra más grande que quepa en la banda
+                    size -= 0.5
+                    self.font(size, bold=True, color=WHITE)
+                band_w = min(self.get_string_width(text) + 6, r * 2 - 4)
+                with self._alpha(min(opacity + 0.3, 0.95)):
+                    self.set_fill_color(*fg)
+                    self.rect(cx - band_w / 2, cy - 3.2, band_w, 6.4, style="F", round_corners=True, corner_radius=1.2)
+                    self.font(size, bold=True, color=WHITE)
+                    self.set_xy(cx - band_w / 2, cy - 3.2)
+                    self.cell(band_w, 6.4, text, align="C")
+                if sub:
+                    self.font(6.4, semi=True, color=fg)
+                    self.set_xy(cx - r, cy + 4.6)
+                    self.cell(r * 2, 3.2, self.fit(_safe(sub), r * 2 - 8), align="C")
         self.set_xy(keep_x, keep_y)
 
     def hazard(self, x: float, y: float, w: float, h: float, a: tuple[int, int, int], b: tuple[int, int, int], step: float = 5.0) -> None:
@@ -672,11 +735,13 @@ class BrandPDF(FPDF):
             self.cell(self.usable - 16, 4.4, line)
         self.set_y(y + h + 3)
 
-    def signatures(self, labels: list[tuple[str, str | None]]) -> None:
-        """Líneas de firma: cada una con su rol y, opcionalmente, el nombre de quien firma."""
-        if self.get_y() + 26 > self.h - 18:   # el bloque (4 de aire + 22 de firmas) tiene que caber entero
+    def signatures(self, labels: list[tuple[str, str | None]], seal: dict | None = None) -> None:
+        """Líneas de firma: cada una con su rol y, opcionalmente, el nombre de quien firma. `seal` (argumentos de `seal()`) estampa
+        un sello redondo sobre la primera firma, como el de un almacén."""
+        needed = 26 + (20 if seal else 0)
+        if self.get_y() + needed > self.h - 18:   # el bloque entero (aire, sello y firmas) tiene que caber
             self.add_page()
-        self.ln(4)
+        self.ln(4 + (20 if seal else 0))
         y = self.get_y()
         n = len(labels)
         gap = 10.0
@@ -693,6 +758,9 @@ class BrandPDF(FPDF):
                 self.font(7.5, color=MUTED)
                 self.set_xy(x, y + 16.4)
                 self.cell(w, 4, self.fit(name, w), align="C")
+        if seal:
+            first_w = w
+            self.seal(cx=self.l_margin + first_w / 2, cy=y - 4.5, **seal)
         self.set_y(y + 22)
 
     # --------------------------------------------------------------------------------------------- gráficos y visuales

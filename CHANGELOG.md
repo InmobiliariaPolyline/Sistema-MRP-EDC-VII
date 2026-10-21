@@ -6,6 +6,16 @@ Formato de cada parche: **Agregado** · **Corregido** · **Problemas y causa** �
 
 ---
 
+## Parche 066 — Sellos nuevos y mejor espaciado en los PDF · 2026-10-21
+
+**Qué cambió**
+- **Sello rectangular rediseñado:** doble borde, icono en un círculo (✓, o ✕ si la orden está cancelada), la palabra grande y debajo una línea chica con el código y la fecha. Va inclinado y más visible que antes, sin tapar lo de abajo. En la orden de compra se **centra en el hueco que deja el cuadro de totales** (antes quedaba pegado a la línea de la tabla).
+- **Sello redondo de almacén** en el vale de salida: anillos, icono arriba, «ENTREGADO» en una banda y la fecha abajo, **estampado sobre la firma de quien entrega** (como un sello real) en lugar de flotar entre la tabla y la nota.
+- **Espaciado:** más aire entre la tabla, la nota y las firmas del vale; el sello ya no toca el rótulo de la firma; el texto de la tarjeta «Avance» del reporte de obra se acortó para que no se corte.
+- Pruebas: tamaño y centrado del sello, que no mueva el cursor, que el sello redondo ajuste cualquier palabra y que las firmas con sello pasen enteras a la página siguiente cuando no caben.
+
+---
+
 ## Parche 065 — PDF: gráficos, seguimiento y valores en dos líneas · 2026-10-21
 
 **Qué cambió**
