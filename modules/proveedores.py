@@ -50,7 +50,7 @@ def render() -> None:
         "Gestión de proveedores",
         "Proveedores",
         "Pensado para contactar: llama o escribe por WhatsApp con un clic, y mira qué materiales tiene cada uno.",
-        action_label="＋ Nuevo proveedor",
+        action_label=":material/add: Nuevo proveedor",
         action_key="new_supplier_open",
     )
     if clicked:
@@ -159,9 +159,9 @@ def _supplier_dialog_form(supplier: dict | None) -> None:
     with st.form(f"supplier_form_{supplier['id'] if supplier else 'new'}"):
         values = _supplier_form(supplier)
         cancel_col, save_col = st.columns([1, 2])
-        save = save_col.form_submit_button("Guardar cambios" if supplier else "Guardar", type="primary", width="stretch")
-        cancel = cancel_col.form_submit_button("Cancelar", width="stretch")
-        preview = st.form_submit_button("Revisar datos", width="stretch", help="Revisa el contacto sin guardar.")
+        save = save_col.form_submit_button(":material/save: Guardar cambios" if supplier else "Guardar", type="primary", width="stretch")
+        cancel = cancel_col.form_submit_button(":material/close: Cancelar", width="stretch")
+        preview = st.form_submit_button(":material/fact_check: Revisar datos", width="stretch", help="Revisa el contacto sin guardar.")
     if cancel:
         st.rerun()
     if preview:
@@ -204,7 +204,7 @@ def _render_cards() -> None:
     ])
     query = st.text_input("Buscar", placeholder="Buscar por nombre, contacto, teléfono o correo…", key="sup_q", max_chars=120)
     if query.strip():
-        st.button("Limpiar búsqueda", key="sup_reset", on_click=_reset_search)
+        st.button(":material/filter_alt_off: Limpiar búsqueda", key="sup_reset", on_click=_reset_search)
     df = ui.filter_df(df, query, ["name", "contact_name", "phone", "email"])
     ui.result_count(len(df), total, noun="proveedores")
     if df.empty:
@@ -332,7 +332,7 @@ def _render_supplier_detail(supplier_id: str) -> None:
     supplier = match.to_dict("records")[0]
 
     b1, b2, b3, _ = st.columns([1.5, 1.5, 2.6, 3.4])
-    if b1.button("← Volver"):
+    if b1.button(":material/arrow_back: Volver"):
         st.session_state[SELECTED_KEY] = None
         st.rerun()
     if b2.button(":material/edit: Editar"):
@@ -392,7 +392,7 @@ def _render_supplier_detail(supplier_id: str) -> None:
     state = f2.selectbox("Estado del catálogo", CATALOG_STATES, key=f"cat_state_{supplier_id}")
     searching = bool(query.strip()) or state != ALL_CATALOG
     if searching:
-        st.button("Limpiar filtros", key=f"cat_reset_{supplier_id}", on_click=_reset_catalog_filters, args=(supplier_id,))
+        st.button(":material/filter_alt_off: Limpiar filtros", key=f"cat_reset_{supplier_id}", on_click=_reset_catalog_filters, args=(supplier_id,))
     if state == "Ofrecidos":
         catalog = catalog[catalog["offered"]]
     elif state == "Disponibles":

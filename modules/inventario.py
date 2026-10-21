@@ -183,7 +183,7 @@ def dispatch_dialog(default_site_id: str | None = None) -> None:
     elif info:
         st.caption(f"Presupuesto de la obra: {info['planned']:g} · ya despachado {info['sent']:g} · quedaría en {info['after']:g}.")
 
-    if st.button("＋ Agregar al vale", width="stretch", key="dispatch_add"):
+    if st.button(":material/add: Agregar al vale", width="stretch", key="dispatch_add"):
         issues = forms.validate({"Cantidad": qty})
         if qty > remaining + 1e-9:
             issues.append(f"Cantidad: solo quedan {remaining:g} {material['unit'] or 'unid.'} disponibles para este vale.")
@@ -206,7 +206,7 @@ def dispatch_dialog(default_site_id: str | None = None) -> None:
             st.rerun(scope="fragment")
 
     cancel, save = st.columns([1, 2])
-    if cancel.button("Cancelar", key="dispatch_cancel", width="stretch"):
+    if cancel.button(":material/close: Cancelar", key="dispatch_cancel", width="stretch"):
         _clear_dispatch_draft()
         st.rerun()
     if save.button("Registrar despacho y generar vale", type="primary", width="stretch", disabled=not lines, key="dispatch_save"):
@@ -292,7 +292,7 @@ def movement_dialog() -> None:
     if outgoing and qty > available:
         st.warning(f"Reduce la cantidad: solo hay {available:g} {material['metric_label'] or 'unid.'} disponibles.")
     cancel, save = st.columns([1, 2])
-    if cancel.button("Cancelar", key="move_cancel", width="stretch"):
+    if cancel.button(":material/close: Cancelar", key="move_cancel", width="stretch"):
         _clear_movement_draft()
         st.rerun()
     if save.button("Guardar movimiento", type="primary", width="stretch"):
@@ -392,10 +392,10 @@ def return_dialog(default_site_id: str | None = None) -> None:
     st.caption(f"{len(chosen)} material(es) a devolver.")
 
     cancel, save = st.columns([1, 2])
-    if cancel.button("Cancelar", key="return_cancel", width="stretch"):
+    if cancel.button(":material/close: Cancelar", key="return_cancel", width="stretch"):
         _clear_return_draft()
         st.rerun()
-    if save.button("Registrar devolución", type="primary", width="stretch", disabled=not chosen or bool(over), key="return_save"):
+    if save.button(":material/task_alt: Registrar devolución", type="primary", width="stretch", disabled=not chosen or bool(over), key="return_save"):
         issues = forms.validate({"Nota (opcional)": note})
         if forms.errors(issues):
             return
@@ -467,9 +467,9 @@ def count_dialog() -> None:
     note = st.text_input("Nota del conteo (opcional)", placeholder="Ej. Conteo mensual de octubre", max_chars=500, key="count_note")
 
     cancel, save = st.columns([1, 2])
-    if cancel.button("Cancelar", key="count_cancel", width="stretch"):
+    if cancel.button(":material/close: Cancelar", key="count_cancel", width="stretch"):
         st.rerun()
-    if save.button("Guardar conteo y ajustar diferencias", type="primary", width="stretch", disabled=counted.empty, key="count_save"):
+    if save.button(":material/task_alt: Guardar conteo y ajustar diferencias", type="primary", width="stretch", disabled=counted.empty, key="count_save"):
         if forms.errors(forms.validate({"Nota del conteo (opcional)": note})):
             return
         lines = [
@@ -511,7 +511,7 @@ def render() -> None:
         "Almacén",
         "Inventario",
         "El material llega del proveedor al almacén y sale hacia las obras con un vale de despacho.",
-        action_label="＋ Despachar a obra",
+        action_label=":material/add: Despachar a obra",
         action_key="new_dispatch_open",
     ):
         _clear_dispatch_draft()
@@ -539,7 +539,7 @@ def render() -> None:
         ]
     )
 
-    tab_stock, tab_vouchers, tab_counts, tab_kardex, tab_moves = st.tabs(["Stock actual", "Vales de salida", "Conteos", "Kardex", "Movimientos"])
+    tab_stock, tab_vouchers, tab_counts, tab_kardex, tab_moves = st.tabs([":material/inventory_2: Stock actual", ":material/receipt_long: Vales de salida", ":material/calculate: Conteos", ":material/menu_book: Kardex", ":material/swap_vert: Movimientos"])
     with tab_stock:
         _render_stock(stock)
     with tab_vouchers:
@@ -573,9 +573,9 @@ def _min_stock_dialog() -> None:
         help="Deja 0 si no quieres alerta para este material.",
     )
     cancel, save = st.columns([1, 2])
-    if cancel.button("Cancelar", key="min_stock_cancel", width="stretch"):
+    if cancel.button(":material/close: Cancelar", key="min_stock_cancel", width="stretch"):
         st.rerun()
-    if save.button("Guardar mínimo", key="min_stock_save", type="primary", width="stretch"):
+    if save.button(":material/save: Guardar mínimo", key="min_stock_save", type="primary", width="stretch"):
         if forms.errors(forms.validate({"Stock mínimo (opcional)": value})):
             return
         try:
@@ -607,7 +607,7 @@ def _render_stock(stock: pd.DataFrame) -> None:
     stock = ui.filter_df(stock, query, ["material_name", "category"])
     ui.result_count(len(stock), total, noun="materiales")
     if query:
-        st.button("Limpiar búsqueda", key="stock_clear", on_click=_clear_stock_search)
+        st.button(":material/filter_alt_off: Limpiar búsqueda", key="stock_clear", on_click=_clear_stock_search)
     if stock.empty:
         ui.empty_state("Sin coincidencias", "Prueba otro nombre o limpia la búsqueda para ver todo el inventario.", icon="🔎")
         return
@@ -651,7 +651,7 @@ def _render_vouchers() -> None:
                 who = row.get("requested_by") or "sin solicitante"
                 st.markdown(ui.pill(who, "gray"), unsafe_allow_html=True)
             with c3:
-                if st.button("Ver / PDF", key=f"voucher_open_{row['id']}", width="stretch"):
+                if st.button(":material/visibility: Ver / PDF", key=f"voucher_open_{row['id']}", width="stretch"):
                     voucher_dialog(row)
 
 
@@ -702,7 +702,7 @@ def _render_counts() -> None:
                 adjusted = int(row["adjusted_count"])
                 st.markdown(ui.pill(f"{adjusted} ajuste(s)" if adjusted else "Sin diferencias", "amber" if adjusted else "green"), unsafe_allow_html=True)
             with c3:
-                if st.button("Ver detalle", key=f"count_open_{row['id']}", width="stretch"):
+                if st.button(":material/visibility: Ver detalle", key=f"count_open_{row['id']}", width="stretch"):
                     count_detail_dialog(row)
 
 

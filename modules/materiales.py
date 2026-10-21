@@ -22,7 +22,7 @@ def render() -> None:
         "Catálogo",
         "Materiales",
         "Categoría, densidad y métrica de cómputo de cada material.",
-        action_label="＋ Nuevo material",
+        action_label=":material/add: Nuevo material",
         action_key="new_material_open",
     )
     if clicked:
@@ -138,9 +138,9 @@ def _material_dialog_form(material: dict | None) -> None:
         values = _material_form(material)
         cancel_col, save_col = st.columns([1, 2])
         # Crear primero Guardar mantiene esa acción al enviar con Enter.
-        save = save_col.form_submit_button("Guardar cambios" if material else "Guardar", type="primary", width="stretch")
-        cancel = cancel_col.form_submit_button("Cancelar", width="stretch")
-        preview = st.form_submit_button("Revisar datos", width="stretch", help="Muestra un resumen sin guardar.")
+        save = save_col.form_submit_button(":material/save: Guardar cambios" if material else "Guardar", type="primary", width="stretch")
+        cancel = cancel_col.form_submit_button(":material/close: Cancelar", width="stretch")
+        preview = st.form_submit_button(":material/fact_check: Revisar datos", width="stretch", help="Muestra un resumen sin guardar.")
     if cancel:
         st.rerun()
     if preview:
@@ -214,7 +214,7 @@ def info_dialog(material_id: str) -> None:
         sites = repo.list_project_sites().set_index("id")["name"].to_dict()
         for b in budgets.to_dict("records"):
             st.write(f"• {sites.get(b['project_site_id'], 'Obra')}{' · ' + b['stage'] if b.get('stage') else ''}: {float(b['planned_qty']):g} previstos × {float(b['planned_unit_price']):,.2f}")
-    if st.button("Cerrar ficha", key=f"close_material_{material_id}", width="stretch"):
+    if st.button(":material/close: Cerrar ficha", key=f"close_material_{material_id}", width="stretch"):
         st.rerun()
 
 
@@ -267,7 +267,7 @@ def _render_table() -> None:
 
     searching = bool(query.strip()) or category_filter != ALL_CATEGORIES
     if searching:
-        st.button("Limpiar filtros", key="mat_reset", on_click=_reset_filters)
+        st.button(":material/filter_alt_off: Limpiar filtros", key="mat_reset", on_click=_reset_filters)
 
     if category_filter != ALL_CATEGORIES:
         df = df[df["category"] == category_filter]

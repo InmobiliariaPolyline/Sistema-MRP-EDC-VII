@@ -33,7 +33,7 @@ def render() -> None:
         st.session_state["audit_actor"] = actors[0]
         st.session_state["audit_only_changes"] = False
         st.session_state["audit_list_page"] = 1
-    c3.button("Limpiar", on_click=reset, width="stretch")
+    c3.button(":material/filter_alt_off: Limpiar", on_click=reset, width="stretch")
 
     if actor != actors[0]:
         log = log[log["actor"] == actor]

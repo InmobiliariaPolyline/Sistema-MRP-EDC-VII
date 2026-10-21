@@ -45,7 +45,7 @@ def render() -> None:
         "Asistencia",
         "Pasa lista cada día: quién vino, a qué obra fue y quién faltó.",
     )
-    tab_list, tab_summary = st.tabs(["Pasar lista", "Resumen"])
+    tab_list, tab_summary = st.tabs([":material/fact_check: Pasar lista", ":material/monitoring: Resumen"])
     with tab_list:
         ui.tip("Elige un estado y una obra en cada fila. «Marcar pendientes presentes» prepara el borrador; «Guardar asistencia» confirma los registros visibles.")
         _render_roll_call()
@@ -76,7 +76,7 @@ def _render_roll_call() -> None:
         workers = workers[workers["site_name"] == site_filter]
     ui.result_count(len(workers), total_workers, noun="trabajadores activos")
     if site_filter != ALL_WORKERS:
-        st.button("Mostrar todos", key="att_clear_filter", on_click=_clear_filter)
+        st.button(":material/visibility: Mostrar todos", key="att_clear_filter", on_click=_clear_filter)
     if workers.empty:
         ui.empty_state("No hay trabajadores en esta obra", "Prueba «Mostrar todos» o asigna trabajadores a esta obra desde su módulo.", icon="🔎")
         return

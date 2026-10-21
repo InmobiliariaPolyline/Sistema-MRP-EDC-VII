@@ -1,0 +1,88 @@
+/* =========================================================================
+   55 · NEXT GEN — encabezados con icono, números que suben, revelado al
+   desplazarse, estados de carga, acciones con color semántico y detalles
+   ========================================================================= */
+
+/* encabezado de página: icono en un azulejo con degradado */
+.mrp-ph { display: flex; align-items: flex-start; gap: 1rem; }
+.mrp-ph-text { min-width: 0; flex: 1; }
+.mrp-ph-ico {
+  position: relative; flex: 0 0 auto; width: 3.4rem; height: 3.4rem; display: grid; place-items: center; border-radius: 1.1rem; color: #fff; background: var(--mrp-grad);
+  box-shadow: 0 14px 30px -12px rgba(90, 63, 240, .75), inset 0 1px 0 rgba(255, 255, 255, .3); animation: mrpPop .6s var(--ease-spring) both; transition: transform var(--dur-base) var(--ease-spring);
+}
+.mrp-ph-ico::after { content: ""; position: absolute; inset: -5px; border-radius: 1.35rem; border: 1px solid color-mix(in srgb, var(--mrp-accent) 40%, transparent); animation: mrpBreathe 3.6s ease-in-out infinite; }
+.mrp-ph:hover .mrp-ph-ico { transform: rotate(-6deg) scale(1.06); }
+.mrp-ph .mrp-page-title { margin-bottom: .35rem; }
+@media (max-width: 640px) { .mrp-ph-ico { width: 2.7rem; height: 2.7rem; border-radius: .9rem; } .mrp-ph-ico .mrp-ico { width: 1.3rem; height: 1.3rem; } .mrp-ph { gap: .75rem; } }
+
+/* rótulo con icono */
+.mrp-eyebrow.has-ico::before { display: none; }
+.mrp-eyebrow .mrp-ico { flex: 0 0 auto; }
+
+/* número de sección de un formulario */
+.mrp-form-no { display: inline-grid; place-items: center; min-width: 1.35rem; height: 1.35rem; padding: 0 .3rem; border-radius: 50%; margin-right: .1rem; font-size: .68rem; font-weight: 800; letter-spacing: 0; color: #fff; background: var(--mrp-grad); box-shadow: 0 6px 14px -6px rgba(90, 63, 240, .8); animation: mrpPop .5s var(--ease-spring) both; }
+.mrp-form-section strong::before { display: none; }
+
+/* números que suben hasta su valor (CSS puro con @property) */
+@property --n { syntax: '<integer>'; initial-value: 0; inherits: false; }
+@keyframes mrpCountUp { from { --n: 0; } to { --n: var(--to); } }
+.mrp-count { animation: mrpCountUp 1.1s var(--ease-out) .25s both; counter-reset: n var(--n); }
+.mrp-count::after { content: counter(n); }
+
+/* mientras Streamlit recarga, lo anterior se atenúa con suavidad en vez de congelarse */
+[data-stale="true"] { opacity: .55; filter: saturate(.75); transition: opacity .3s ease, filter .3s ease; }
+[data-stale="false"], [data-stale] { transition: opacity .3s ease, filter .3s ease; }
+[data-testid="stStatusWidget"] { color: var(--mrp-accent); }
+[data-testid="stAppViewContainer"]::before {
+  content: ""; position: fixed; top: 0; left: 0; right: 0; z-index: 9999; height: 3px; transform: scaleX(0); transform-origin: left; pointer-events: none; opacity: 0;
+  background: linear-gradient(90deg, var(--mrp-accent-2), var(--mrp-accent), var(--mrp-accent-2)); background-size: 200% 100%;
+}
+[data-testid="stApp"]:has([data-testid="stStatusWidget"]) [data-testid="stAppViewContainer"]::before { opacity: 1; animation: mrpTopbar 1.6s var(--ease-in-out) infinite, mrpGradient 1.2s linear infinite; }
+@keyframes mrpTopbar { 0% { transform: scaleX(0); } 70% { transform: scaleX(.92); } 100% { transform: scaleX(.98); } }
+
+/* acciones por fila con color según lo que hacen */
+[class*="st-key-del_"] button:hover, [class*="st-key-att_del_"] button:hover, [class*="st-key-dispatch_del_"] button:hover, [class*="st-key-oline_del_"] button:hover {
+  color: var(--mrp-bad) !important; border-color: var(--mrp-bad) !important; background: var(--mrp-bad-bg) !important; box-shadow: 0 10px 22px -12px var(--mrp-bad);
+}
+[class*="st-key-edit_"] button:hover { color: var(--mrp-info) !important; border-color: var(--mrp-info) !important; background: var(--mrp-info-bg) !important; }
+[class*="st-key-info_"] button:hover { color: var(--mrp-teal) !important; border-color: var(--mrp-teal) !important; background: var(--mrp-teal-bg) !important; }
+[class*="st-key-del_"] button:hover [data-testid="stIconMaterial"] { transform: scale(1.15) rotate(8deg); }
+
+/* las filas de listas (tarjetas con borde) entran en cascada */
+[data-testid="stLayoutWrapper"] > [data-testid="stVerticalBlock"]:has(.mrp-row) { animation: mrpUp .55s var(--ease-out) both; }
+[data-testid="stLayoutWrapper"]:nth-child(2) > [data-testid="stVerticalBlock"]:has(.mrp-row) { animation-delay: .04s; }
+[data-testid="stLayoutWrapper"]:nth-child(3) > [data-testid="stVerticalBlock"]:has(.mrp-row) { animation-delay: .08s; }
+[data-testid="stLayoutWrapper"]:nth-child(4) > [data-testid="stVerticalBlock"]:has(.mrp-row) { animation-delay: .12s; }
+[data-testid="stLayoutWrapper"]:nth-child(5) > [data-testid="stVerticalBlock"]:has(.mrp-row) { animation-delay: .16s; }
+[data-testid="stLayoutWrapper"]:nth-child(6) > [data-testid="stVerticalBlock"]:has(.mrp-row) { animation-delay: .20s; }
+[data-testid="stLayoutWrapper"]:nth-child(n+7) > [data-testid="stVerticalBlock"]:has(.mrp-row) { animation-delay: .24s; }
+
+/* lo que queda más abajo aparece al desplazarse (navegadores con animation-timeline) */
+@supports (animation-timeline: view()) {
+  [data-testid="stLayoutWrapper"] > [data-testid="stVerticalBlock"]:has(.mrp-panel-title), [data-testid="stExpander"], .mrp-empty, .mrp-help-example {
+    animation: mrpUp linear both; animation-timeline: view(); animation-range: entry 0% entry 30%;
+  }
+}
+
+/* gráficos y mapas aparecen con suavidad */
+[data-testid="stPlotlyChart"], [data-testid="stDeckGlJsonChart"] { animation: mrpFade .9s ease-out .15s both; }
+
+/* pestañas: el icono reacciona */
+[data-baseweb="tab"] [data-testid="stIconMaterial"] { transition: transform var(--dur-base) var(--ease-spring); }
+[data-baseweb="tab"]:hover [data-testid="stIconMaterial"], [data-baseweb="tab"][aria-selected="true"] [data-testid="stIconMaterial"] { transform: scale(1.15); }
+
+/* botón principal del encabezado: un destello cada tanto para invitar a la acción */
+[data-testid="stColumn"] button[kind="primary"] { animation: mrpGlow 3.6s ease-in-out 1.2s infinite; }
+@keyframes mrpGlow { 0%, 100% { box-shadow: 0 8px 20px -8px rgba(100, 80, 245, .75), inset 0 1px 0 rgba(255, 255, 255, .22); } 50% { box-shadow: 0 12px 30px -6px rgba(100, 80, 245, .95), 0 0 0 4px var(--mrp-ring), inset 0 1px 0 rgba(255, 255, 255, .22); } }
+button[kind="primary"]:hover { animation: none; }
+
+/* tooltips y menús */
+[data-testid="stTooltipContent"] { animation: mrpPop var(--dur-base) var(--ease-spring); }
+[data-testid="stSidebar"] [data-testid="stToggle"] label { transition: transform var(--dur-fast); }
+[data-testid="stSidebar"] [data-testid="stToggle"] label:hover { transform: translateX(3px); }
+
+@media (prefers-reduced-motion: reduce) {
+  .mrp-count { animation: none; --n: var(--to); }
+  [data-testid="stColumn"] button[kind="primary"] { animation: none; }
+}
+.mrp-form-section strong .mrp-form-no { color: #fff; font-size: .68rem; line-height: 1; }

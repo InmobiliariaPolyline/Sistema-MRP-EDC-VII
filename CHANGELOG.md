@@ -6,6 +6,16 @@ Formato de cada parche: **Agregado** · **Corregido** · **Problemas y causa** �
 
 ---
 
+## Parche 063 — Hora de Perú y segunda pasada de interfaz · 2026-10-21
+
+**Qué cambió**
+- **Hora de Perú:** todo el sistema usa la hora de Lima (UTC−5), que no depende del servidor ni del horario de verano. «Hora del sistema», los PDF y reportes («Generado el…»), el historial, los vales, las recepciones, el kardex y los «hace 5 min» ya no salen con 5 horas de diferencia. Las marcas guardadas en UTC se convierten al mostrarse. Módulo `utils/clock.py` y un test que impide volver a leer el reloj del servidor.
+- **Encabezados con icono:** cada pantalla lleva un azulejo con el icono de su módulo; los rótulos y paneles llevan icono según su tema.
+- **Más iconos:** pestañas, botones (nuevo, guardar, cancelar, ver, limpiar, dar acceso…) y rótulos con icono Material; las secciones de formulario llevan su número en una insignia.
+- **Más movimiento:** números enteros que «suben» hasta su valor, filas de listas en cascada, bloques que aparecen al desplazarse, barra de progreso superior mientras carga, lo anterior se atenúa mientras se recarga, destellos del botón principal y acciones por fila con color (eliminar rojo, editar azul, ver verde azulado).
+
+---
+
 ## Parche 062 — Interfaz remasterizada: iconos, movimiento y acceso renovado · 2026-10-21
 
 **Qué cambió**

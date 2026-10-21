@@ -29,7 +29,7 @@ def render(user: dict) -> None:
         "Personal de obra",
         "Trabajadores",
         "Información personal, cuadrilla y obra donde trabaja cada uno.",
-        action_label="＋ Nuevo trabajador",
+        action_label=":material/add: Nuevo trabajador",
         action_key="new_worker_open",
     )
     if clicked:
@@ -60,8 +60,8 @@ def _render_groups_panel() -> None:
                 max_chars=forms.RULES["Nombre de la cuadrilla"]["max"], help="Obligatorio. Usa un nombre que el equipo reconozca.",
             )
             cancel_col, save_col = st.columns([1, 2])
-            submitted = save_col.form_submit_button("Agregar", type="primary", width="stretch")
-            cancel = cancel_col.form_submit_button("Cancelar", width="stretch")
+            submitted = save_col.form_submit_button(":material/add: Agregar", type="primary", width="stretch")
+            cancel = cancel_col.form_submit_button(":material/close: Cancelar", width="stretch")
         if cancel:
             st.session_state["_group_reset_pending"] = True
             st.rerun()
@@ -117,7 +117,7 @@ def _render_sites_panel() -> None:
             )
             cancel_col, save_col = st.columns([1, 2])
             save = save_col.form_submit_button("Guardar obra", type="primary", width="stretch")
-            cancel = cancel_col.form_submit_button("Cancelar", width="stretch")
+            cancel = cancel_col.form_submit_button(":material/close: Cancelar", width="stretch")
             search = st.form_submit_button(":material/search: Ubicar en el mapa", width="stretch", help="Busca y muestra la ubicación sin guardar la obra.")
 
         if cancel:
@@ -339,9 +339,9 @@ def _new_worker_dialog() -> None:
         with st.expander("Configurar usuario y contraseña", expanded=grant_access):
             username, password, role = _access_fields()
         cancel_col, save_col = st.columns([1, 2])
-        save = save_col.form_submit_button("Guardar", type="primary", width="stretch")
-        cancel = cancel_col.form_submit_button("Cancelar", width="stretch")
-        preview = st.form_submit_button("Revisar datos", width="stretch", help="Revisa el trabajador sin guardar ni crear una cuenta.")
+        save = save_col.form_submit_button(":material/save: Guardar", type="primary", width="stretch")
+        cancel = cancel_col.form_submit_button(":material/close: Cancelar", width="stretch")
+        preview = st.form_submit_button(":material/fact_check: Revisar datos", width="stretch", help="Revisa el trabajador sin guardar ni crear una cuenta.")
     if cancel:
         st.rerun()
     if preview:
@@ -382,9 +382,9 @@ def _edit_worker_dialog(worker: dict) -> None:
         if worker.get("username"):
             st.caption(f"Acceso actual: @{worker['username']} · {worker.get('role') or 'operador'}")
         cancel_col, save_col = st.columns([1, 2])
-        save = save_col.form_submit_button("Guardar cambios", type="primary", width="stretch")
-        cancel = cancel_col.form_submit_button("Cancelar", width="stretch")
-        preview = st.form_submit_button("Revisar datos", width="stretch", help="Muestra el resumen y la ubicación sin guardar.")
+        save = save_col.form_submit_button(":material/save: Guardar cambios", type="primary", width="stretch")
+        cancel = cancel_col.form_submit_button(":material/close: Cancelar", width="stretch")
+        preview = st.form_submit_button(":material/fact_check: Revisar datos", width="stretch", help="Muestra el resumen y la ubicación sin guardar.")
     if cancel:
         st.rerun()
     if preview:
@@ -410,9 +410,9 @@ def _grant_access_dialog(worker: dict) -> None:
         forms.section("Credenciales", "Usuario y contraseña son obligatorios para crear la cuenta.")
         username, password, role = _access_fields()
         cancel_col, save_col = st.columns([1, 2])
-        save = save_col.form_submit_button("Dar acceso", type="primary", width="stretch")
-        cancel = cancel_col.form_submit_button("Cancelar", width="stretch")
-        preview = st.form_submit_button("Revisar acceso", width="stretch", help="Muestra el usuario y el rol; la contraseña permanece oculta.")
+        save = save_col.form_submit_button(":material/key: Dar acceso", type="primary", width="stretch")
+        cancel = cancel_col.form_submit_button(":material/close: Cancelar", width="stretch")
+        preview = st.form_submit_button(":material/fact_check: Revisar acceso", width="stretch", help="Muestra el usuario y el rol; la contraseña permanece oculta.")
     if cancel:
         st.rerun()
     if preview:
@@ -531,7 +531,7 @@ def _render_workers_list() -> None:
     group_filter = f2.selectbox("Cuadrilla", group_options, key="wk_group")
     site_filter = f3.selectbox("Obra", site_options, key="wk_site")
     if query.strip() or group_filter != ALL_GROUPS or site_filter != ALL_SITES:
-        st.button("Limpiar filtros", key="wk_reset", on_click=_reset_worker_filters)
+        st.button(":material/filter_alt_off: Limpiar filtros", key="wk_reset", on_click=_reset_worker_filters)
 
     if group_filter == NO_GROUP:
         df = df[df["group_name"].isna()]
@@ -561,13 +561,13 @@ def _render_workers_list() -> None:
                 st.markdown(pills, unsafe_allow_html=True)
             with c3:
                 if row.get("user_id"):
-                    if st.button("Quitar acceso", key=f"revoke_{row['id']}", width="stretch"):
+                    if st.button(":material/lock: Quitar acceso", key=f"revoke_{row['id']}", width="stretch"):
                         ui.confirm_delete(
                             f"¿Quitar el acceso al sistema de {row['full_name']}? Su cuenta de usuario se elimina; el trabajador se conserva.",
                             lambda wid=row["id"], uid=row["user_id"], nm=row["full_name"]: _revoke_access(wid, uid, nm),
                         )
                 else:
-                    if st.button("Dar acceso", key=f"grant_{row['id']}", width="stretch"):
+                    if st.button(":material/key: Dar acceso", key=f"grant_{row['id']}", width="stretch"):
                         _grant_access_dialog(row)
             with c4:
                 if st.button(":material/edit:", key=f"edit_worker_{row['id']}", help="Editar trabajador"):

@@ -133,7 +133,7 @@ def _password_tab(user: dict) -> None:
         again = st.text_input("Repetir contraseña", type="password", key="acct_again")
         cancel_col, save_col = st.columns([1, 2])
         save = save_col.form_submit_button("Cambiar contraseña", type="primary", width="stretch")
-        cancel = cancel_col.form_submit_button("Cancelar", width="stretch")
+        cancel = cancel_col.form_submit_button(":material/close: Cancelar", width="stretch")
     if cancel:
         st.rerun()
     if not save:
@@ -230,7 +230,7 @@ def _company_tab(user: dict) -> None:
 def account_dialog(user: dict) -> None:
     """Mi cuenta: cambio de contraseña y, para el administrador, los datos de la empresa (RUC) tras confirmar la contraseña."""
     if user.get("role") == "admin":
-        tab_password, tab_company = st.tabs(["Contraseña", "Empresa y RUC"])
+        tab_password, tab_company = st.tabs([":material/key: Contraseña", ":material/business: Empresa y RUC"])
         with tab_password:
             _password_tab(user)
         with tab_company:

@@ -114,7 +114,7 @@ def _budget_dialog(site_id: str, site_name: str) -> None:
     materials = repo.list_materials()
     if materials.empty:
         ui.empty_state("Faltan materiales", "Registra un material en el catálogo y vuelve para añadirlo al presupuesto.")
-        if st.button("Cancelar", key="budget_cancel_empty", width="stretch"):
+        if st.button(":material/close: Cancelar", key="budget_cancel_empty", width="stretch"):
             _clear_budget_draft(site_id)
             st.rerun()
         return
@@ -163,7 +163,7 @@ def _budget_dialog(site_id: str, site_name: str) -> None:
     if price == 0:
         st.caption("Con precio 0, este material queda presupuestado en cantidad y no suma costo al total.")
     cancel, save = st.columns([1, 2])
-    if cancel.button("Cancelar", key="budget_cancel", width="stretch"):
+    if cancel.button(":material/close: Cancelar", key="budget_cancel", width="stretch"):
         _clear_budget_draft(site_id)
         st.rerun()
     if save.button("Guardar en el presupuesto", type="primary", width="stretch"):

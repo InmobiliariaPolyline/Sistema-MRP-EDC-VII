@@ -127,8 +127,10 @@ def header(title: str, description: str = "") -> None:
 
 
 def section(title: str, description: str = "") -> None:
+    number = re.match(r"^(\d+)\.\s*(.+)$", title)
+    label = f'<span class="mrp-form-no">{number.group(1)}</span>{html.escape(number.group(2))}' if number else html.escape(title)
     st.markdown(
-        f'<div class="mrp-form-section"><strong>{html.escape(title)}</strong>'
+        f'<div class="mrp-form-section"><strong>{label}</strong>'
         f'<span>{html.escape(description)}</span></div>',
         unsafe_allow_html=True,
     )

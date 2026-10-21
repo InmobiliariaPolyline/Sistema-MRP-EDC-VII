@@ -90,7 +90,8 @@ class StyleSheetTests(unittest.TestCase):
         used = set()
         for path in (ROOT / "modules" / "styles").glob("*.css"):
             used |= set(re.findall(r"animation:\s*(mrp[A-Za-z]+)", path.read_text(encoding="utf-8")))
-        defined = set(re.findall(r"@keyframes\s+(mrp[A-Za-z]+)", css + (ROOT / "modules" / "styles" / "00_base.css").read_text(encoding="utf-8")))
+        everything = "".join(p.read_text(encoding="utf-8") for p in (ROOT / "modules" / "styles").glob("*.css"))
+        defined = set(re.findall(r"@keyframes\s+(mrp[A-Za-z]+)", everything))
         self.assertEqual(sorted(used - defined), [])
 
     def test_motion_is_switched_off_for_people_who_ask(self):

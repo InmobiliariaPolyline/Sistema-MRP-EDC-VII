@@ -183,7 +183,7 @@ def render() -> None:
         "Compras",
         "Órdenes de compra",
         "Pedidos a proveedores: qué materiales, cuántos, a qué precio y para qué obra.",
-        action_label="＋ Nueva orden",
+        action_label=":material/add: Nueva orden",
         action_key="new_order_open",
     )
     if clicked:
@@ -251,7 +251,7 @@ def _new_order_dialog() -> None:
     suppliers = repo.list_suppliers()
     if suppliers.empty:
         ui.empty_state("Falta un proveedor", "Registra uno en Proveedores para preparar tu primera orden.", icon="🏭")
-        if st.button("Cancelar", key="order_cancel_empty", width="stretch"):
+        if st.button(":material/close: Cancelar", key="order_cancel_empty", width="stretch"):
             _clear_order_draft()
             st.rerun()
         return
@@ -327,7 +327,7 @@ def _new_order_dialog() -> None:
         if not record.get("available", True):
             st.caption("El catálogo indica que este material no está disponible. Confirma la entrega con el proveedor.")
         _material_quotes(record["id"], supplier_id, offers)
-        if st.button("＋ Agregar al pedido", width="stretch", disabled=catalog_price <= 0):
+        if st.button(":material/add: Agregar al pedido", width="stretch", disabled=catalog_price <= 0):
             existing = next((ln for ln in lines if ln["material_id"] == record["id"]), None)
             issues = forms.validate({"Cantidad": qty, "Precio unit.": price})
             if existing:
@@ -394,10 +394,10 @@ def _new_order_dialog() -> None:
         ui.empty_state("Tu pedido está vacío", "Selecciona un material y pulsa «Agregar al pedido». Después podrás crear la orden.", icon="🧾")
 
     cancel, save = st.columns([1, 2])
-    if cancel.button("Cancelar", key="order_cancel", width="stretch"):
+    if cancel.button(":material/close: Cancelar", key="order_cancel", width="stretch"):
         _clear_order_draft()
         st.rerun()
-    if save.button("Crear orden", type="primary", width="stretch", disabled=not lines):
+    if save.button(":material/add_circle: Crear orden", type="primary", width="stretch", disabled=not lines):
         issues = forms.validate({"Notas (opcional)": notes})
         if not lines:
             issues.append("Materiales del pedido: agrega al menos un material.")
@@ -541,7 +541,7 @@ def _edit_order_dialog(order: dict, items: pd.DataFrame) -> None:
                         help="Fijo: precio del catálogo del proveedor (o el que ya tiene la línea de la orden).")
         if not existing and catalog_price <= 0:
             st.warning("Este material no tiene precio en el catálogo del proveedor. Regístralo en Proveedores → Catálogo para poder agregarlo.", icon=":material/sell:")
-        if st.button("＋ Agregar a la orden", width="stretch", key=f"edit_add_btn_{oid}", disabled=(not existing and catalog_price <= 0)):
+        if st.button(":material/add: Agregar a la orden", width="stretch", key=f"edit_add_btn_{oid}", disabled=(not existing and catalog_price <= 0)):
             issues = forms.validate({"Cantidad": qty})
             if not forms.errors(issues):
                 sync()
@@ -564,10 +564,10 @@ def _edit_order_dialog(order: dict, items: pd.DataFrame) -> None:
     st.caption(f"{len(kept)} material(es) en la orden. Al guardar, el mensaje de WhatsApp y el PDF se arman con estos datos.")
 
     cancel, save = st.columns([1, 2])
-    if cancel.button("Cancelar", key=f"edit_cancel_{oid}", width="stretch"):
+    if cancel.button(":material/close: Cancelar", key=f"edit_cancel_{oid}", width="stretch"):
         _clear_edit_draft(oid)
         st.rerun()
-    if save.button("Guardar cambios", type="primary", width="stretch", key=f"edit_save_{oid}"):
+    if save.button(":material/save: Guardar cambios", type="primary", width="stretch", key=f"edit_save_{oid}"):
         issues = forms.validate({"Notas (opcional)": notes})
         if kept.empty:
             issues.append("Materiales: la orden debe conservar al menos un material (para quitarla por completo, elimínala).")
@@ -697,7 +697,7 @@ def _render_list() -> None:
     df = ui.filter_df(df, query, ["code", "supplier_name", "site_name"])
     ui.result_count(len(df), total, noun="órdenes")
     if query or status_label != ALL_STATUSES:
-        st.button("Limpiar filtros", key="ord_clear", on_click=_clear_filters)
+        st.button(":material/filter_alt_off: Limpiar filtros", key="ord_clear", on_click=_clear_filters)
     if df.empty:
         ui.empty_state("Sin coincidencias", "Prueba otro código o proveedor, o limpia los filtros para ver todas las órdenes.", icon="🔎")
         return
@@ -728,7 +728,7 @@ def _render_list() -> None:
                     unsafe_allow_html=True,
                 )
             with c4:
-                if st.button("Ver", key=f"open_order_{row['id']}", width="stretch"):
+                if st.button(":material/visibility: Ver", key=f"open_order_{row['id']}", width="stretch"):
                     st.session_state[SELECTED_KEY] = row["id"]
                     st.rerun()
             with c5:
@@ -827,7 +827,7 @@ def _render_reception(order: dict, items: pd.DataFrame) -> None:
         forms.section("1. Indica lo que llegó", "Registra solo esta entrega. Las cantidades se sumarán al inventario al guardar.")
         records = pending.to_dict("records")
         keys = {r["id"]: f"recv_{r['id']}_{float(r['received_qty']):g}" for r in records}
-        if st.button("Recibir todo lo pendiente", key=f"recv_all_{order['id']}",
+        if st.button(":material/inventory: Recibir todo lo pendiente", key=f"recv_all_{order['id']}",
                      help="Completa las cantidades del borrador. Revisa y pulsa «Registrar lo indicado» para guardar."):
             for r in records:
                 st.session_state[keys[r["id"]]] = float(r["quantity"]) - float(r["received_qty"])
@@ -868,11 +868,11 @@ def _render_reception(order: dict, items: pd.DataFrame) -> None:
         else:
             st.caption("Indica las cantidades de esta entrega; 0 deja el material pendiente.")
         b1, b2 = st.columns(2)
-        if b1.button("Cancelar", width="stretch", key=f"recv_cancel_{order['id']}"):
+        if b1.button(":material/close: Cancelar", width="stretch", key=f"recv_cancel_{order['id']}"):
             for key in keys.values():
                 st.session_state.pop(key, None)
             st.rerun()
-        if b2.button("Registrar lo indicado", type="primary", width="stretch", key=f"recv_go_{order['id']}"):
+        if b2.button(":material/task_alt: Registrar lo indicado", type="primary", width="stretch", key=f"recv_go_{order['id']}"):
             _receive(order["id"], order["code"], receipts, {"document_ref": doc_ref, "delivered_by": delivered_by, "notes": recv_notes})
 
 
@@ -901,7 +901,7 @@ def _render_detail(order_id: str) -> None:
     order = match.to_dict("records")[0]
     status = order["status"]
 
-    if st.button("← Volver"):
+    if st.button(":material/arrow_back: Volver"):
         st.session_state[SELECTED_KEY] = None
         st.rerun()
 
@@ -985,7 +985,7 @@ def _render_detail(order_id: str) -> None:
     b1, b2, b3, b4 = st.columns([3, 2.2, 2, 1.8])
     if status == "pendiente" and b1.button(":material/send: Marcar como enviada", width="stretch"):
         _change_status(order_id, order["code"], "enviada")
-    if status in ("pendiente", "enviada", "parcial") and b2.button("Cancelar orden", width="stretch"):
+    if status in ("pendiente", "enviada", "parcial") and b2.button(":material/cancel: Cancelar orden", width="stretch"):
         _change_status(order_id, order["code"], "cancelada")
     if b3.button(":material/delete: Eliminar", width="stretch", disabled=received_any,
                  help="Ya recibió material: no se puede eliminar. Cancélala si el pedido no continúa." if received_any else None):

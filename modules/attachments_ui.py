@@ -37,7 +37,7 @@ def render(entity_type: str, entity_id: str, *, expanded: bool = False, key: str
                 f'<div class="mrp-row-sub">{rules.human_size(row["size_bytes"])} · {_stamp(row["created_at"])} · {row.get("uploaded_by") or "sistema"}</div>',
                 unsafe_allow_html=True,
             )
-            if c2.button("Abrir", key=f"att_view_{row['id']}", width="stretch"):
+            if c2.button(":material/open_in_new: Abrir", key=f"att_view_{row['id']}", width="stretch"):
                 st.session_state[open_key] = row["id"]
             if c3.button(":material/delete:", key=f"att_del_{row['id']}", help="Quitar documento"):
                 ui.confirm_delete(
@@ -52,7 +52,7 @@ def render(entity_type: str, entity_id: str, *, expanded: bool = False, key: str
         upload = st.file_uploader(
             "PDF o imagen (máx. 10 MB)", type=[e.lstrip(".") for e in rules.ALLOWED], key=f"att_file_{key}_{n}", label_visibility="collapsed",
         )
-        if upload is not None and st.button("Guardar documento", type="primary", key=f"att_save_{key}"):
+        if upload is not None and st.button(":material/save: Guardar documento", type="primary", key=f"att_save_{key}"):
             try:
                 repo.add_attachment(entity_type, entity_id, upload.name, upload.getvalue(), ui.current_actor())
             except ValueError as exc:
@@ -75,7 +75,7 @@ def _show(attachment_id: str, open_key: str) -> None:
         f"Descargar {meta['filename']}", data=content, file_name=meta["filename"], mime=meta.get("content_type") or "application/octet-stream",
         key=f"att_dl_{attachment_id}", icon=":material/download:",
     )
-    if st.button("Cerrar vista", key=f"att_close_{attachment_id}"):
+    if st.button(":material/close: Cerrar vista", key=f"att_close_{attachment_id}"):
         st.session_state.pop(open_key, None)
         st.rerun()
 

@@ -26,12 +26,32 @@ def inject() -> None:
     st.markdown("<style>" + sheets["font"] + "</style><style>:root {" + palette + "}" + sheets["css"] + extra + "</style>", unsafe_allow_html=True)
 
 
+# icono del rótulo de cada sección según la palabra que contiene (para el encabezado de página y de los paneles)
+_EYEBROW_ICONS = (
+    ("orden", "receipt"), ("pedido", "receipt"), ("compra", "truck"), ("proveedor", "factory"), ("almac", "box"), ("inventario", "box"),
+    ("obra", "building"), ("personal", "helmet"), ("trabajador", "helmet"), ("material", "layers"), ("catálogo", "layers"), ("ayuda", "bulb"),
+    ("anális", "chart"), ("report", "chart"), ("portafolio", "chart"), ("historial", "clock"), ("respaldo", "shield"), ("seguridad", "shield"),
+    ("informaci", "info"), ("sistema", "info"), ("centro", "home"), ("resumen", "home"), ("ubicaci", "pin"), ("asistencia", "calendar"),
+)
+
+
+def eyebrow_html(text: str, extra: str = "") -> str:
+    """El rótulo pequeño sobre un título, con un icono que sigue a su tema."""
+    low = text.lower()
+    name = next((icon for key, icon in _EYEBROW_ICONS if key in low), None)
+    icon = icons.svg(name, 13, 2.2) if name else ""
+    return f'<div class="mrp-eyebrow{" has-ico" if icon else ""}{extra}">{icon}{html.escape(text)}</div>'
+
+
 def page_header(eyebrow: str, title: str, subtitle: str = "", action_label: str | None = None, action_key: str | None = None) -> bool:
     """Título, contexto, ayuda y acción principal con la misma jerarquía."""
-    content = f'<div class="mrp-eyebrow">{html.escape(eyebrow)}</div><div class="mrp-page-title">{html.escape(title)}</div>'
-    if subtitle:
-        content += f'<div class="mrp-page-subtitle">{html.escape(subtitle)}</div>'
     guide = guide_for(eyebrow, title)
+    low = eyebrow.lower()
+    tile = (guide or {}).get("icon") or next((icon for key, icon in _EYEBROW_ICONS if key in low), "box")
+    text = f'{eyebrow_html(eyebrow)}<div class="mrp-page-title">{html.escape(title)}</div>'
+    if subtitle:
+        text += f'<div class="mrp-page-subtitle">{html.escape(subtitle)}</div>'
+    content = f'<div class="mrp-ph"><div class="mrp-ph-ico">{icons.svg(tile, 26, 1.8)}</div><div class="mrp-ph-text">{text}</div></div>'
     if not action_label:
         st.markdown(content, unsafe_allow_html=True)
         _guide_popover(guide)
@@ -135,6 +155,8 @@ def spark(values: list[float], color: str = "currentColor") -> str:
 def stat_card(icon: str, value, label: str, caption: str = "", warn: bool = False, tone: str = "purple", trend: list[float] | None = None) -> str:
     """Tarjeta de estadística. `tone`: purple, green, amber, blue, red o teal."""
     klass = f"mrp-stat-card mrp-tone-{'amber' if warn else tone}"
+    if isinstance(value, int) and not isinstance(value, bool) and 0 <= value < 1000 or (isinstance(value, str) and value.isdigit() and len(value) < 4):
+        value = f'<span class="mrp-count" style="--to:{int(value)}"></span>'   # los números enteros chicos «suben» hasta su valor
     caption_html = f'<div class="mrp-stat-caption">{caption}</div>' if caption else ""
     spark_html = spark(trend or [], "var(--tone)")
     return (
@@ -197,10 +219,7 @@ def activity_item(name: str, sub: str, badge: str, when: str = "") -> str:
 
 def panel_header(eyebrow: str, title: str) -> None:
     """Encabezado a usar dentro de un `with st.container(border=True):`."""
-    st.markdown(
-        f'<div class="mrp-eyebrow">{eyebrow}</div><div class="mrp-panel-title">{title}</div>',
-        unsafe_allow_html=True,
-    )
+    st.markdown(f'{eyebrow_html(eyebrow)}<div class="mrp-panel-title">{title}</div>', unsafe_allow_html=True)
 
 
 def avatar(name: str) -> str:
@@ -342,9 +361,9 @@ def show_flash() -> None:
 def _confirm_dialog(message: str, on_confirm: Callable[[], None]) -> None:
     st.write(message)
     c1, c2 = st.columns(2)
-    if c1.button("Cancelar", width="stretch"):
+    if c1.button(":material/close: Cancelar", width="stretch"):
         st.rerun()
-    if c2.button("Sí, eliminar", type="primary", width="stretch"):
+    if c2.button(":material/delete: Sí, eliminar", type="primary", width="stretch"):
         on_confirm()
         st.rerun()
 
