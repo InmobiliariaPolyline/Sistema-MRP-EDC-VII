@@ -741,6 +741,16 @@ CHAPTERS: list[dict] = [
                 "title": "Entregar el reporte de una obra",
                 "goal": "Descargar el estado completo de una obra, listo para imprimir.",
                 "where": "Obras › Reporte de la obra (PDF)",
+                "mock": {
+                    "title": "Obras y presupuesto",
+                    "source": ["obras.py"],
+                    "rows": [
+                        {"field": "Obra", "kind": "select", "value": "Torre Central", "mark": 1},
+                        {"stats": [("Presupuesto", "18,780"), ("Pedido hasta hoy", "11,410"), ("Saldo del presupuesto", "7,370"), ("Sobre lo presupuestado", "1")]},
+                        {"buttons": [("Reporte de la obra (PDF)", "primary", 2)]},
+                        {"tabs": ["Información", "Materiales", "Trabajadores", "Progreso"], "active": 1},
+                    ],
+                },
                 "steps": [
                     {"title": "Elige la obra", "text": "Con el selector de arriba."},
                     {"title": "Pulsa «Reporte de la obra (PDF)»", "text": "Está debajo de las tarjetas, antes de las pestañas."},
