@@ -337,7 +337,7 @@ def _render_bootstrap() -> None:
     with st.form("bootstrap_form"):
         name = st.text_input("Nombre completo", placeholder="Ej. Ana Pérez", max_chars=forms.RULES["Nombre completo"]["max"])
         username = st.text_input("Usuario", placeholder="Ej. aperez", max_chars=forms.RULES["Usuario"]["max"], help="Letras sin tildes, números, punto, guion y guion bajo.")
-        password = st.text_input("Contraseña", type="password", help="Al menos 6 caracteres.")
+        password = st.text_input("Contraseña", type="password", help="Al menos 8 caracteres, con letras y números.")
         password2 = st.text_input("Repetir contraseña", type="password", help="Escribe la misma contraseña para confirmar.")
         submitted = st.form_submit_button("Crear administrador  →", type="primary", width="stretch")
 

@@ -1,0 +1,179 @@
+/* =========================================================================
+   47 · MANUAL DE USUARIO — capítulos, procedimientos y maquetas fieles de los
+   formularios (.mrp-mock-*). Solo usa variables --mrp-*: claro y oscuro.
+   ========================================================================= */
+
+/* Selector de capítulos y encabezados de sección */
+.st-key-manual_chapter [data-testid="stButtonGroup"] { flex-wrap: wrap; gap: .35rem; }
+.mrp-man-h { margin: 1.7rem 0 .8rem; font-size: 1.15rem; font-weight: 800; letter-spacing: -.015em; color: var(--mrp-text); display: flex; align-items: center; gap: .6rem; }
+.mrp-man-h::after { content: ""; flex: 1; height: 1px; background: var(--mrp-border); }
+.mrp-man-hero { margin-top: .6rem; }
+
+/* El recorrido de una compra */
+.mrp-man-flow { display: grid; grid-template-columns: repeat(auto-fit, minmax(10.5rem, 1fr)); gap: .9rem; margin: .4rem 0 .6rem; width: 100%; }
+.mrp-man-flow-card {
+  position: relative; padding: 1rem .95rem .95rem; border-radius: 1.1rem; background: var(--mrp-surface); border: 1px solid var(--mrp-border);
+  box-shadow: var(--mrp-shadow); transition: transform .15s ease, border-color .15s ease;
+}
+.mrp-man-flow-card:hover { transform: translateY(-2px); border-color: var(--mrp-accent); }
+.mrp-man-flow-card:not(:last-child)::after {
+  content: ""; position: absolute; top: 50%; right: -.62rem; width: .85rem; height: .85rem; z-index: 2; transform: translateY(-50%) rotate(45deg);
+  border-top: 2px solid var(--mrp-accent); border-right: 2px solid var(--mrp-accent); opacity: .55;
+}
+.mrp-man-flow-no { position: absolute; top: .7rem; right: .8rem; font-size: .72rem; font-weight: 800; color: var(--mrp-muted); }
+.mrp-man-flow-ico { display: grid; place-items: center; width: 2.9rem; height: 2.9rem; border-radius: .95rem; color: #fff; background: var(--mrp-grad); box-shadow: 0 8px 18px -8px rgba(90, 63, 240, .7); }
+.mrp-man-flow-title { margin-top: .7rem; font-weight: 800; color: var(--mrp-text); font-size: .98rem; }
+.mrp-man-flow-text { margin-top: .2rem; color: var(--mrp-muted); font-size: .84rem; line-height: 1.5; }
+
+/* Lo que sí hace / lo que no hace */
+.mrp-man-compare { display: grid; grid-template-columns: repeat(auto-fit, minmax(18rem, 1fr)); gap: .9rem; width: 100%; margin-top: .4rem; }
+.mrp-man-compare-card { padding: 1rem 1.1rem; border-radius: 1.1rem; border: 1px solid transparent; }
+.mrp-man-compare-card.yes { background: var(--mrp-good-bg); }
+.mrp-man-compare-card.no { background: var(--mrp-teal-bg); }
+.mrp-man-compare-head { font-size: .72rem; font-weight: 800; letter-spacing: .1em; text-transform: uppercase; margin-bottom: .55rem; }
+.mrp-man-compare-card.yes .mrp-man-compare-head { color: var(--mrp-good); }
+.mrp-man-compare-card.no .mrp-man-compare-head { color: var(--mrp-teal); }
+.mrp-man-compare-card ul { list-style: none; margin: 0; padding: 0; display: grid; gap: .5rem; }
+.mrp-man-compare-card li { display: flex; gap: .6rem; align-items: flex-start; color: var(--mrp-text); font-size: .9rem; line-height: 1.5; }
+.mrp-man-bullet { flex: 0 0 1.3rem; height: 1.3rem; display: grid; place-items: center; border-radius: 50%; margin-top: .1rem; color: #fff; }
+.mrp-man-compare-card.yes .mrp-man-bullet { background: var(--mrp-good); }
+.mrp-man-compare-card.no .mrp-man-bullet { background: var(--mrp-teal); }
+
+/* Ruta para empezar */
+.mrp-man-road, .mrp-man-steps { list-style: none; margin: 0; padding: 0; width: 100% !important; max-width: 100% !important; box-sizing: border-box; }
+.mrp-man-road { display: grid; gap: .6rem; counter-reset: road; }
+.mrp-man-road li { display: flex; gap: .85rem; align-items: flex-start; padding: .8rem 1rem; border-radius: 1rem; background: var(--mrp-surface); border: 1px solid var(--mrp-border); }
+.mrp-man-road-no { flex: 0 0 2rem; height: 2rem; display: grid; place-items: center; border-radius: 50%; font-weight: 800; font-size: .85rem; color: var(--mrp-accent); background: var(--mrp-soft); border: 1.5px solid var(--mrp-accent); }
+.mrp-man-road-title { font-weight: 750; color: var(--mrp-text); }
+.mrp-man-road-text { color: var(--mrp-muted); font-size: .88rem; line-height: 1.5; margin: .1rem 0 .1rem; }
+
+/* Estados */
+.mrp-man-states-title { margin: 1.1rem 0 .55rem; font-size: .72rem; font-weight: 800; letter-spacing: .1em; text-transform: uppercase; color: var(--mrp-muted); }
+.mrp-man-states { display: grid; grid-template-columns: repeat(auto-fit, minmax(12rem, 1fr)); gap: .7rem; width: 100%; }
+.mrp-man-state { padding: .85rem 1rem; border-radius: 1rem; background: var(--mrp-surface); border: 1px solid var(--mrp-border); color: var(--mrp-muted); font-size: .86rem; line-height: 1.5; }
+.mrp-man-state .mrp-pill { margin-bottom: .45rem; }
+.mrp-man-states-note { margin-top: .7rem; color: var(--mrp-muted); font-size: .86rem; }
+
+/* Glosario */
+.mrp-man-glossary { display: grid; grid-template-columns: repeat(auto-fit, minmax(17rem, 1fr)); gap: .8rem; width: 100%; }
+.mrp-man-term { padding: .9rem 1rem; border-radius: 1rem; background: var(--mrp-surface); border: 1px solid var(--mrp-border); }
+.mrp-man-term-name { font-weight: 800; color: var(--mrp-accent); font-size: .95rem; }
+.mrp-man-term-def { margin-top: .2rem; color: var(--mrp-muted); font-size: .88rem; line-height: 1.55; }
+.mrp-man-term-def strong { color: var(--mrp-text); }
+
+/* Tarjeta de un procedimiento */
+[class*="st-key-man_proc_"] { border-radius: 1.3rem !important; background: var(--mrp-surface); box-shadow: var(--mrp-shadow); }
+.mrp-man-proc-head { display: flex; flex-wrap: wrap; align-items: center; gap: .8rem; padding-bottom: .9rem; margin-bottom: .9rem; border-bottom: 1px solid var(--mrp-border); }
+.mrp-man-proc-no { flex: 0 0 auto; padding: .35rem .7rem; border-radius: .8rem; font-weight: 800; font-size: .85rem; color: #fff; background: var(--mrp-grad); }
+.mrp-man-proc-text { flex: 1 1 14rem; min-width: 0; }
+.mrp-man-proc-title { font-size: 1.12rem; font-weight: 800; letter-spacing: -.01em; color: var(--mrp-text); }
+.mrp-man-proc-goal { margin-top: .1rem; color: var(--mrp-muted); font-size: .9rem; line-height: 1.5; }
+
+/* Pasos (los números son los mismos que llevan las marcas de la maqueta) */
+.mrp-man-steps { display: grid; gap: .75rem; }
+.mrp-man-steps li { display: flex; gap: .8rem; align-items: flex-start; }
+.mrp-man-step-title { font-weight: 750; color: var(--mrp-text); line-height: 1.35; }
+.mrp-man-step-text { margin-top: .12rem; color: var(--mrp-muted); font-size: .9rem; line-height: 1.6; overflow-wrap: anywhere; }
+.mrp-man-step-text strong { color: var(--mrp-text); }
+.mrp-man-step-text code { padding: .05rem .4rem; border-radius: .4rem; font-size: .85em; color: var(--mrp-accent); background: var(--mrp-soft); }
+.mrp-man-steps + .mrp-help-callout, .mrp-man-steps ~ .mrp-help-callout:first-of-type { margin-top: .9rem; }
+
+/* ---------------------------------------------------------------------------------------------------------------
+   Maqueta de un formulario: ventana con barra de título, campos con el aspecto de los reales y marcas numeradas
+   --------------------------------------------------------------------------------------------------------------- */
+.mrp-mock { width: 100%; box-sizing: border-box; border-radius: 1.2rem; background: var(--mrp-surface); border: 1px solid var(--mrp-border); box-shadow: var(--mrp-shadow-lg); overflow: hidden; }
+.mrp-mock-bar { display: flex; align-items: center; gap: .7rem; padding: .65rem .9rem; background: var(--mrp-field); border-bottom: 1px solid var(--mrp-border); }
+.mrp-mock-dots { display: inline-flex; gap: .3rem; }
+.mrp-mock-dots i { width: .6rem; height: .6rem; border-radius: 50%; background: var(--mrp-border); }
+.mrp-mock-dots i:first-child { background: #F26B6B; }
+.mrp-mock-dots i:nth-child(2) { background: #F2C14E; }
+.mrp-mock-dots i:nth-child(3) { background: #5BC78B; }
+.mrp-mock-title { font-weight: 750; font-size: .85rem; color: var(--mrp-text); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.mrp-mock-body { padding: .9rem 1rem 1rem; display: grid; gap: .7rem; }
+.mrp-mock-foot { padding: .5rem .9rem; border-top: 1px dashed var(--mrp-border); font-size: .68rem; color: var(--mrp-muted); text-align: center; letter-spacing: .02em; }
+
+.mrp-mock-sec { margin-top: .25rem; font-size: .66rem; letter-spacing: .09em; text-transform: uppercase; font-weight: 800; color: var(--mrp-accent); }
+.mrp-mock-cols { display: grid; gap: .7rem; grid-template-columns: repeat(auto-fit, minmax(9rem, 1fr)); }
+.mrp-mock-field { min-width: 0; }
+.mrp-mock-label { display: flex; align-items: center; gap: .35rem; margin-bottom: .22rem; font-size: .72rem; font-weight: 700; color: var(--mrp-text); }
+.mrp-mock-input {
+  display: flex; align-items: center; justify-content: space-between; gap: .5rem; min-height: 2.1rem; padding: .35rem .65rem; border-radius: .7rem;
+  background: var(--mrp-field); border: 1px solid var(--mrp-border); font-size: .8rem; color: var(--mrp-text);
+}
+.mrp-mock-input span:first-child { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.mrp-mock-input .ph { color: var(--mrp-muted); opacity: .75; }
+.mrp-mock-input .dots { letter-spacing: .12em; color: var(--mrp-muted); }
+.mrp-mock-select { cursor: default; }
+.mrp-mock-number { font-variant-numeric: tabular-nums; }
+.mrp-mock-input.tall { min-height: 4rem; align-items: flex-start; }
+.mrp-mock-input.disabled { opacity: .65; }
+.mrp-mock-chev { flex: 0 0 auto; width: .5rem; height: .5rem; margin-right: .15rem; border-right: 2px solid var(--mrp-muted); border-bottom: 2px solid var(--mrp-muted); transform: rotate(45deg) translateY(-2px); }
+.mrp-mock-step { flex: 0 0 auto; display: inline-flex; gap: .15rem; }
+.mrp-mock-step i { width: 1.2rem; height: 1.2rem; display: grid; place-items: center; border-radius: .4rem; font-style: normal; font-weight: 800; font-size: .8rem; color: var(--mrp-muted); background: var(--mrp-surface); border: 1px solid var(--mrp-border); }
+.mrp-mock-ico { flex: 0 0 auto; display: grid; place-items: center; color: var(--mrp-muted); }
+.mrp-mock-check { display: flex; align-items: center; gap: .5rem; font-size: .8rem; font-weight: 600; color: var(--mrp-text); }
+.mrp-mock-box { flex: 0 0 auto; width: 1.05rem; height: 1.05rem; display: grid; place-items: center; border-radius: .3rem; border: 1.5px solid var(--mrp-muted); color: #fff; }
+.mrp-mock-box.on { background: var(--mrp-accent); border-color: var(--mrp-accent); }
+
+.mrp-mock-btns { display: flex; flex-wrap: wrap; justify-content: flex-end; gap: .5rem; margin-top: .15rem; }
+.mrp-mock-btn { position: relative; padding: .42rem .95rem; border-radius: .75rem; font-size: .78rem; font-weight: 700; border: 1px solid var(--mrp-border); color: var(--mrp-text); background: var(--mrp-surface); }
+.mrp-mock-btn.primary { color: #fff; border-color: transparent; background: var(--mrp-grad); box-shadow: 0 8px 18px -10px rgba(90, 63, 240, .8); }
+.mrp-mock-btn .mrp-mock-mark { position: absolute; top: -.55rem; right: -.4rem; }
+
+.mrp-mock-stats { position: relative; display: grid; gap: .5rem; grid-template-columns: repeat(auto-fit, minmax(6.4rem, 1fr)); }
+.mrp-mock-stats > div { padding: .5rem .65rem; border-radius: .8rem; background: var(--mrp-field); border: 1px solid var(--mrp-border); border-top: 3px solid var(--mrp-accent); }
+.mrp-mock-stats .k { display: block; font-size: .6rem; letter-spacing: .05em; text-transform: uppercase; font-weight: 700; color: var(--mrp-muted); }
+.mrp-mock-stats b { display: block; margin-top: .1rem; font-size: .92rem; color: var(--mrp-text); }
+
+.mrp-mock-tablewrap { position: relative; overflow-x: auto; border-radius: .8rem; border: 1px solid var(--mrp-border); }
+.mrp-mock-table { width: 100%; border-collapse: collapse; font-size: .72rem; }
+.mrp-mock-table th { padding: .42rem .55rem; text-align: left; font-size: .62rem; letter-spacing: .04em; text-transform: uppercase; font-weight: 800; color: var(--mrp-muted); background: var(--mrp-field); white-space: nowrap; }
+.mrp-mock-table td { padding: .42rem .55rem; color: var(--mrp-text); border-top: 1px solid var(--mrp-border); white-space: nowrap; }
+.mrp-mock-table tr:nth-child(even) td { background: color-mix(in srgb, var(--mrp-field) 55%, transparent); }
+.mrp-mock-table .mrp-pill { font-size: .62rem; padding: .08rem .45rem; }
+
+.mrp-mock-tabs { position: relative; display: inline-flex; gap: .25rem; padding: .22rem; border-radius: .8rem; background: var(--mrp-field); border: 1px solid var(--mrp-border); justify-self: start; }
+.mrp-mock-tab { padding: .3rem .8rem; border-radius: .6rem; font-size: .75rem; font-weight: 650; color: var(--mrp-muted); }
+.mrp-mock-tab.on { color: var(--mrp-text); background: var(--mrp-surface); box-shadow: var(--mrp-shadow); }
+.mrp-mock-tabs .mrp-mock-mark { position: absolute; top: -.5rem; right: -.5rem; }
+.mrp-mock-note { position: relative; padding: .6rem .8rem; border-radius: .8rem; font-size: .76rem; line-height: 1.5; color: var(--mrp-text); }
+.mrp-mock-note.info { background: var(--mrp-info-bg); }
+.mrp-mock-note.warn { background: var(--mrp-warn-bg); }
+.mrp-mock-note .mrp-mock-mark { position: absolute; top: -.5rem; right: -.4rem; }
+.mrp-mock-pills { position: relative; display: flex; flex-wrap: wrap; gap: .4rem; align-items: center; }
+.mrp-mock-lines { display: grid; gap: .35rem; }
+.mrp-mock-line { display: flex; align-items: center; gap: .6rem; padding: .4rem .65rem; border-radius: .7rem; background: var(--mrp-field); font-size: .76rem; color: var(--mrp-text); }
+.mrp-mock-line span { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.mrp-mock-line i { font-style: normal; font-size: .7rem; color: var(--mrp-muted); }
+.mrp-mock-caption { font-size: .72rem; color: var(--mrp-muted); }
+.mrp-mock-sign { position: relative; display: grid; grid-template-columns: repeat(auto-fit, minmax(5.5rem, 1fr)); gap: .9rem; padding-top: 1.1rem; }
+.mrp-mock-sign .line { display: block; height: 1px; background: var(--mrp-muted); margin-bottom: .3rem; }
+.mrp-mock-sign .who { display: block; text-align: center; font-size: .66rem; font-weight: 700; color: var(--mrp-muted); }
+.mrp-mock-sign .mrp-mock-mark { position: absolute; top: .2rem; right: 0; }
+
+/* Menú lateral de muestra */
+.mrp-mock-menu { position: relative; padding: .7rem .6rem; border-radius: 1rem; background: linear-gradient(180deg, #1B1450 0%, #120E3A 100%); }
+.mrp-mock-group { margin: .55rem .4rem .2rem; font-size: .58rem; letter-spacing: .12em; text-transform: uppercase; font-weight: 800; color: rgba(255, 255, 255, .45); }
+.mrp-mock-group:first-child { margin-top: 0; }
+.mrp-mock-item { display: flex; align-items: center; gap: .55rem; padding: .32rem .6rem; border-radius: .6rem; font-size: .76rem; font-weight: 600; color: rgba(255, 255, 255, .78); }
+.mrp-mock-item.on { color: #fff; background: var(--mrp-grad); }
+.mrp-mock-menu > .mrp-mock-mark { position: absolute; top: .5rem; right: .5rem; }
+
+/* Marca numerada: la misma en la maqueta y en el paso que explica */
+.mrp-mock-mark {
+  flex: 0 0 auto; display: inline-grid; place-items: center; min-width: 1.15rem; height: 1.15rem; padding: 0 .2rem; border-radius: 999px; z-index: 2;
+  font-size: .66rem; font-weight: 800; line-height: 1; color: #fff; background: var(--mrp-grad); box-shadow: 0 0 0 2px var(--mrp-surface), 0 4px 10px -3px rgba(90, 63, 240, .8);
+}
+.mrp-mock-mark.big { min-width: 1.7rem; height: 1.7rem; font-size: .82rem; margin-top: .05rem; }
+.mrp-mock-tablewrap .mrp-mock-mark { position: absolute; top: .3rem; right: .4rem; }
+.mrp-mock-stats .mrp-mock-mark { position: absolute; top: -.5rem; right: -.35rem; }
+.mrp-mock-pills .mrp-mock-mark { margin-left: .2rem; }
+
+@media (max-width: 640px) {
+  .mrp-man-flow-card:not(:last-child)::after { display: none; }
+  .mrp-mock-body { padding: .75rem; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .mrp-man-flow-card { transition: none; }
+  .mrp-man-flow-card:hover { transform: none; }
+}

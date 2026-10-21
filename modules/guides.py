@@ -264,6 +264,21 @@ GUIDES: dict[str, dict] = {
         ],
         "not_does": ["El sistema **no se conecta con el sistema del proveedor ni procesa pagos**. Prepara el pedido con su valor exacto (IGV incluido) y registra lo pedido por proveedor, lo que entra al almacén y lo que sale a cada obra. La compra y el pago se hacen fuera, con el RUC de la empresa."],
     },
+    "Manual de usuario": {
+        "icon": "info",
+        "summary": "El manual completo del sistema: cada procedimiento muestra el formulario tal como lo verás y los pasos para completarlo.",
+        "sections": [
+            {
+                "title": "Cómo leerlo",
+                "steps": [
+                    {"title": "Elige un capítulo", "text": "Los botones de arriba siguen el orden natural del trabajo: empezar, preparar datos, pedir material, almacén, obras y control."},
+                    {"title": "Mira la maqueta y sigue los números", "text": "El dibujo del formulario lleva marcas numeradas; cada número es el paso que lo explica."},
+                    {"title": "Busca por palabra", "text": "Escribe «recepción», «IGV» o «vale» en el buscador para ir directo al procedimiento."},
+                ],
+            }
+        ],
+        "not_does": ["El sistema **no se conecta con el sistema del proveedor ni procesa pagos**: el manual explica cómo registrar lo pedido, lo recibido y lo despachado."],
+    },
     "Respaldo de datos": {
         "icon": "shield",
         "summary": "Tener una copia de todo fuera del sistema, por si algo se borra por error.",

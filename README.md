@@ -39,6 +39,7 @@ Sistema con login propio, dashboard y varios módulos:
   y despachado desde el almacén, con aviso cuando un material excede lo previsto.
 - **Asistencia**: pasar lista por día (estado y obra de cada trabajador) y
   resumen por trabajador y por obra.
+- **Manual de usuario** (Sistema › Manual de Usuario): capítulos ilustrados con maquetas de cada formulario, pasos numerados, buscador y glosario.
 - **Ayuda en cada pantalla**: botón «❓ Cómo usar» junto al título de cada módulo, consejos con ejemplo en los formularios y **validación en vivo** mientras se escribe (contador de caracteres, qué falta, qué caracteres no se permiten, borde rojo/verde).
 - **Ficha de obra y de material**: en *Obras*, pestañas de información (mapa), materiales, trabajadores y progreso; en *Materiales*, el botón ℹ️ abre la ficha del material (qué significa su densidad, precios, stock y obras donde se usa).
 - **Sesión persistente**: al recargar la página no se pierde el login (cookie firmada, 7 días; define `SESSION_SECRET` en `.env`/secrets para tu propio secreto).

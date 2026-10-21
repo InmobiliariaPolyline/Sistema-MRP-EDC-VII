@@ -6,6 +6,20 @@ Formato de cada parche: **Agregado** · **Corregido** · **Problemas y causa** �
 
 ---
 
+## Parche 061 — Manual de usuario ilustrado · 2026-10-21
+
+El colaborador aportó el módulo «Manual de Usuario» (solo texto en pestañas y desplegables). Se rediseñó para que se vea como el resto del sistema y se entienda de un vistazo.
+
+**Qué cambió**
+- **Capítulos con selector** (Empezar, Preparar los datos, Pedir material, Almacén, Obras y personal, Control y respaldo, Preguntas y glosario) y **buscador** que ignora tildes.
+- **Maquetas fieles de los formularios** en cada procedimiento (~26): campos, botones, tablas y resúmenes dibujados como en el sistema, con **números** que remiten al paso que los explica.
+- **Tarjetas ilustradas:** recorrido de una compra, lo que el sistema sí y no hace, ruta para empezar, estados de las órdenes y glosario.
+- **Textos corregidos:** se quitaron expresiones imprecisas («compra formal», «emitir el documento»); el manual dice que el sistema no compra ni paga ni se conecta con el proveedor.
+- **Exactitud comprobada por tests:** cada etiqueta, botón y columna de las maquetas debe existir en el código del módulo que la dibuja (`tests/test_manual.py`).
+- Se restauró `import streamlit as st` en `core/shell.py` (el alias `str_lit` del merge) y la ayuda de contraseña del primer administrador ahora dice 8 caracteres con letras y números.
+
+---
+
 ## Parche 060 — Ventanas de ayuda «Cómo usar» renovadas · 2026-10-16
 
 La ayuda de cada pantalla era un cuadro pequeño con un muro de texto y numeración rara («3a0», «3b1»). Ahora es una ventana propia, ordenada y clara.
