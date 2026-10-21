@@ -11,6 +11,7 @@ import streamlit as st
 from db import repository as repo
 from db.auth import hash_password
 from modules import forms, ui, security
+from modules.proveedores import company_name
 from utils import icons
 from utils.geocode import google_maps_search_url, parse_coordinates, search_address
 
@@ -549,6 +550,7 @@ def _render_workers_list() -> None:
         return
     df = ui.paginate(df, key="workers_directory")
 
+    company = company_name()
     for row in df.to_dict("records"):
         with st.container(border=True):
             c1, c2, c3, c4, c5 = st.columns([4, 2.6, 2.6, 1, 1])
@@ -580,7 +582,7 @@ def _render_workers_list() -> None:
                     )
 
             if row.get("phone"):
-                st.markdown(ui.contact_links(row["phone"], None), unsafe_allow_html=True)
+                st.markdown(ui.contact_links(row["phone"], None, row.get("full_name"), company, "worker", row.get("site_name"), row.get("position")), unsafe_allow_html=True)
             if row.get("username"):
                 st.caption(f"Acceso al sistema: @{row['username']} ({row.get('role') or 'operador'})")
 

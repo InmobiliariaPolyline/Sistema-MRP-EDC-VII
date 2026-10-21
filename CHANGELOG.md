@@ -6,6 +6,15 @@ Formato de cada parche: **Agregado** · **Corregido** · **Problemas y causa** �
 
 ---
 
+## Parche 068 — Mensajes de WhatsApp para trabajadores y mejor formato · 2026-10-21
+
+**Qué cambió**
+- **Mensajes propios para trabajadores:** el botón WhatsApp de cada trabajador ya no ofrece lo de los proveedores (pedir catálogos o cotizaciones no tiene sentido con alguien de tu equipo). Ahora despliega siete mensajes de trato de «tú»: convocar a trabajar, recordar la asistencia, cambio de obra o turno, material listo en almacén, aviso de seguridad, pedir el reporte del día y pedir documentos. Llevan la obra y el puesto del trabajador, y solo tienen Llamar y WhatsApp (no correo).
+- **Mejor formato en todos los mensajes:** WhatsApp con el título en *negrita*, saludo, párrafos, listas con sangría y viñetas, datos con su campo en negrita y «____» donde falta completar, despedida y firma en _cursiva_. El correo (Gmail, Outlook, app del equipo) va en texto limpio con la misma sangría y «Saludos cordiales». Los de proveedores pasan a trato de «usted» y piden los datos concretos (precio, plazo, pago, pedido mínimo…).
+- Pruebas: opciones distintas por público, formato por canal y que a un trabajador nunca se le ofrezca nada de cotizaciones.
+
+---
+
 ## Parche 067 — Logotipo de proveedores y botones de contacto · 2026-10-21
 
 **Agregado**

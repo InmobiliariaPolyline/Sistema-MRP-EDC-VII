@@ -42,7 +42,7 @@ GUIDES: dict[str, dict] = {
                 "steps": [
                     {"title": "Crea la ficha", "text": "Pulsa **＋ Nuevo proveedor** y escribe su nombre. Es lo único obligatorio. Si quieres, sube su **logotipo** (PNG, JPG o WEBP): se reduce solo y sirve para reconocerlo de un vistazo.", "where": "Botón de arriba a la derecha"},
                     {"title": "Agrega cómo contactarlo", "text": "Escribe el teléfono (un celular de 9 dígitos o con código de país, por ejemplo `51987654321`), el correo y la persona de contacto. En su tarjeta tendrás **Llamar** (celeste), **WhatsApp** (verde), **Gmail** y **Outlook**."},
-                    {"title": "Usa los mensajes ya escritos", "text": "WhatsApp, Gmail y Outlook se despliegan con mensajes listos: solicitar cotización, consultar disponibilidad, pedir lista de precios, seguimiento de un pedido, coordinar entrega o pedir un comprobante. Al elegir uno se abre la aplicación con el texto escrito; tú lo revisas y lo envías."},
+                    {"title": "Usa los mensajes ya escritos", "text": "WhatsApp, Gmail y Outlook se despliegan con mensajes listos: solicitar cotización, consultar disponibilidad, pedir lista de precios, seguimiento de un pedido, coordinar entrega o pedir un comprobante. Al elegir uno se abre la aplicación con el texto escrito, con título, sangría y datos por completar; tú lo revisas y lo envías."},
                     {"title": "Anota su RUC y sus condiciones", "text": "El **RUC** (11 dígitos; el sistema comprueba que esté bien escrito) sale en la orden de compra. El **plazo de entrega** y el **monto mínimo de compra** ayudan a la sugerencia de compra."},
                 ],
             },
@@ -245,6 +245,7 @@ GUIDES: dict[str, dict] = {
                 "steps": [
                     {"title": "Crea cuadrillas y obras", "text": "Empieza por las **cuadrillas** y las **obras**. En la obra puedes pegar el **enlace de Google Maps** para guardar su ubicación exacta."},
                     {"title": "Registra a cada trabajador", "text": "Pulsa **＋ Nuevo trabajador**: nombre, documento, teléfono, puesto, cuadrilla y obra.", "where": "Botón de arriba a la derecha"},
+                    {"title": "Escríbele por WhatsApp", "text": "En la tarjeta de cada trabajador, **WhatsApp** se despliega con mensajes pensados para tu equipo: convocar a trabajar, recordar la asistencia, cambio de obra o turno, material listo en almacén, aviso de seguridad, pedir el reporte del día o pedir documentos. Ya llevan su obra y su puesto; completas lo que dice «____» y lo envías."},
                     {"title": "Dale acceso si lo necesita", "text": "Si alguien debe entrar al sistema, créale un usuario con contraseña y rol."},
                 ],
             }

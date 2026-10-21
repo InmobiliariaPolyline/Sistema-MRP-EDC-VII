@@ -396,21 +396,25 @@ def filter_df(df: pd.DataFrame, query: str, columns: list[str]) -> pd.DataFrame:
     return df[mask]
 
 
-def contact_links(phone: str | None, email: str | None, contact: str | None = None, company: str | None = None) -> str:
+def contact_links(
+    phone: str | None, email: str | None, contact: str | None = None, company: str | None = None, audience: str = "supplier",
+    site: str | None = None, role: str | None = None,
+) -> str:
     """Botones de contacto rápido con el aspecto de lo que representan: llamar (celeste), WhatsApp (verde), Gmail y Outlook.
     WhatsApp, Gmail y Outlook se despliegan con mensajes ya escritos (cotizar, disponibilidad, precios, seguimiento, entrega,
     comprobantes): al elegir uno se abre la aplicación con el texto listo. El sistema no envía nada: lo revisa y envía la persona."""
-    presets = contact_utils.messages(contact, company)
+    presets = contact_utils.messages(contact, company, audience, site, role)
+    head = "Mensaje para tu equipo" if audience == "worker" else "Elige un mensaje"
     buttons = []
     if phone:
         buttons.append(f'<a class="mrp-cbtn call" href="tel:{contact_utils.dial_number(phone)}">{icons.svg("phone", 16, 2.1)}<span>Llamar</span></a>')
         if contact_utils.whatsapp_number(phone):
             items = "".join(
-                f'<a href="{html.escape(contact_utils.whatsapp_url(phone, p["body"]), quote=True)}" target="_blank" rel="noopener">'
+                f'<a href="{html.escape(contact_utils.whatsapp_url(phone, p["whatsapp"]), quote=True)}" target="_blank" rel="noopener">'
                 f'<b>{html.escape(p["label"])}</b><small>{html.escape(p["hint"])}</small></a>'
                 for p in presets
             )
-            buttons.append(_menu("wa", icons.brand("whatsapp", 18), "WhatsApp", "Abrir WhatsApp con un mensaje listo", items))
+            buttons.append(_menu("wa", icons.brand("whatsapp", 18), "WhatsApp", "Abrir WhatsApp con un mensaje listo", items, head))
     if email:
         gmail = "".join(
             f'<a href="{html.escape(contact_utils.gmail_url(email, p["subject"], p["body"]), quote=True)}" target="_blank" rel="noopener">'
@@ -432,9 +436,9 @@ def contact_links(phone: str | None, email: str | None, contact: str | None = No
     return '<div class="mrp-contact">' + "".join(buttons) + "</div>"
 
 
-def _menu(kind: str, icon_html: str, label: str, title: str, items: str) -> str:
+def _menu(kind: str, icon_html: str, label: str, title: str, items: str, head: str = "Elige un mensaje") -> str:
     """Botón que despliega una lista de mensajes (HTML puro con <details>, sin JavaScript propio)."""
     return (
         f'<details class="mrp-menu {kind}"><summary class="mrp-cbtn {kind}" title="{html.escape(title, quote=True)}">{icon_html}<span>{label}</span>'
-        f'<i class="mrp-menu-chev"></i></summary><div class="mrp-menu-list"><div class="mrp-menu-head">Elige un mensaje</div>{items}</div></details>'
+        f'<i class="mrp-menu-chev"></i></summary><div class="mrp-menu-list"><div class="mrp-menu-head">{html.escape(head)}</div>{items}</div></details>'
     )

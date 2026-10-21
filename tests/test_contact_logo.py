@@ -91,17 +91,50 @@ class ContactTests(unittest.TestCase):
         self.assertEqual(contact.dial_number("+51 987-654 321"), "+51987654321")
         self.assertEqual(contact.whatsapp_number(None), "")
 
-    def test_there_are_several_messages_each_for_something_different(self):
+    def test_supplier_messages_are_varied_and_formal(self):
         msgs = contact.messages("Ana María Ruiz", "Constructora Ejemplo")
         self.assertGreaterEqual(len(msgs), 5)
         self.assertEqual(len({m["key"] for m in msgs}), len(msgs))
-        self.assertEqual(len({m["body"] for m in msgs}), len(msgs))
+        self.assertEqual(len({m["email"] for m in msgs}), len(msgs))
         for m in msgs:
             self.assertTrue(m["label"] and m["hint"] and m["subject"])
-            self.assertIn("Hola Ana,", m["body"])
-            self.assertIn("Constructora Ejemplo", m["body"])
+            self.assertIn("Buen día, Ana:", m["email"])
+            self.assertIn("Le escribe Constructora Ejemplo.", m["email"])
+            self.assertIn("Quedo atento", m["email"])
         anonymous = contact.messages(None, None)
-        self.assertTrue(all(m["body"].startswith("Hola, buen día.") for m in anonymous))
+        self.assertTrue(all(m["email"].startswith("Buen día:") for m in anonymous))
+
+    def test_messages_are_formatted_per_channel(self):
+        m = contact.messages("Ana", "Ejemplo SAC")[0]
+        wa, mail = m["whatsapp"], m["email"]
+        self.assertTrue(wa.startswith("*Solicitud de cotización*\n\nBuen día, Ana:"))   # título en negrita de WhatsApp
+        self.assertTrue(wa.rstrip().endswith("_Ejemplo SAC_"))                            # firma en cursiva
+        self.assertIn("\n   •  Precio unitario", wa)                                       # sangría y viñeta
+        self.assertNotIn("*", mail)                                                        # el correo va en texto limpio
+        self.assertIn("\n   •  Precio unitario", mail)
+        self.assertTrue(mail.rstrip().endswith("Saludos cordiales,\nEjemplo SAC"))
+        self.assertNotIn("\n\n\n", wa)
+        data = contact.messages("Ana", None)[1]["whatsapp"]                               # datos por completar con su campo en negrita
+        self.assertIn("*Material:* ____", data)
+
+    def test_worker_messages_are_completely_different_and_informal(self):
+        workers = contact.messages("Juan Pérez", "Constructora Ejemplo", "worker", "Torre Central", "Maestro de obra")
+        suppliers = contact.messages("Juan Pérez", "Constructora Ejemplo")
+        self.assertGreaterEqual(len(workers), 6)
+        self.assertFalse({m["key"] for m in workers} & {m["key"] for m in suppliers})        # ninguna opción se repite
+        self.assertFalse({m["label"] for m in workers} & {m["label"] for m in suppliers})
+        for m in workers:
+            self.assertIn("Hola Juan, buen día.", m["whatsapp"])
+            self.assertNotIn("cotiza", m["whatsapp"].lower())                                  # a un trabajador no se le pide un catálogo
+            self.assertNotIn("catálogo", m["whatsapp"].lower())
+            self.assertNotIn("Le escribe", m["whatsapp"])                                      # trato de tú, no de usted
+        convoca = next(m for m in workers if m["key"] == "convocatoria")["whatsapp"]
+        self.assertIn("*Obra:* Torre Central", convoca)                                        # usa la obra y el puesto del trabajador
+        self.assertIn("*Puesto:* Maestro de obra", convoca)
+        self.assertIn("Gracias por tu apoyo.", convoca)
+        no_site = next(m for m in contact.messages("Juan", None, "worker") if m["key"] == "convocatoria")["whatsapp"]
+        self.assertIn("*Obra:* ____", no_site)
+        self.assertTrue(no_site.rstrip().endswith("_Equipo de obra_"))
 
     def test_links_carry_the_text_encoded(self):
         body = "Hola, ¿cómo está? Precio & plazo: 100%"
@@ -123,6 +156,7 @@ class ContactTests(unittest.TestCase):
         for kind in ("call", "wa", "gmail", "outlook"):
             self.assertIn(f"mrp-cbtn {kind}", html)
         self.assertEqual(html.count("wa.me/"), len(contact.messages()))
+        self.assertIn("Elige un mensaje", html)
         self.assertIn("mail.google.com", html)
         self.assertIn("outlook.live.com", html)
         self.assertIn("mailto:", html)
@@ -133,6 +167,15 @@ class ContactTests(unittest.TestCase):
         self.assertNotIn("wa.me", only_mail)
         self.assertIn("Sin datos de contacto", ui.contact_links(None, None))
         self.assertNotIn("<script", ui.contact_links("1", 'x"><script>alert(1)</script>@a.pe'))
+
+    def test_worker_buttons_have_their_own_menu(self):
+        html = ui.contact_links("987654321", None, "Juan Pérez", "Ejemplo", "worker", "Torre Central", "Albañil")
+        self.assertIn("Mensaje para tu equipo", html)
+        self.assertEqual(html.count("<details"), 1)               # solo WhatsApp: a un trabajador no se le escribe por Gmail
+        self.assertEqual(html.count("wa.me/"), len(contact.messages(audience="worker")))
+        self.assertIn("Convocatoria de trabajo", unquote(html))
+        self.assertNotIn("Solicitar cotización", html)
+        self.assertNotIn("gmail", html)
 
     def test_every_class_used_has_a_style(self):
         css = (Path(__file__).resolve().parent.parent / "modules" / "styles" / "56_contact.css").read_text(encoding="utf-8")
