@@ -36,6 +36,27 @@ TONES = {
     "gray": (MUTED, (238, 240, 247)),
 }
 
+# Un tema por familia de documento: acento, tono oscuro, tono suave y estilo de portada.
+THEMES = {
+    "violet": {"accent": ACCENT, "dark": ACCENT_DARK, "soft": SOFT},              # orden de compra
+    "teal": {"accent": (14, 150, 150), "dark": (10, 106, 112), "soft": (222, 245, 244)},      # vale de salida
+    "blue": {"accent": (47, 111, 222), "dark": (24, 62, 148), "soft": (228, 238, 255)},       # reportes del sistema
+    "amber": {"accent": (224, 140, 20), "dark": (150, 82, 8), "soft": (255, 240, 214)},       # reporte de obra
+    "green": {"accent": (30, 150, 96), "dark": (16, 96, 62), "soft": (225, 245, 235)},        # kardex
+    "slate": {"accent": (70, 84, 120), "dark": (30, 38, 66), "soft": (233, 236, 245)},        # documentos sobrios
+}
+
+# Código 39: cada carácter son 9 elementos (barra, espacio, barra…), «1» = ancho y «0» = angosto. Lo leen todos los lectores.
+_CODE39 = {
+    "0": "000110100", "1": "100100001", "2": "001100001", "3": "101100000", "4": "000110001", "5": "100110000", "6": "001110000", "7": "000100101",
+    "8": "100100100", "9": "001100100", "A": "100001001", "B": "001001001", "C": "101001000", "D": "000011001", "E": "100011000", "F": "001011000",
+    "G": "000001101", "H": "100001100", "I": "001001100", "J": "000011100", "K": "100000011", "L": "001000011", "M": "101000010", "N": "000010011",
+    "O": "100010010", "P": "001010010", "Q": "000000111", "R": "100000110", "S": "001000110", "T": "000010110", "U": "110000001", "V": "011000001",
+    "W": "111000000", "X": "010010001", "Y": "110010000", "Z": "011010000", "-": "010000101", ".": "110000100", " ": "011000100", "*": "010010100",
+    "$": "010101000", "/": "010100010", "+": "010001010", "%": "000101010",
+}
+
+
 def _rgb(color: tuple[int, int, int]) -> str:
     return "#%02x%02x%02x" % color
 
@@ -51,9 +72,12 @@ class BrandPDF(FPDF):
     """PDF con la identidad del sistema. `kind`: tipo de documento ('Orden de compra'…), mostrado en el encabezado de las
     páginas siguientes junto a `code`."""
 
-    def __init__(self, kind: str, code: str = "", orientation: str = "P", margin: float = 14.0):
+    def __init__(self, kind: str, code: str = "", orientation: str = "P", margin: float = 14.0, theme: str = "violet", style: str = "band"):
         super().__init__(orientation=orientation, unit="mm", format="A4")
         self.kind, self.code = kind, code
+        palette = THEMES[theme]
+        self.accent, self.accent_dark, self.soft = palette["accent"], palette["dark"], palette["soft"]
+        self.style = style            # portada: band (franja), ticket (vale), poster (reporte), stripe (obra), minimal (ledger)
         self.set_margins(margin, margin + 8, margin)
         self.set_auto_page_break(auto=True, margin=18)
         self.alias_nb_pages()
@@ -63,6 +87,10 @@ class BrandPDF(FPDF):
         self.add_font("Inter", "B", str(FONTS / "Inter_Bold.ttf"))
         self.add_font("InterSB", "", str(FONTS / "Inter_SemiBold.ttf"))
         self._cover_done = False
+
+    def tone(self, name: str) -> tuple[tuple[int, int, int], tuple[int, int, int]]:
+        """Colores (texto, fondo) de un tono; «accent» sigue al tema del documento."""
+        return (self.accent, self.soft) if name == "accent" else TONES[name]
 
     # --------------------------------------------------------------------------------------------- ancho útil
     @property
@@ -105,8 +133,9 @@ class BrandPDF(FPDF):
         return lines or [""]
 
     # --------------------------------------------------------------------------------------------- iconos y formas
-    def icon(self, name: str, x: float, y: float, size: float = 5, color: tuple[int, int, int] = ACCENT, weight: float = 2.0) -> None:
+    def icon(self, name: str, x: float, y: float, size: float = 5, color: tuple[int, int, int] | None = None, weight: float = 2.0) -> None:
         body = _ICONS[name]
+        color = color or self.accent
         svg = (
             f'<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" width="24" height="24">'
             f'<g fill="none" stroke="{_rgb(color)}" stroke-width="{weight}" stroke-linecap="round" stroke-linejoin="round">{body}</g></svg>'
@@ -115,7 +144,7 @@ class BrandPDF(FPDF):
 
     def chip(self, x: float, y: float, text: str, tone: str = "gray", size: float = 7.5, h: float = 5.4, align: str = "L") -> float:
         """Etiqueta redondeada de color. Devuelve su ancho. `align='R'` ancla `x` al borde derecho."""
-        fg, bg = TONES[tone]
+        fg, bg = self.tone(tone)
         self.font(size, semi=True, color=fg)
         width = self.get_string_width(_safe(text)) + 5
         left = x - width if align == "R" else x
@@ -136,58 +165,260 @@ class BrandPDF(FPDF):
 
     def progress(self, x: float, y: float, w: float, fraction: float | None, h: float = 2.2, tone: str = "accent") -> None:
         """Barra de avance (0 a 1)."""
-        fg, _ = TONES[tone]
+        fg, _ = self.tone(tone)
         self.set_fill_color(*BORDER)
         self.rect(x, y, w, h, style="F", round_corners=True, corner_radius=h / 2)
         if fraction and fraction > 0:
             self.set_fill_color(*fg)
             self.rect(x, y, max(min(fraction, 1.0) * w, h), h, style="F", round_corners=True, corner_radius=h / 2)
 
+    # --------------------------------------------------------------------------------------------- formas decorativas
+    def _alpha(self, value: float):
+        return self.local_context(fill_opacity=value, stroke_opacity=value)
+
+    def barcode(self, x: float, y: float, text: str, h: float = 9.0, narrow: float = 0.32, color: tuple[int, int, int] = TEXT, draw: bool = True) -> float:
+        """Código de barras Code 39 del texto (letras, números y - . espacio). Devuelve su ancho. Lo lee cualquier lector.
+        Con `draw=False` solo mide."""
+        wide = narrow * 2.6
+        if draw:
+            self.set_fill_color(*color)
+        cursor = x
+        for ch in f"*{_safe(text).upper()}*":
+            pattern = _CODE39.get(ch)
+            if not pattern:
+                continue
+            for index, bit in enumerate(pattern):
+                width = wide if bit == "1" else narrow
+                if draw and index % 2 == 0:
+                    self.rect(cursor, y, width, h, style="F")
+                cursor += width
+            cursor += narrow
+        return cursor - x
+
+    def stamp(self, text: str, x: float, y: float, tone: str = "accent", angle: float = -11, size: float = 15, opacity: float = 0.22) -> None:
+        """Sello inclinado (tipo «ENTREGADO», «RECIBIDA»): borde doble y letras grandes, translúcido para no tapar el texto."""
+        fg, _ = self.tone(tone)
+        keep_x, keep_y = self.get_x(), self.get_y()
+        self.font(size, bold=True, color=fg)
+        text = _safe(text).upper()
+        w, h = self.get_string_width(text) + 10, size * 0.62 + 5
+        with self.rotation(angle, x + w / 2, y + h / 2):
+            with self._alpha(opacity):
+                self.set_draw_color(*fg)
+                self.set_line_width(0.9)
+                self.rect(x, y, w, h, style="D", round_corners=True, corner_radius=2)
+                self.set_line_width(0.3)
+                self.rect(x + 1.3, y + 1.3, w - 2.6, h - 2.6, style="D", round_corners=True, corner_radius=1.4)
+                self.set_xy(x, y)
+                self.cell(w, h, text, align="C")
+        self.set_xy(keep_x, keep_y)
+
+    def hazard(self, x: float, y: float, w: float, h: float, a: tuple[int, int, int], b: tuple[int, int, int], step: float = 5.0) -> None:
+        """Franja de obra: rayas diagonales de dos colores (se recorta al rectángulo)."""
+        self.set_fill_color(*a)
+        self.rect(x, y, w, h, style="F")
+        self.set_fill_color(*b)
+        with self.rect_clip(x, y, w, h):
+            cursor = x - h
+            while cursor < x + w:
+                self.polygon([(cursor, y + h), (cursor + step / 2, y + h), (cursor + step / 2 + h, y), (cursor + h, y)], style="F")
+                cursor += step
+
+    def dashed(self, x1: float, y: float, x2: float, color: tuple[int, int, int] = BORDER, dash: float = 1.6, gap: float = 1.4) -> None:
+        self.set_draw_color(*color)
+        self.set_line_width(0.3)
+        self.set_dash_pattern(dash=dash, gap=gap)
+        self.line(x1, y, x2, y)
+        self.set_dash_pattern()
+
     # --------------------------------------------------------------------------------------------- portada y páginas
     def cover(self, label: str, title: str, meta: list[tuple[str, str]] | None = None, chip: tuple[str, str] | None = None, icon: str = "order") -> None:
-        """Banda superior de la primera página: tipo de documento, título grande, datos a la derecha y, si se pide, una etiqueta de estado."""
+        """Primera página: cada familia de documentos tiene su portada (franja, ticket, póster, obra o sobria)."""
+        {"ticket": self._cover_ticket, "poster": self._cover_poster, "stripe": self._cover_stripe, "minimal": self._cover_minimal}.get(self.style, self._cover_band)(
+            label, title, meta or [], chip, icon
+        )
+        self._cover_done = True
+
+    def _meta_right(self, meta: list[tuple[str, str]], y: float, key_color, value_color, width: float = 62, limit: int = 3) -> None:
+        right = self.w - self.r_margin
+        for key, value in meta[:limit]:
+            self.font(7, color=key_color)
+            self.set_xy(right - width, y)
+            self.cell(width, 3.4, _safe(key).upper(), align="R")
+            self.font(9, semi=True, color=value_color)
+            self.set_xy(right - width, y + 3.2)
+            self.cell(width, 4.2, self.fit(value, width), align="R")
+            y += 7.8
+
+    def _cover_band(self, label, title, meta, chip, icon) -> None:
+        """Franja de dos tonos con círculos decorativos (orden de compra y documentos formales)."""
         top, band = 0.0, 32.0
-        self.set_fill_color(*ACCENT_DARK)
+        self.set_fill_color(*self.accent_dark)
         self.rect(0, top, self.w, band, style="F")
-        self.set_fill_color(*ACCENT)
+        self.set_fill_color(*self.accent)
         self.rect(self.w * 0.55, top, self.w * 0.45, band, style="F")
-        self.set_fill_color(*ACCENT_DARK)
+        self.set_fill_color(*self.accent_dark)
         self.rect(self.w * 0.55 - 8, top, 16, band, style="F")  # transición suave entre los dos tonos
-        # marca
+        with self._alpha(0.10):
+            self.set_fill_color(255, 255, 255)
+            with self.rect_clip(0, 0, self.w, band):
+                self.circle(self.w * 0.74, 4, 22, style="F")
+                self.circle(self.w * 0.9, 30, 16, style="F")
+                self.circle(self.w * 0.42, 38, 12, style="F")
         self.set_fill_color(255, 255, 255)
         self.rect(self.l_margin, 8, 11, 11, style="F", round_corners=True, corner_radius=2.6)
-        self.icon(icon, self.l_margin + 2.1, 10.1, 6.8, ACCENT_DARK, 2.2)
+        self.icon(icon, self.l_margin + 2.1, 10.1, 6.8, self.accent_dark, 2.2)
         self.font(7.5, semi=True, color=(214, 208, 255))
         self.set_xy(self.l_margin + 14, 8.2)
         self.cell(60, 4, _safe(label).upper())
         self.font(17, bold=True, color=WHITE)
         self.set_xy(self.l_margin + 14, 12.4)
         self.cell(110, 8, self.fit(title, 110))
-        # datos a la derecha
-        right = self.w - self.r_margin
-        y = 6.4
-        for key, value in (meta or [])[:3]:
-            self.font(7, color=(214, 208, 255))
-            self.set_xy(right - 62, y)
-            self.cell(62, 3.4, _safe(key).upper(), align="R")
-            self.font(9, semi=True, color=WHITE)
-            self.set_xy(right - 62, y + 3.2)
-            self.cell(62, 4.2, self.fit(value, 62), align="R")
-            y += 7.8
+        self._meta_right(meta, 6.4, (214, 208, 255), WHITE)
         if chip:
             self.chip(self.l_margin + 14, 22.4, chip[0], chip[1])
         self.set_y(band + 7)
-        self._cover_done = True
+
+    def _cover_ticket(self, label, title, meta, chip, icon) -> None:
+        """Vale / boleta: franja con muescas de talonario, código de barras del número y línea de corte."""
+        band = 40.0
+        self.set_fill_color(*self.accent_dark)
+        self.rect(0, 0, self.w, band, style="F")
+        self.set_fill_color(*self.accent)
+        self.rect(0, 0, self.w, 4, style="F")
+        with self._alpha(0.09):
+            self.set_fill_color(255, 255, 255)
+            with self.rect_clip(0, 0, self.w, band):
+                self.circle(self.w * 0.28, 8, 26, style="F")
+                self.circle(self.w * 0.62, 48, 20, style="F")
+        # muescas del talonario a ambos lados
+        self.set_fill_color(255, 255, 255)
+        self.circle(-0.5, band, 4.2, style="F")
+        self.circle(self.w + 0.5, band, 4.2, style="F")
+        self.set_fill_color(255, 255, 255)
+        self.rect(self.l_margin, 10, 12, 12, style="F", round_corners=True, corner_radius=3)
+        self.icon(icon, self.l_margin + 2.3, 12.3, 7.4, self.accent_dark, 2.2)
+        self.font(7.5, semi=True, color=(205, 240, 238))
+        self.set_xy(self.l_margin + 16, 9.6)
+        self.cell(80, 4, _safe(label).upper())
+        self.font(22, bold=True, color=WHITE)
+        self.set_xy(self.l_margin + 16, 14.2)
+        self.cell(90, 10, self.fit(title, 90))
+        if chip:
+            self.chip(self.l_margin + 16, 27.6, chip[0], chip[1])
+        # tarjeta blanca con el código de barras del número
+        right = self.w - self.r_margin
+        card_w = 70.0
+        self.set_fill_color(255, 255, 255)
+        self.rect(right - card_w, 8.5, card_w, 25, style="F", round_corners=True, corner_radius=2.6)
+        natural = self.barcode(0, 0, title, h=1, draw=False)
+        scale = min(1.0, (card_w - 12) / max(natural, 1))
+        self.barcode(right - card_w + (card_w - natural * scale) / 2, 12, title, h=11, narrow=0.32 * scale, color=self.accent_dark)
+        self.font(7.5, semi=True, color=self.accent_dark)
+        self.set_xy(right - card_w, 24.4)
+        self.cell(card_w, 3.6, _safe(title), align="C")
+        if meta:
+            self.font(6.6, color=MUTED)
+            self.set_xy(right - card_w, 28.2)
+            self.cell(card_w, 3, f"{_safe(meta[0][0])}: {_safe(meta[0][1])}", align="C")
+        self.dashed(self.l_margin, band + 4, self.w - self.r_margin, color=self.accent)
+        self.set_y(band + 10)
+
+    def _cover_poster(self, label, title, meta, chip, icon) -> None:
+        """Reportes: póster oscuro con barras de gráfico decorativas y el título grande."""
+        band = 40.0
+        self.set_fill_color(*self.accent_dark)
+        self.rect(0, 0, self.w, band, style="F")
+        heights = [8, 13, 10, 18, 15, 24, 20, 28, 25, 33, 30]   # barras decorativas, cada vez más altas
+        x0 = self.w * 0.62
+        step = (self.w - x0 - self.r_margin) / len(heights)
+        with self._alpha(0.18):
+            self.set_fill_color(255, 255, 255)
+            for i, hh in enumerate(heights):
+                self.rect(x0 + i * step, band - hh - 3, step * 0.62, hh, style="F", round_corners=True, corner_radius=1)
+        with self._alpha(0.07):
+            self.set_fill_color(255, 255, 255)
+            with self.rect_clip(0, 0, self.w, band):
+                self.circle(self.w * 0.18, 4, 30, style="F")
+        self.set_fill_color(*self.accent)
+        self.rect(0, band - 2.2, self.w, 2.2, style="F")
+        self.set_fill_color(255, 255, 255)
+        self.rect(self.l_margin, 9, 12, 12, style="F", round_corners=True, corner_radius=3)
+        self.icon(icon, self.l_margin + 2.3, 11.3, 7.4, self.accent_dark, 2.2)
+        self.font(7.5, semi=True, color=(205, 220, 255))
+        self.set_xy(self.l_margin + 16, 9.2)
+        self.cell(100, 4, _safe(label).upper())
+        self.font(19, bold=True, color=WHITE)
+        self.set_xy(self.l_margin + 16, 13.4)
+        self.cell(self.w * 0.55, 9, self.fit(title, self.w * 0.55))
+        x = self.l_margin + 16
+        for key, value in meta[:2]:
+            self.font(7.2, color=(220, 232, 255))
+            text = f"{_safe(key)}: {_safe(value)}"
+            width = self.get_string_width(text) + 6
+            with self._alpha(0.16):
+                self.set_fill_color(255, 255, 255)
+                self.rect(x, 26, width, 6, style="F", round_corners=True, corner_radius=3)
+            self.font(7.2, color=(220, 232, 255))
+            self.set_xy(x, 26)
+            self.cell(width, 6, text, align="C")
+            x += width + 3
+        if chip:
+            self.chip(x, 26.3, chip[0], chip[1])
+        self.set_y(band + 8)
+
+    def _cover_stripe(self, label, title, meta, chip, icon) -> None:
+        """Obra: franja de peligro (rayas), nombre de la obra en grande sobre fondo claro."""
+        self.hazard(0, 0, self.w, 7, self.accent_dark, self.accent, step=6)
+        self.set_fill_color(*self.soft)
+        self.rect(0, 7, self.w, 27, style="F")
+        self.set_fill_color(*self.accent)
+        self.rect(self.l_margin, 12, 15, 15, style="F", round_corners=True, corner_radius=3.4)
+        self.icon(icon, self.l_margin + 3.1, 15.1, 8.8, WHITE, 2.1)
+        self.font(7.5, semi=True, color=self.accent_dark)
+        self.set_xy(self.l_margin + 19, 11.6)
+        self.cell(90, 4, _safe(label).upper())
+        self.font(19, bold=True, color=TEXT)
+        self.set_xy(self.l_margin + 19, 16.4)
+        self.cell(self.w * 0.5, 9, self.fit(title, self.w * 0.5))
+        if chip:
+            self.chip(self.l_margin + 19, 27, chip[0], chip[1])
+        self._meta_right(meta, 11.4, MUTED, TEXT, width=90, limit=2)
+        self.set_fill_color(*self.accent)
+        self.rect(0, 34, self.w, 0.9, style="F")
+        self.set_y(34 + 8)
+
+    def _cover_minimal(self, label, title, meta, chip, icon) -> None:
+        """Libro mayor (kardex): encabezado sobrio con barra de color y una sola línea de datos."""
+        self.set_fill_color(*self.accent)
+        self.rect(self.l_margin, 9, 2.2, 17, style="F", round_corners=True, corner_radius=1.1)
+        self.icon(icon, self.l_margin + 6, 9.4, 6, self.accent, 2.1)
+        self.font(7.5, semi=True, color=self.accent)
+        self.set_xy(self.l_margin + 14, 9.4)
+        self.cell(100, 4, _safe(label).upper())
+        self.font(18, bold=True, color=TEXT)
+        self.set_xy(self.l_margin + 6, 15.2)
+        self.cell(self.w * 0.6, 9, self.fit(title, self.w * 0.6))
+        self._meta_right(meta, 8.2, MUTED, TEXT, width=80, limit=2)
+        if chip:
+            self.chip(self.w - self.r_margin - 40, 21, chip[0], chip[1])
+        self.set_draw_color(*self.accent)
+        self.set_line_width(0.5)
+        self.line(self.l_margin, 28.6, self.w - self.r_margin, 28.6)
+        self.set_y(28.6 + 7)
 
     def header(self) -> None:
         if not self._cover_done:
             return  # la primera página lleva portada
-        self.set_fill_color(*ACCENT)
-        self.rect(0, 0, self.w, 1.6, style="F")
-        self.set_fill_color(*SOFT)
+        if self.style == "stripe":
+            self.hazard(0, 0, self.w, 2.4, self.accent_dark, self.accent, step=5)
+        else:
+            self.set_fill_color(*self.accent)
+            self.rect(0, 0, self.w, 1.6, style="F")
+        self.set_fill_color(*self.soft)
         self.rect(self.l_margin, 6, 5.5, 5.5, style="F", round_corners=True, corner_radius=1.4)
-        self.icon("order", self.l_margin + 1.0, 7.0, 3.5, ACCENT, 2.4)
-        self.font(8, semi=True, color=ACCENT_DARK)
+        self.icon("order", self.l_margin + 1.0, 7.0, 3.5, self.accent, 2.4)
+        self.font(8, semi=True, color=self.accent_dark)
         self.set_xy(self.l_margin + 8, 6.2)
         self.cell(80, 5, _safe(f"{self.kind}  {self.code}").strip())
         self.font(7.5, color=MUTED)
@@ -216,7 +447,7 @@ class BrandPDF(FPDF):
         y = self.get_y()
         x = self.l_margin
         if icon:
-            self.icon(icon, x, y + 0.3, 5, ACCENT, 2.0)
+            self.icon(icon, x, y + 0.3, 5, self.accent, 2.0)
             x += 7
         self.font(11, bold=True)
         self.set_xy(x, y)
@@ -245,11 +476,11 @@ class BrandPDF(FPDF):
             self.add_page()
             y0 = self.get_y()
         self.box(x0, y0, width, height, fill=WHITE)
-        self.set_fill_color(*ACCENT)
+        self.set_fill_color(*self.accent)
         self.rect(x0, y0 + 3.5, 0.9, height - 7, style="F")
         cy = y0 + pad
         if title:
-            self.font(8, semi=True, color=ACCENT_DARK)
+            self.font(8, semi=True, color=self.accent_dark)
             self.set_xy(x0 + pad + 1, cy - 0.5)
             self.cell(width - pad * 2, 4, _safe(title).upper())
             cy += title_h
@@ -282,7 +513,7 @@ class BrandPDF(FPDF):
         for i, card in enumerate(cards):
             col, row = i % per_row, i // per_row
             x, yy = self.l_margin + col * (w + gap), y + row * (h + gap)
-            fg, bg = TONES[card.get("tone", "accent")]
+            fg, bg = self.tone(card.get("tone", "accent"))
             self.box(x, yy, w, h, fill=WHITE)
             self.set_fill_color(*fg)
             self.rect(x, yy + 3, 1.0, h - 6, style="F")
@@ -307,19 +538,29 @@ class BrandPDF(FPDF):
 
     def table(
         self, columns: list[str], rows: list[list], widths: list[float], align: list[str] | None = None, row_h: float = 6.6,
-        tones: dict[int, dict[int, str]] | None = None, bold_last_row: bool = False, size: float = 8,
+        tones: dict[int, dict[int, str]] | None = None, bold_last_row: bool = False, size: float = 8, look: str | None = None,
+        colors: dict[tuple[int, int], tuple[int, int, int]] | None = None,
     ) -> None:
         """Tabla con encabezado de color, filas alternadas y texto recortado con «…». `widths` son pesos relativos;
-        `align` por columna ('L' o 'R'); `tones[fila][columna]` pinta esa celda como etiqueta ('good', 'bad', 'warn'…)."""
+        `align` por columna ('L' o 'R'); `tones[fila][columna]` pinta esa celda como etiqueta ('good', 'bad', 'warn'…).
+        `look`: «zebra» (filas alternadas, el predeterminado), «lines» (libro mayor: encabezado claro y líneas finas) o «cards»."""
+        look = look or {"minimal": "lines", "ticket": "cards"}.get(self.style, "zebra")
         total = sum(widths)
         cols = [w / total * self.usable for w in widths]
         align = align or ["L"] * len(columns)
 
         def head() -> None:
             y = self.get_y()
-            self.set_fill_color(*ACCENT_DARK)
-            self.rect(self.l_margin, y, self.usable, 7.4, style="F", round_corners=True, corner_radius=1.6)
-            self.font(7.4, semi=True, color=WHITE)
+            if look == "lines":
+                self.set_fill_color(*self.soft)
+                self.rect(self.l_margin, y, self.usable, 7.4, style="F")
+                self.set_draw_color(*self.accent)
+                self.set_line_width(0.4)
+                self.line(self.l_margin, y + 7.4, self.l_margin + self.usable, y + 7.4)
+            else:
+                self.set_fill_color(*self.accent_dark)
+                self.rect(self.l_margin, y, self.usable, 7.4, style="F", round_corners=True, corner_radius=1.6)
+            self.font(7.4, semi=True, color=self.accent_dark if look == "lines" else WHITE)
             x = self.l_margin
             for name, w, a in zip(columns, cols, align):
                 self.set_xy(x + 1.8, y)
@@ -335,18 +576,29 @@ class BrandPDF(FPDF):
             y = self.get_y()
             last = bold_last_row and r == len(rows) - 1
             if last:
-                self.set_fill_color(*SOFT)
+                self.set_fill_color(*self.soft)
                 self.rect(self.l_margin, y, self.usable, row_h, style="F", round_corners=True, corner_radius=1.2)
-            elif r % 2 == 1:
+            elif look == "zebra" and r % 2 == 1:
                 self.set_fill_color(*PAPER)
                 self.rect(self.l_margin, y, self.usable, row_h, style="F")
+            elif look == "lines":
+                self.set_draw_color(*BORDER)
+                self.set_line_width(0.15)
+                self.line(self.l_margin, y + row_h, self.l_margin + self.usable, y + row_h)
+            elif look == "cards":
+                self.set_draw_color(*BORDER)
+                self.set_line_width(0.2)
+                self.set_dash_pattern(dash=1.2, gap=1.2)
+                self.line(self.l_margin, y + row_h, self.l_margin + self.usable, y + row_h)
+                self.set_dash_pattern()
             x = self.l_margin
             for c, (value, w, a) in enumerate(zip(row, cols, align)):
                 tone = (tones or {}).get(r, {}).get(c)
                 if tone and _safe(value):
                     self.chip(x + 1.4 if a == "L" else x + w - 1.4, y + (row_h - 5) / 2, self.fit(value, w - 3), tone, size=6.8, h=5, align=a if a == "R" else "L")
                 else:
-                    self.font(size, bold=last, color=TEXT)
+                    colored = (colors or {}).get((r, c))
+                    self.font(size, bold=last or bool(colored), color=colored or TEXT)
                     self.set_xy(x + 1.8, y)
                     self.cell(w - 3.6, row_h, self.fit(value, w - 3.6), align=a)
                 x += w
@@ -371,7 +623,7 @@ class BrandPDF(FPDF):
             self.font(8.5, semi=True)
             self.cell(width / 2 - 8, 6, _safe(value), align="R")
             cy += 6.6
-        self.set_fill_color(*ACCENT_DARK)
+        self.set_fill_color(*self.accent_dark)
         self.rect(x, cy + 0.6, width, 9, style="F", round_corners=True, corner_radius=2.2)
         self.font(8.5, semi=True, color=(214, 208, 255))
         self.set_xy(x + 4, cy + 0.6)
@@ -385,7 +637,7 @@ class BrandPDF(FPDF):
         text = _safe(text)
         if not text:
             return
-        fg, bg = TONES[tone]
+        fg, bg = self.tone(tone)
         self.font(8.5)
         lines = self.wrap(text, self.usable - 18, max_lines=6)
         h = 9 + len(lines) * 4.4

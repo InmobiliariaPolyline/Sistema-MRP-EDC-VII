@@ -9,7 +9,7 @@ import io
 import pandas as pd
 
 from utils import money
-from utils.pdf_style import BrandPDF
+from utils.pdf_style import TONES, BrandPDF
 from utils.pdf_style import MUTED as MUTED_TEXT
 from utils.pdf_style import PAPER as PAPER_COLOR
 from utils import clock
@@ -60,15 +60,15 @@ def to_excel(sheets: dict[str, pd.DataFrame]) -> bytes:
     return buffer.getvalue()
 
 
-def to_pdf(title: str, sections: dict[str, pd.DataFrame]) -> bytes:
+def to_pdf(title: str, sections: dict[str, pd.DataFrame], label: str = "Reporte del sistema", theme: str = "blue", style: str = "poster", icon: str = "chart") -> bytes:
     """Un PDF horizontal con portada y una tabla por conjunto de datos (números a la derecha, filas alternadas,
     encabezado que se repite en cada página y total de filas por sección)."""
-    pdf = BrandPDF(title[:70], orientation="L")
+    pdf = BrandPDF(title[:70], orientation="L", theme=theme, style=style)
     total_rows = sum(len(df) for df in sections.values())
     pdf.add_page()
     pdf.cover(
-        "Reporte del sistema", title,
-        [("Generado", f"{clock.now():%d/%m/%Y %H:%M}"), ("Contenido", f"{len(sections)} conjunto(s) · {total_rows:,} registro(s)")], icon="chart",
+        label, title,
+        [("Generado", f"{clock.now():%d/%m/%Y %H:%M}"), ("Contenido", f"{len(sections)} conjunto(s) · {total_rows:,} registro(s)")], icon=icon,
     )
     for heading, df in sections.items():
         pdf.section(heading, "list", f"{len(df):,}")
@@ -82,7 +82,20 @@ def to_pdf(title: str, sections: dict[str, pd.DataFrame]) -> bytes:
         rows = [[_cell_text(v) for v in row] for row in raw_rows]
         numeric = [all(_is_number(r[i]) or r[i] is None or (isinstance(r[i], float) and r[i] != r[i]) for r in raw_rows[:200]) and any(_is_number(r[i]) for r in raw_rows[:200]) for i in range(len(columns))]
         weights = [min(max(len(columns[i]) * 0.9, *(len(r[i]) for r in rows[:200])) + 2, 40) for i in range(len(columns))]
-        pdf.table(columns, rows, weights, ["R" if n else "L" for n in numeric], row_h=6.2, size=7.6)
+        # valores con color según su signo: entradas y diferencias a favor en verde, salidas y faltantes en rojo
+        green, red = TONES["good"][0], TONES["bad"][0]
+        colors = {}
+        for c, name in enumerate(columns):
+            if name not in ("Entrada", "Salida", "Diferencia"):
+                continue
+            for r, raw in enumerate(raw_rows):
+                try:
+                    number = float(raw[c])
+                except (TypeError, ValueError):
+                    continue
+                if number == number and number != 0:
+                    colors[(r, c)] = red if name == "Salida" or (name == "Diferencia" and number < 0) else green
+        pdf.table(columns, rows, weights, ["R" if n else "L" for n in numeric], row_h=6.2, size=7.6, colors=colors)
     return bytes(pdf.output())
 
 
@@ -96,7 +109,7 @@ def order_pdf(order: dict, items: pd.DataFrame, supplier: dict | None = None, co
     currency = order.get("currency") or money.BASE
     tax_rate = float(order.get("tax_rate") or 0)
     include = bool(order.get("prices_include_tax")) and tax_rate > 0
-    pdf = BrandPDF("Orden de compra", order["code"])
+    pdf = BrandPDF("Orden de compra", order["code"], theme="violet", style="band")
     pdf.add_page()
     meta = [("Fecha de emisión", _date(order["created_at"]))]
     if _date(order.get("expected_date")):
@@ -152,7 +165,9 @@ def order_pdf(order: dict, items: pd.DataFrame, supplier: dict | None = None, co
         detail.append((f"IGV ({tax_rate:.0%})", f"{sym} {amounts['tax']:,.2f}"))
     else:
         detail.append(("IGV", "Exonerado / inafecto"))
+    stamp_y = pdf.get_y()
     pdf.totals(detail, ("Importe total", f"{sym} {amounts['total']:,.2f}"))
+    pdf.stamp(status_text, pdf.l_margin + 6, stamp_y + 6, status_tone if status_tone != "gray" else "accent")
     if currency != money.BASE and float(order.get("exchange_rate") or 0) > 0:
         pdf.font(8, color=MUTED_TEXT)
         pdf.set_x(pdf.l_margin)
@@ -199,7 +214,7 @@ def order_whatsapp_text(order: dict, items: pd.DataFrame, company: dict | None =
 
 def dispatch_pdf(voucher: dict, lines: pd.DataFrame) -> bytes:
     """Vale de salida (despacho de almacén a obra): portada, datos del despacho, materiales entregados y tres firmas."""
-    pdf = BrandPDF("Vale de salida", voucher["code"])
+    pdf = BrandPDF("Vale de salida", voucher["code"], theme="teal", style="ticket")
     pdf.add_page()
     stage = voucher.get("stage")
     pdf.cover(
@@ -216,6 +231,8 @@ def dispatch_pdf(voucher: dict, lines: pd.DataFrame) -> bytes:
     pdf.section("Materiales entregados", "box", len(lines))
     rows = [[str(i + 1), r["material_name"], r.get("unit") or "", f"{float(r['quantity']):,.2f}"] for i, r in enumerate(lines.to_dict("records"))]
     pdf.table(["N.º", "Material", "Unidad", "Cantidad"], rows, [0.8, 7, 1.6, 1.8], ["L", "L", "L", "R"], row_h=7.2, size=8.6)
+    pdf.stamp("Entregado", pdf.l_margin + 6, pdf.get_y() + 1, "teal")
+    pdf.ln(17)
     pdf.note_box("Nota del vale", voucher.get("note"), icon="note", tone="info")
     pdf.signatures([("Entrega (almacén)", voucher.get("actor")), ("Recibe", voucher.get("requested_by")), ("V.° B.° de obra", None)])
     pdf.font(7.2, color=MUTED_TEXT)
@@ -245,7 +262,7 @@ def site_report_pdf(site: dict, prog: dict, materials: pd.DataFrame, stages: lis
 
     `materials`: tabla de `obras.progress_by_material`; `stages`: [{"stage", "budget", "dispatched"}] (en soles);
     `vouchers`: vales de la obra. Los importes van en soles y sin IGV."""
-    pdf = BrandPDF("Reporte de obra", site["name"], orientation="L")
+    pdf = BrandPDF("Reporte de obra", site["name"], orientation="L", theme="amber", style="stripe")
     pdf.add_page()
     pdf.cover(
         "Reporte de obra", site["name"],

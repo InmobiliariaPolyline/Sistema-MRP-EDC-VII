@@ -6,6 +6,21 @@ Formato de cada parche: **Agregado** · **Corregido** · **Problemas y causa** �
 
 ---
 
+## Parche 064 — PDF con identidad propia por tipo de documento · 2026-10-21
+
+Antes todos los PDF eran la misma plantilla en violeta. Ahora cada familia de documentos tiene su color y su portada.
+
+**Qué cambió**
+- **Orden de compra** (violeta, franja con círculos): sello inclinado con su estado («Recibida parcial», «Pendiente»…) junto a los totales.
+- **Vale de salida** (verde azulado, talonario): franja con muescas, **código de barras Code 39** con el número del vale (lo lee cualquier lector), línea de corte, filas con separador punteado y sello «Entregado».
+- **Reporte del sistema** (azul, póster): título grande, barras de gráfico decorativas y datos del reporte en etiquetas.
+- **Reporte de obra** (ámbar, obra): franja de peligro con rayas, nombre de la obra en grande; la franja también acompaña las páginas siguientes.
+- **Kardex** (verde, libro mayor): encabezado sobrio con barra de color, tabla de líneas finas y **entradas en verde / salidas en rojo**; en el reporte general también colorea «Diferencia» según su signo.
+- Piezas nuevas en `BrandPDF`: temas, estilos de portada, `barcode`, `stamp`, `hazard`, `dashed` y tres estilos de tabla (zebra, líneas, talonario).
+- Pruebas: todas las combinaciones de tema y portada se generan, el sello no mueve el cursor y el código de barras usa los patrones estándar.
+
+---
+
 ## Parche 063 — Hora de Perú y segunda pasada de interfaz · 2026-10-21
 
 **Qué cambió**

@@ -683,7 +683,7 @@ def _render_kardex() -> None:
     d1, d2, _ = st.columns([2, 2, 3])
     d1.download_button(":material/download: Excel", data=to_excel({"Kardex": table}), file_name=f"{name}.xlsx", width="stretch",
                        mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet", key="kardex_xlsx")
-    d2.download_button(":material/download: PDF", data=to_pdf(f"Kardex: {material['material_name']}", {f"{material['material_name']} ({unit})": table}), file_name=f"{name}.pdf",
+    d2.download_button(":material/download: PDF", data=to_pdf(f"Kardex: {material['material_name']}", {f"{material['material_name']} ({unit})": table}, label="Kardex de inventario", theme="green", style="minimal", icon="list"), file_name=f"{name}.pdf",
                        mime="application/pdf", width="stretch", key="kardex_pdf")
 
 

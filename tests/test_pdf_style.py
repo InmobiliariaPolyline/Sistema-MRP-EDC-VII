@@ -103,5 +103,53 @@ class DocumentTests(unittest.TestCase):
         self.assertTrue(pdf.startswith(b"%PDF"))
 
 
+class DiversityTests(unittest.TestCase):
+    def test_every_theme_and_cover_style_renders(self):
+        for theme in pdf_style.THEMES:
+            for style in ("band", "ticket", "poster", "stripe", "minimal"):
+                with self.subTest(theme=theme, style=style):
+                    pdf = BrandPDF("Documento", "DOC-0001", theme=theme, style=style)
+                    pdf.add_page()
+                    pdf.cover("Etiqueta", "Título del documento", [("Fecha", "21/10/2026"), ("Moneda", "Soles")], ("Estado", "good"), icon="order")
+                    pdf.table(["A", "B"], [["uno", "2"]] * 3, [1, 1], ["L", "R"])
+                    pdf.stamp("Entregado", 20, 120, "good")
+                    self.assertTrue(bytes(pdf.output()).startswith(b"%PDF"))
+
+    def test_second_page_keeps_the_theme_header(self):
+        for style in ("stripe", "band"):
+            pdf = BrandPDF("Reporte", "X", theme="amber", style=style)
+            pdf.add_page()
+            pdf.cover("R", "T", [], None)
+            for _ in range(80):
+                pdf.table(["A"], [["fila"]] * 3, [1])
+            self.assertGreater(pdf.page_no(), 1)
+
+    def test_code39_barcode_is_measurable_and_uses_standard_patterns(self):
+        pdf = BrandPDF("Vale", "VS-0012", theme="teal", style="ticket")
+        pdf.add_page()
+        width = pdf.barcode(0, 0, "VS-0012", draw=False)
+        self.assertGreater(width, 20)
+        self.assertEqual(pdf_style._CODE39["A"], "100001001")
+        self.assertEqual(len(pdf_style._CODE39["*"]), 9)
+        for char, pattern in pdf_style._CODE39.items():
+            self.assertEqual(len(pattern), 9, char)
+            self.assertIn(pattern.count("1"), (1, 2, 3), char)
+        self.assertGreater(pdf.barcode(0, 0, "VS-0012", draw=True), 20)
+
+    def test_stamp_does_not_move_the_cursor(self):
+        pdf = BrandPDF("Orden", "OC-1")
+        pdf.add_page()
+        pdf.set_xy(30, 77)
+        pdf.stamp("Recibida", 20, 100)
+        self.assertEqual((round(pdf.get_x()), round(pdf.get_y())), (30, 77))
+
+    def test_documents_use_their_own_family_look(self):
+        voucher = {"code": "VS-0001", "created_at": "2026-10-01T10:00:00", "site_name": "Torre", "stage": None, "requested_by": "Juan", "actor": "Luis", "note": ""}
+        lines = pd.DataFrame([{"material_name": "Cemento", "unit": "bolsa", "quantity": 3}])
+        self.assertTrue(reports.dispatch_pdf(voucher, lines).startswith(b"%PDF"))
+        sections = {"Kardex": pd.DataFrame({"Fecha": ["2026-10-01 04:00"], "Entrada": [5.0], "Salida": [None], "Saldo": [5.0]})}
+        self.assertTrue(reports.to_pdf("Kardex: Cemento", sections, label="Kardex de inventario", theme="green", style="minimal", icon="list").startswith(b"%PDF"))
+
+
 if __name__ == "__main__":
     unittest.main()
