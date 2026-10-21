@@ -771,6 +771,20 @@ CHAPTERS: list[dict] = [
                 "title": "Sacar reportes",
                 "goal": "Descargar la información en Excel o PDF para compartirla o archivarla.",
                 "where": "Reportes",
+                "mock": {
+                    "title": "Reportes",
+                    "source": ["reportes.py"],
+                    "rows": [
+                        {"sec": "1. Elige el contenido"},
+                        {"field": "Datos a incluir", "kind": "tags", "mark": 1, "options": [
+                            "Materiales", "Proveedores", "Catálogo y precios por proveedor", "Trabajadores", "Órdenes de compra", "Detalle de órdenes",
+                            "Stock actual", "Movimientos de inventario", "Asistencia (últimos 90 días)"]},
+                        {"buttons": [("Los básicos", "ghost", 1), ("Seleccionar todo", "ghost"), ("Limpiar selección", "ghost")]},
+                        {"stats": [("Conjuntos", "9"), ("Registros", "842"), ("Con información", "8")]},
+                        {"sec": "2. Descarga tu reporte"},
+                        {"buttons": [("⬇ Descargar Excel", "primary", 2), ("⬇ Descargar PDF", "ghost", 2)]},
+                    ],
+                },
                 "steps": [
                     {"title": "Elige el contenido", "text": "«Los básicos» trae lo de siempre. Puedes agregar vales de salida, historial de precios, presupuestos de obra, conteos, recepciones, calificación de proveedores e historial de cambios."},
                     {"title": "Descarga", "text": "**Excel** crea una hoja por conjunto; **PDF** los reúne en un documento con portada y tablas."},
@@ -829,6 +843,17 @@ CHAPTERS: list[dict] = [
                 "title": "Consultar el estado del sistema",
                 "goal": "Ver la versión desplegada, el entorno y pedir soporte con datos útiles.",
                 "where": "Sistema",
+                "mock": {
+                    "title": "Sistema",
+                    "source": ["sistema.py"],
+                    "rows": [
+                        {"stats": [("Versión", "parche 061"), ("Base de datos", "Supabase"), ("Seguridad", "Protegida"), ("Hora del sistema", "21/10/2026 12:30")], "mark": 1},
+                        {"sec": "Novedades"},
+                        {"note": "**Manual de usuario ilustrado** · parche 061", "tone": "info", "mark": 2},
+                        {"sec": "Soporte"},
+                        {"note": "Sistema MRP · parche 061 · Datos: Supabase · Protegida · Consultado el 21/10/2026", "tone": "info", "mark": 3},
+                    ],
+                },
                 "steps": [
                     {"title": "Mira las tarjetas de arriba", "text": "Versión desplegada, base de datos (Supabase o prueba), seguridad y hora del sistema."},
                     {"title": "Lee las novedades", "text": "Los últimos cambios del sistema, tomados de su registro de cambios."},

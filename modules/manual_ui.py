@@ -54,6 +54,9 @@ def field_html(field: dict) -> str:
             for i, o in enumerate(field["options"])
         )
         return f'<div class="mrp-mock-field"><div class="mrp-mock-label">{esc(label)}{_mark(field.get("mark"))}</div><div class="mrp-mock-radios">{options}</div></div>'
+    if kind == "tags":
+        chips = "".join(f'<span class="mrp-mock-chip">{esc(t)}<i>×</i></span>' for t in field["options"])
+        return f'<div class="mrp-mock-field"><div class="mrp-mock-label">{esc(label)}{_mark(field.get("mark"))}</div><div class="mrp-mock-input tags">{chips}</div></div>'
     if kind == "check":
         checked = " on" if field.get("checked") else ""
         return (
