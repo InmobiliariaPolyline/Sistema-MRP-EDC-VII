@@ -6,13 +6,13 @@ muestra y cómo se navega entre pantallas vive acá, separado de cada módulo
 en sí (que vive en `modules/`) y del acceso a datos (que vive en `db/`)."""
 import html
 
-import streamlit as st
+import streamlit as str_lit
 
 from core.version import APP_VERSION
 from db.client import using_service_key
 from db.repository import USING_LOCAL
 from modules import (
-    asistencia, dashboard, historial, inventario, login, materiales, obras, ordenes, proveedores, reportes,
+    asistencia, dashboard, historial, inventario, login, manual_Usuario, materiales, obras, ordenes, proveedores, reportes,
     respaldo, security, sistema, trabajadores, ui,
 )
 
@@ -27,6 +27,7 @@ _ROUTES = [
     ("Asistencia", ":material/event_available:", lambda user: asistencia.render(), False),
     ("Trabajadores", ":material/engineering:", lambda user: trabajadores.render(user), True),
     ("Reportes", ":material/monitoring:", lambda user: reportes.render(), False),
+    ("Manual de Usuario", ":material/menu_book:", lambda user: manual_Usuario.show(), False),
     ("Historial", ":material/history:", lambda user: historial.render(), True),
     ("Respaldo", ":material/backup:", lambda user: respaldo.render(), True),
     ("Sistema", ":material/info:", lambda user: sistema.render(), False),
@@ -38,7 +39,7 @@ _GROUPS = [
     ("Compras y almacén", ["Órdenes de compra", "Proveedores", "Materiales", "Inventario"]),
     ("Obra y personal", ["Obras", "Asistencia", "Trabajadores"]),
     ("Análisis", ["Reportes", "Historial", "Respaldo"]),
-    ("Sistema", ["Sistema"]),
+    ("Sistema", ["Sistema", "Manual de Usuario"]),
 ]
 
 
@@ -46,10 +47,10 @@ def render(user: dict) -> None:
     """Dibuja el sidebar (marca + menú + cerrar sesión) y el módulo activo."""
     ui.show_flash()
     if USING_LOCAL:
-        st.sidebar.info("Modo de prueba: los datos se guardan en este equipo.", icon=":material/science:")
+        str_lit.sidebar.info("Modo de prueba: los datos se guardan en este equipo.", icon=":material/science:")
 
     if not USING_LOCAL and not using_service_key():
-        st.sidebar.warning(
+        str_lit.sidebar.warning(
             "La base está en **modo abierto**: cualquiera con la clave pública podría leer o cambiar los datos. "
             "Configura SUPABASE_SERVICE_KEY y cierra la base (db/migrations/040_cerrar_base.sql).",
             icon=":material/lock_open:",
@@ -58,47 +59,47 @@ def render(user: dict) -> None:
     routes = {r[0]: r for r in _ROUTES if user["role"] == "admin" or not r[3]}
 
     options = list(routes)
-    if st.session_state.get("mrp_active_route") not in options:
-        st.session_state["mrp_active_route"] = options[0]
-    seccion = st.session_state["mrp_active_route"]
-    with st.sidebar:
+    if str_lit.session_state.get("mrp_active_route") not in options:
+        str_lit.session_state["mrp_active_route"] = options[0]
+    seccion = str_lit.session_state["mrp_active_route"]
+    with str_lit.sidebar:
         _render_brand(user)
-        with st.container(key="mrp_sidebar_navigation"):
+        with str_lit.container(key="mrp_sidebar_navigation"):
             for group, labels in _GROUPS:
                 visible = [label for label in labels if label in routes]
                 if not visible:
                     continue
-                st.markdown(f'<div class="mrp-sidebar-section">{html.escape(group)}</div>', unsafe_allow_html=True)
+                str_lit.markdown(f'<div class="mrp-sidebar-section">{html.escape(group)}</div>', unsafe_allow_html=True)
                 for label in visible:
-                    st.button(
+                    str_lit.button(
                         label, icon=routes[label][1], key=f"mrp_nav_{label}", width="stretch",
                         type="primary" if label == seccion else "secondary",
                         on_click=_select_route, args=(label,),
                     )
-        st.divider()
-        if st.button("Mi cuenta", icon=":material/manage_accounts:", width="stretch", help="Cambia tu contraseña."):
+        str_lit.divider()
+        if str_lit.button("Mi cuenta", icon=":material/manage_accounts:", width="stretch", help="Cambia tu contraseña."):
             security.lock_company()
             security.account_dialog(user)
-        if st.button("Actualizar datos", icon=":material/refresh:", width="stretch", help="Vuelve a leer todo de la base. Úsalo si otra persona acaba de hacer cambios (los datos se guardan unos segundos en memoria para ir más rápido)."):
-            st.cache_data.clear()
-            st.rerun()
-        st.toggle("Modo oscuro", key="dark_mode", help="Cambia entre el tema claro y el oscuro.")
-        if st.button("Cerrar sesión", icon=":material/logout:", width="stretch"):
+        if str_lit.button("Actualizar datos", icon=":material/refresh:", width="stretch", help="Vuelve a leer todo de la base. Úsalo si otra persona acaba de hacer cambios (los datos se guardan unos segundos en memoria para ir más rápido)."):
+            str_lit.cache_data.clear()
+            str_lit.rerun()
+        str_lit.toggle("Modo oscuro", key="dark_mode", help="Cambia entre el tema claro y el oscuro.")
+        if str_lit.button("Cerrar sesión", icon=":material/logout:", width="stretch"):
             login.logout()
-            st.rerun()
-        st.caption(f"Sistema MRP · {APP_VERSION}")
+            str_lit.rerun()
+        str_lit.caption(f"Sistema MRP · {APP_VERSION}")
 
     routes[seccion][2](user)
 
 
 def _select_route(label: str) -> None:
-    st.session_state["mrp_active_route"] = label
+    str_lit.session_state["mrp_active_route"] = label
 
 
 def _render_brand(user: dict) -> None:
     role = "Administrador" if user["role"] == "admin" else "Operador"
     name = html.escape(user["name"])
-    st.markdown(
+    str_lit.markdown(
         '<div class="mrp-brand">'
         '<div class="mrp-brand-badge">📦</div>'
         '<div><div class="mrp-brand-name">Sistema MRP</div>'
