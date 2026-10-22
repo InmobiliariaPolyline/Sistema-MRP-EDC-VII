@@ -54,3 +54,7 @@
 .mrp-plan-row .due { color: var(--mrp-muted); }
 .mrp-plan-row b { color: var(--mrp-text); }
 @media (max-width: 640px) { .mrp-line { flex-wrap: wrap; } .mrp-plan-row { grid-template-columns: 2rem 1fr auto; } .mrp-plan-row .due { grid-column: 2; } }
+
+/* la cantidad se escribe: sin botones + y − */
+[class*="st-key-new_order_qty_"] [data-testid="stNumberInputStepUp"], [class*="st-key-new_order_qty_"] [data-testid="stNumberInputStepDown"],
+[class*="st-key-edit_add_"][class*="_qty_"] [data-testid="stNumberInputStepUp"], [class*="st-key-edit_add_"][class*="_qty_"] [data-testid="stNumberInputStepDown"] { display: none; }
