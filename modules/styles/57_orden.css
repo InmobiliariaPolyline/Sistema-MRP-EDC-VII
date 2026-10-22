@@ -70,3 +70,5 @@
 .mrp-grand { display: flex; justify-content: space-between; align-items: center; margin: .9rem 0 .2rem; padding: .85rem 1.1rem; border-radius: 1rem; color: #fff; background: var(--mrp-grad); box-shadow: 0 14px 28px -16px rgba(90, 63, 240, .8); }
 .mrp-grand span { font-size: .78rem; font-weight: 800; letter-spacing: .06em; text-transform: uppercase; opacity: .9; }
 .mrp-grand b { font-size: 1.3rem; font-weight: 800; letter-spacing: -.02em; font-variant-numeric: tabular-nums; }
+.mrp-batchhead { margin-top: 0; }
+.mrp-batchpills { display: flex; flex-wrap: wrap; gap: .25rem; justify-content: flex-end; }

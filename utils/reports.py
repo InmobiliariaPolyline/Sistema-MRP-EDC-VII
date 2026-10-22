@@ -473,3 +473,41 @@ def site_report_pdf(site: dict, prog: dict, materials: pd.DataFrame, stages: lis
     return bytes(pdf.output())
 
 
+
+
+def batch_pdf(code: str, orders: list[dict], company: dict | None = None) -> bytes:
+    """Resumen de un pedido que junta órdenes de varios proveedores: una sección por proveedor con sus materiales, su IGV y su total, y el total general.
+    Cada orden sigue teniendo su propio PDF para enviarlo a su proveedor."""
+    company = company or {}
+    pdf = BrandPDF("Pedido", code, theme="violet", style="poster")
+    pdf.add_page()
+    base = money.BASE
+    grand = 0.0
+    sections = []
+    for entry in orders:
+        order, items = entry["order"], entry["items"]
+        subtotal = sum(float(r["quantity"]) * float(r["unit_price"]) for r in items.to_dict("records"))
+        amounts = money.amounts(subtotal, float(order.get("tax_rate") or 0), order.get("exchange_rate") or 1, bool(order.get("prices_include_tax")))
+        grand += amounts["total_base"]
+        sections.append((order, items, amounts))
+    first = orders[0]["order"] if orders else {}
+    pdf.cover("Pedido de compra", code, [("Fecha de emisión", _date(first.get("created_at"))), ("Proveedores", str(len(orders))), ("Obra destino", str(first.get("site_name") or "Sin obra destino"))],
+              (f"{len(orders)} órdenes", "info"), icon="order")
+    for order, items, amounts in sections:
+        currency = order.get("currency") or money.BASE
+        sym = money.symbol(currency)
+        status_text, _ = ORDER_STATUS.get(order.get("status"), (str(order.get("status") or ""), "gray"))
+        pdf.section(f"{order['supplier_name']} · {order['code']} · {status_text}", "building", len(items))
+        rows = [[str(i + 1), r["material_name"], r.get("unit") or "", f"{float(r['quantity']):,.2f}", f"{float(r['unit_price']):,.2f}", f"{float(r['quantity']) * float(r['unit_price']):,.2f}"]
+                for i, r in enumerate(items.to_dict("records"))]
+        pdf.table(["N.º", "Material", "Unidad", "Cantidad", "Precio unit.", "Subtotal"], rows, [0.7, 5.0, 1.3, 1.5, 1.9, 1.9], ["L", "L", "L", "R", "R", "R"])
+        tax = float(order.get("tax_rate") or 0)
+        detail = [("Valor de venta", f"{sym} {amounts['net']:,.2f}"), (f"IGV ({tax:.0%})" if tax else "IGV", f"{sym} {amounts['tax']:,.2f}" if tax else "Exonerado / inafecto")]
+        if order.get("payment_terms"):
+            detail.append(("Condición de pago", str(order["payment_terms"])))
+        pdf.totals(detail, (f"Total {order['code']}", f"{sym} {amounts['total']:,.2f}"))
+        pdf.ln(2)
+    pdf.totals([("Órdenes", str(len(orders)))], ("Total del pedido", f"{money.symbol(base)} {grand:,.2f}"))
+    pdf.note_box("Aviso", "Resumen informativo: cada proveedor recibe su propia orden. El sistema calcula el valor exacto del trato; la compra y el pago se hacen fuera de él.")
+    pdf.signatures([("Autoriza", company.get("legal_name"))])
+    return bytes(pdf.output())

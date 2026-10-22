@@ -18,11 +18,12 @@ from db import repository as repo
 from modules import attachments_ui, forms, orden_form, sugerencias, ui
 from utils import audit, money, pricing, units
 from utils.mail import mailto_url
-from utils.reports import order_pdf, order_whatsapp_text, payment_pdf, payment_schedule_pdf
+from utils.reports import batch_pdf, order_pdf, order_whatsapp_text, payment_pdf, payment_schedule_pdf
 from utils.timeago import age_days
 from utils import clock
 
 SELECTED_KEY = "selected_order_id"
+BATCH_KEY = "selected_batch_code"
 CART_KEY = "_order_cart"      # {id del proveedor: {"name", "lines", "terms"}}: el pedido en curso, agrupado por proveedor
 PRESET_KEY = "_order_preset"
 ALERT_DAYS_KEY = "alert_days"
@@ -117,6 +118,9 @@ def _clear_filters() -> None:
 def render() -> None:
     if st.session_state.get(SELECTED_KEY):
         _render_detail(st.session_state[SELECTED_KEY])
+        return
+    if st.session_state.get(BATCH_KEY):
+        _render_batch(st.session_state[BATCH_KEY])
         return
 
     clicked = ui.page_header(
@@ -380,7 +384,7 @@ def _new_order_dialog() -> None:
     if cancel.button(":material/close: Cancelar", key="order_cancel", width="stretch"):
         _clear_order_draft()
         st.rerun()
-    if save.button(":material/add_circle: Crear orden" if len(cart) <= 1 else f":material/add_circle: Crear {len(cart)} órdenes", type="primary", width="stretch", disabled=not cart):
+    if save.button(":material/add_circle: Crear orden" if len(cart) <= 1 else f":material/add_circle: Crear pedido ({len(cart)} proveedores)", type="primary", width="stretch", disabled=not cart):
         issues = forms.validate({"Notas (opcional)": notes})
         if not cart:
             issues.append("Materiales del pedido: agrega al menos un material.")
@@ -393,15 +397,22 @@ def _new_order_dialog() -> None:
             return
         site_id = None if site_choice == NO_SITE else sites.loc[sites["name"] == site_choice, "id"].iloc[0]
         codes: list[str] = []
+        batch = None
+        if len(cart) > 1:
+            try:
+                batch = repo.next_batch_code()
+            except ValueError as exc:
+                st.error(f"No se pudo crear el pedido: {exc}")
+                return
         for group_id, group in list(cart.items()):
             try:
-                codes.append(repo.create_order(group_id, group["name"], site_id, notes.strip() or None, group["lines"], group["terms"]))
+                codes.append(repo.create_order(group_id, group["name"], site_id, notes.strip() or None, group["lines"], group["terms"], batch))
             except ValueError as exc:
                 st.error(f"No se pudo crear la orden de {group['name']}: {exc}" + (f" Ya se crearon: {', '.join(codes)}." if codes else ""))
                 return
             cart.pop(group_id)
         _clear_order_draft()
-        ui.flash(f"Orden {codes[0]} creada." if len(codes) == 1 else f"Órdenes creadas: {', '.join(codes)}.", ":material/receipt_long:")
+        ui.flash(f"Orden {codes[0]} creada." if len(codes) == 1 else f"Pedido {batch} creado con {len(codes)} órdenes ({', '.join(codes)}).", ":material/receipt_long:")
         st.rerun()
 
 
@@ -682,45 +693,113 @@ def _render_list() -> None:
         return
 
     stale_ids = set(stale["id"]) if not stale.empty else set()
-    for row in df.to_dict("records"):
-        with st.container(border=True):
-            c1, c2, c3, c4, c5 = st.columns([4, 3, 2, 1.6, 1])
-            with c1:
-                date = clock.local(row["created_at"], False)
-                n = int(row["items_count"])
-                sub = f"{row['code']} · {date} · {n} línea{'s' if n != 1 else ''}"
-                st.markdown(ui.row_name_sub(ui.avatar(row["supplier_name"]), row["supplier_name"], sub), unsafe_allow_html=True)
-            with c2:
-                pills = status_pill(row["status"])
-                if row["id"] in stale_ids:
-                    pills += " " + ui.pill("⏰ " + f"{age_days(str(row['created_at']))} días", "red")
-                if row["id"] in late_days:
-                    pills += " " + ui.pill(f"📅 {int(late_days[row['id']])} d de atraso", "red")
-                elif row.get("expected_date") and row["status"] in OPEN_STATUSES:
-                    pills += " " + ui.pill(f"📅 entrega {str(row['expected_date'])[8:10]}/{str(row['expected_date'])[5:7]}", "gray")
-                if row.get("site_name"):
-                    pills += " " + ui.pill(row["site_name"], "gray")
-                st.markdown(pills, unsafe_allow_html=True)
-            with c3:
-                st.markdown(
-                    f'<div class="mrp-row-name">{money.fmt(row["total"], row.get("currency"))}</div><div class="mrp-row-sub">total{" con IGV" if float(row.get("tax_rate") or 0) else ""}</div>',
-                    unsafe_allow_html=True,
+    rows = df.to_dict("records")
+    shown: set[str] = set()
+    for row in rows:
+        batch_code = row.get("batch_code")
+        if not batch_code:
+            _render_order_row(row, stale_ids, late_days)
+        elif batch_code not in shown:
+            shown.add(batch_code)
+            _render_batch_card(batch_code, [r for r in rows if r.get("batch_code") == batch_code], stale_ids, late_days)
+
+
+def _batch_totals(members: list[dict]) -> tuple[float, int]:
+    """Total de un pedido en soles y número de líneas, sumando sus órdenes."""
+    return sum(float(r["total_base"]) for r in members), sum(int(r["items_count"]) for r in members)
+
+
+def _render_batch_card(code: str, members: list[dict], stale_ids: set, late_days: dict) -> None:
+    """Un pedido con varias órdenes (una por proveedor) en una sola tarjeta, con su total general."""
+    total, lines = _batch_totals(members)
+    states = sorted({r["status"] for r in members}, key=list(STATUSES).index)
+    with st.container(border=True):
+        head, view = st.columns([8, 1.6], vertical_alignment="center")
+        head.markdown(orden_form.batch_head_html(code, len(members), lines, money.fmt(total, money.BASE), " ".join(status_pill(s) for s in states)), unsafe_allow_html=True)
+        if view.button(":material/visibility: Ver pedido", key=f"open_batch_{code}", width="stretch"):
+            st.session_state[BATCH_KEY] = code
+            st.rerun()
+        for row in members:
+            _render_order_row(row, stale_ids, late_days)
+
+
+def _render_order_row(row: dict, stale_ids: set, late_days: dict) -> None:
+    with st.container(border=True):
+        c1, c2, c3, c4, c5 = st.columns([4, 3, 2, 1.6, 1])
+        with c1:
+            date = clock.local(row["created_at"], False)
+            n = int(row["items_count"])
+            sub = f"{row['code']} · {date} · {n} línea{'s' if n != 1 else ''}"
+            st.markdown(ui.row_name_sub(ui.avatar(row["supplier_name"]), row["supplier_name"], sub), unsafe_allow_html=True)
+        with c2:
+            pills = status_pill(row["status"])
+            if row["id"] in stale_ids:
+                pills += " " + ui.pill("⏰ " + f"{age_days(str(row['created_at']))} días", "red")
+            if row["id"] in late_days:
+                pills += " " + ui.pill(f"📅 {int(late_days[row['id']])} d de atraso", "red")
+            elif row.get("expected_date") and row["status"] in OPEN_STATUSES:
+                pills += " " + ui.pill(f"📅 entrega {str(row['expected_date'])[8:10]}/{str(row['expected_date'])[5:7]}", "gray")
+            if row.get("site_name"):
+                pills += " " + ui.pill(row["site_name"], "gray")
+            st.markdown(pills, unsafe_allow_html=True)
+        with c3:
+            st.markdown(
+                f'<div class="mrp-row-name">{money.fmt(row["total"], row.get("currency"))}</div><div class="mrp-row-sub">total{" con IGV" if float(row.get("tax_rate") or 0) else ""}</div>',
+                unsafe_allow_html=True,
+            )
+        with c4:
+            if st.button(":material/visibility: Ver", key=f"open_order_{row['id']}", width="stretch"):
+                st.session_state[SELECTED_KEY] = row["id"]
+                st.rerun()
+        with c5:
+            if st.button(":material/delete:", key=f"del_order_{row['id']}", help="Eliminar orden"):
+                ui.confirm_delete(
+                    f"¿Eliminar la orden {row['code']}? Se borran también sus líneas.",
+                    lambda oid=row["id"], code=row["code"]: _delete_order(oid, code),
                 )
-            with c4:
-                if st.button(":material/visibility: Ver", key=f"open_order_{row['id']}", width="stretch"):
-                    st.session_state[SELECTED_KEY] = row["id"]
-                    st.rerun()
-            with c5:
-                if st.button(":material/delete:", key=f"del_order_{row['id']}", help="Eliminar orden"):
-                    ui.confirm_delete(
-                        f"¿Eliminar la orden {row['code']}? Se borran también sus líneas.",
-                        lambda oid=row["id"], code=row["code"]: _delete_order(oid, code),
-                    )
 
 
 # ---------------------------------------------------------------------------
 # Detalle
 # ---------------------------------------------------------------------------
+
+def _render_batch(code: str) -> None:
+    """Un pedido con varios proveedores como una sola ficha: sus materiales agrupados por proveedor, el total general y el PDF del pedido."""
+    orders = repo.list_orders()
+    members = orders[orders["batch_code"] == code].to_dict("records") if not orders.empty and "batch_code" in orders.columns else []
+    if not members:
+        st.session_state[BATCH_KEY] = None
+        st.rerun()
+        return
+    if st.button(":material/arrow_back: Volver", key="batch_back"):
+        st.session_state[BATCH_KEY] = None
+        st.rerun()
+    ui.page_header("Pedido", code)
+    total, lines = _batch_totals(members)
+    ui.stat_grid(
+        [
+            ui.stat_card("🏭", str(len(members)), "Proveedores"),
+            ui.stat_card("🏗️", members[0]["site_name"] or "—", "Obra destino"),
+            ui.stat_card("📅", clock.local(members[0]["created_at"], False), "Fecha"),
+            ui.stat_card("💰", money.fmt(total, money.BASE), "Total del pedido (con IGV)"),
+        ]
+    )
+    st.caption(f"{lines} línea(s) en {len(members)} órdenes, una por proveedor: cada una tiene su propio PDF, IGV, forma de pago y recepción.")
+    with_items = []
+    for row in sorted(members, key=lambda r: r["code"]):
+        items = repo.list_order_items(row["id"])
+        with_items.append({"order": row, "items": items})
+        head, open_btn = st.columns([8, 2], vertical_alignment="center")
+        head.markdown(orden_form.group_head_html(f"{row['supplier_name']} · {row['code']}", len(items), money.fmt(row["total"], row.get("currency")), False), unsafe_allow_html=True)
+        if open_btn.button(":material/open_in_new: Abrir orden", key=f"batch_open_{row['id']}", width="stretch"):
+            st.session_state[BATCH_KEY] = None
+            st.session_state[SELECTED_KEY] = row["id"]
+            st.rerun()
+        st.markdown(status_pill(row["status"]), unsafe_allow_html=True)
+        for index, line in enumerate(items.to_dict("records")):
+            st.markdown(orden_form.line_card_html(index, {**line, "quantity": float(line["quantity"]), "unit_price": float(line["unit_price"]), "category": None}, row.get("currency")), unsafe_allow_html=True)
+    st.markdown(orden_form.grand_total_html(len(members), money.fmt(total, money.BASE)), unsafe_allow_html=True)
+    st.download_button(":material/description: PDF del pedido", data=batch_pdf(code, with_items, repo.get_company()), file_name=f"{code}.pdf", mime="application/pdf", key=f"batch_pdf_{code}")
 
 def _mark_sent_from_link(order_id: str, code: str, status: str) -> None:
     """Al abrir WhatsApp con el pedido, la orden pendiente pasa sola a «enviada» y anota la hora de envío."""
@@ -886,6 +965,12 @@ def _render_detail(order_id: str) -> None:
 
     ui.page_header("Orden de compra", order["code"])
     st.markdown(status_pill(status), unsafe_allow_html=True)
+    if order.get("batch_code"):
+        st.info(f"Esta orden es parte del pedido {order['batch_code']}, que junta materiales de varios proveedores.", icon=":material/layers:")
+        if st.button(":material/layers: Ver el pedido completo", key=f"to_batch_{order_id}"):
+            st.session_state[SELECTED_KEY] = None
+            st.session_state[BATCH_KEY] = order["batch_code"]
+            st.rerun()
 
     ui.stat_grid(
         [

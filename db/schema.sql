@@ -968,6 +968,7 @@ create table if not exists company_profile (
 alter table suppliers add column if not exists ruc text;
 alter table purchase_orders add column if not exists prices_include_tax boolean not null default false;
 alter table purchase_orders add column if not exists payment_terms text;
+alter table purchase_orders add column if not exists batch_code text;
 
 do $$
 begin

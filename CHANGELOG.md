@@ -6,6 +6,17 @@ Formato de cada parche: **Agregado** · **Corregido** · **Problemas y causa** �
 
 ---
 
+## Parche 072 — Un pedido, una ficha: varios proveedores juntos · 2026-10-22
+
+Cuando un pedido junta materiales de varios proveedores, ahora queda como **un solo pedido con un código (PD-0001)** y una sola ficha, en lugar de órdenes sueltas.
+
+**Agregado**
+- «Crear pedido (N proveedores)»: el sistema genera el pedido PD-NNNN y, dentro, una orden por proveedor (cada una conserva su PDF para enviárselo, su IGV, su forma de pago y su recepción, porque dependen del proveedor).
+- En la lista, las órdenes de un pedido aparecen juntas en **una tarjeta** con el total general y los estados; «Ver pedido» abre la ficha con todos los materiales agrupados por proveedor, el total del pedido y el **PDF del pedido**.
+- Cada orden dice a qué pedido pertenece y tiene el botón «Ver el pedido completo».
+
+**Hay que hacer:** correr `db/migrations/047_pedido_varios_proveedores.sql` en el SQL Editor de Supabase (agrega `purchase_orders.batch_code`). Sin ese SQL las órdenes de un solo proveedor funcionan igual; crear un pedido con varios proveedores avisará que falta correrlo.
+
 ## Parche 071 — Un pedido con varios proveedores · 2026-10-22
 
 Al crear una orden, cambiar de proveedor ya no borra lo agregado: el pedido es un carrito agrupado por proveedor y al crearlo se genera **una orden por proveedor**.

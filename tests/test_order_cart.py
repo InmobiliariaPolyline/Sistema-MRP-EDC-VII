@@ -1,10 +1,14 @@
 """Pedido con varios proveedores: mover una línea, cambiar de proveedor sin perder lo agregado y alternativas más baratas."""
+import tempfile
 import unittest
+from pathlib import Path
 
 import pandas as pd
 import streamlit as st
 
+from db import local_repository as repo
 from modules import orden_form, ordenes
+from utils import reports
 
 
 def _line(material_id="m1", qty=2.0, price=10.0):
@@ -68,7 +72,45 @@ class CartTests(unittest.TestCase):
 
     def test_group_html_escapes(self):
         self.assertNotIn("<i>", orden_form.group_head_html("<i>x</i>", 2, "S/ 1.00", True))
-        self.assertIn("2 órdenes", orden_form.grand_total_html(2, "S/ 5.00"))
+        self.assertIn("2 proveedores", orden_form.grand_total_html(2, "S/ 5.00"))
+
+
+class BatchTests(unittest.TestCase):
+    def setUp(self):
+        self.tmp = tempfile.TemporaryDirectory()
+        self._old = repo.DB_PATH
+        repo.DB_PATH = Path(self.tmp.name) / "t.db"
+        repo._init_db()
+        repo.upsert_material("Acero", "Perfil", 7850, "unid")
+        self.mat = repo.list_materials().iloc[0]["id"]
+        repo.upsert_supplier("Uno", None, None, None, None)
+        repo.upsert_supplier("Dos", None, None, None, None)
+        self.sup = dict(zip(repo.list_suppliers()["name"], repo.list_suppliers()["id"]))
+        self.items = [{"material_id": self.mat, "material_name": "Perfil", "unit": "unid", "quantity": 2.0, "unit_price": 10.0}]
+
+    def tearDown(self):
+        repo.DB_PATH = self._old
+        self.tmp.cleanup()
+
+    def test_batch_codes_count_up_and_orders_keep_their_batch(self):
+        self.assertEqual(repo.next_batch_code(), "PD-0001")
+        a = repo.create_order(self.sup["Uno"], "Uno", None, None, self.items, None, "PD-0001")
+        b = repo.create_order(self.sup["Dos"], "Dos", None, None, self.items, None, "PD-0001")
+        repo.create_order(self.sup["Uno"], "Uno", None, None, self.items)
+        orders = repo.list_orders()
+        self.assertEqual(sorted(orders[orders["batch_code"] == "PD-0001"]["code"]), sorted([a, b]))
+        self.assertEqual(orders["batch_code"].notna().sum(), 2)
+        self.assertEqual(repo.next_batch_code(), "PD-0002")
+
+    def test_batch_pdf_builds(self):
+        repo.create_order(self.sup["Uno"], "Uno", None, None, self.items, {"tax_rate": 0.18, "payment_terms": "Contado"}, "PD-0001")
+        repo.create_order(self.sup["Dos"], "Dos", None, None, self.items, None, "PD-0001")
+        orders = repo.list_orders()
+        entries = [{"order": row, "items": repo.list_order_items(row["id"])} for row in orders.to_dict("records")]
+        self.assertTrue(reports.batch_pdf("PD-0001", entries, {}).startswith(b"%PDF"))
+        total, lines = ordenes._batch_totals(orders.to_dict("records"))
+        self.assertAlmostEqual(total, 2 * 20.0 + 3.6)
+        self.assertEqual(lines, 2)
 
 
 if __name__ == "__main__":

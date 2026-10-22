@@ -254,6 +254,15 @@ def group_head_html(supplier: str, count: int, total: str, current: bool = False
     )
 
 
+def batch_head_html(code: str, suppliers: int, lines: int, total: str, pills: str = "") -> str:
+    """Encabezado de un pedido que junta órdenes de varios proveedores (una sola ficha con su total general)."""
+    return (
+        f'<div class="mrp-grouphead mrp-batchhead"><div class="mrp-grouphead-ico">{icons.svg("layers", 18, 1.9)}</div>'
+        f'<div class="mrp-grouphead-body"><b>Pedido {html.escape(code)}</b><small>{suppliers} proveedores · {lines} línea(s) · una orden por proveedor</small></div>'
+        f'<div class="mrp-batchpills">{pills}</div><div class="mrp-grouphead-total"><small>Total del pedido</small><b>{html.escape(total)}</b></div></div>'
+    )
+
+
 def grand_total_html(count: int, total: str) -> str:
     """Lo que suman todas las órdenes del pedido (en soles)."""
-    return f'<div class="mrp-grand"><span>Total de las {count} órdenes</span><b>{html.escape(total)}</b></div>'
+    return f'<div class="mrp-grand"><span>Total del pedido · {count} proveedores</span><b>{html.escape(total)}</b></div>'

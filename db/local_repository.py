@@ -256,6 +256,7 @@ def _init_db() -> None:
             ("suppliers", "logo", "text"),
             ("purchase_orders", "prices_include_tax", "integer not null default 0"),
             ("purchase_orders", "payment_terms", "text"),
+            ("purchase_orders", "batch_code", "text"),
             ("suppliers", "lead_time_days", "integer"),
             ("suppliers", "min_order_amount", "real"),
             ("purchase_orders", "sent_at", "text"),
@@ -739,7 +740,7 @@ def list_orders() -> pd.DataFrame:
             """
             select o.id, o.code, o.supplier_id, o.supplier_name, o.project_site_id,
                    ps.name as site_name, o.status, o.notes, o.created_at,
-                   o.expected_date, o.sent_at, o.currency, o.exchange_rate, o.tax_rate, o.prices_include_tax, o.payment_terms,
+                   o.expected_date, o.sent_at, o.currency, o.exchange_rate, o.tax_rate, o.prices_include_tax, o.payment_terms, o.batch_code,
                    coalesce((select sum(i.quantity * i.unit_price) from purchase_order_items i where i.order_id = o.id), 0) as subtotal,
                    (select count(*) from purchase_order_items i where i.order_id = o.id) as items_count
             from purchase_orders o
@@ -770,9 +771,10 @@ def list_order_items(order_id: str | None = None) -> pd.DataFrame:
 
 def create_order(
     supplier_id: str, supplier_name: str, project_site_id: str | None, notes: str | None, items: list[dict], terms: dict | None = None,
+    batch_code: str | None = None,
 ) -> str:
     """Crea la orden con sus líneas y devuelve su código (OC-0001, OC-0002...).
-    `terms`: fecha prometida, moneda, tipo de cambio e IGV (ver utils/money.py)."""
+    `terms`: fecha prometida, moneda, tipo de cambio e IGV (ver utils/money.py). `batch_code`: el pedido (PD-0001) al que pertenece."""
     terms = money.normalize_terms(terms)
     order_id = str(uuid.uuid4())
     with _connect() as conn:
@@ -780,10 +782,10 @@ def create_order(
         number = max([int(c.split("-")[1]) for c in codes if c.startswith("OC-") and c.split("-")[1].isdigit()] or [0]) + 1
         code = f"OC-{number:04d}"
         conn.execute(
-            "insert into purchase_orders (id, code, supplier_id, supplier_name, project_site_id, notes, expected_date, currency, exchange_rate, tax_rate, prices_include_tax, payment_terms) "
-            "values (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+            "insert into purchase_orders (id, code, supplier_id, supplier_name, project_site_id, notes, expected_date, currency, exchange_rate, tax_rate, prices_include_tax, payment_terms, batch_code) "
+            "values (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
             (order_id, code, supplier_id, supplier_name, project_site_id, notes,
-             terms["expected_date"], terms["currency"], terms["exchange_rate"], terms["tax_rate"], int(terms["prices_include_tax"]), terms["payment_terms"]),
+             terms["expected_date"], terms["currency"], terms["exchange_rate"], terms["tax_rate"], int(terms["prices_include_tax"]), terms["payment_terms"], batch_code),
         )
         for item in items:
             conn.execute(
@@ -794,6 +796,13 @@ def create_order(
                 (str(uuid.uuid4()), order_id, item["material_id"], item["material_name"], item.get("unit"), item["quantity"], item["unit_price"]),
             )
     return code
+
+
+def next_batch_code() -> str:
+    """El siguiente código de pedido (PD-0001, PD-0002...)."""
+    with _connect() as conn:
+        codes = [row[0] for row in conn.execute("select batch_code from purchase_orders where batch_code is not null").fetchall()]
+    return f"PD-{max([int(c.split('-')[1]) for c in codes if c.startswith('PD-') and c.split('-')[1].isdigit()] or [0]) + 1:04d}"
 
 
 def set_order_status(order_id: str, status: str) -> None:

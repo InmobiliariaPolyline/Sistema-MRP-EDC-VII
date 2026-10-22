@@ -606,7 +606,7 @@ def list_orders() -> pd.DataFrame:
         )
     columns = [
         "id", "code", "supplier_id", "supplier_name", "project_site_id", "site_name",
-        "status", "notes", "created_at", "expected_date", "sent_at", "currency", "exchange_rate", "tax_rate", "prices_include_tax", "payment_terms",
+        "status", "notes", "created_at", "expected_date", "sent_at", "currency", "exchange_rate", "tax_rate", "prices_include_tax", "payment_terms", "batch_code",
         "subtotal", "net", "tax", "total", "subtotal_base", "total_base", "items_count",
     ]
     df = _df(rows, columns=[c for c in columns if c not in ("net", "tax", "total", "subtotal_base", "total_base")]) if rows else _df(columns=columns)
@@ -659,9 +659,10 @@ def _terms_payload(terms: dict) -> dict:
 
 def create_order(
     supplier_id: str, supplier_name: str, project_site_id: str | None, notes: str | None, items: list[dict], terms: dict | None = None,
+    batch_code: str | None = None,
 ) -> str:
     """Crea la orden con sus líneas y devuelve su código (OC-0001, OC-0002...).
-    `terms`: fecha prometida, moneda, tipo de cambio e IGV (ver utils/money.py)."""
+    `terms`: fecha prometida, moneda, tipo de cambio e IGV (ver utils/money.py). `batch_code`: el pedido (PD-0001) al que pertenece."""
     terms = money.normalize_terms(terms)
     client = get_client()
     existing = client.table("purchase_orders").select("code").execute().data or []
@@ -671,11 +672,13 @@ def create_order(
     payload = {"code": code, "supplier_id": supplier_id, "supplier_name": supplier_name, "project_site_id": project_site_id, "notes": notes}
     if not money.is_default(terms):  # solo se envían las columnas nuevas si hacen falta (así funciona antes del SQL)
         payload.update(_terms_payload(terms))
+    if batch_code:
+        payload["batch_code"] = batch_code
     try:
         res = client.table("purchase_orders").insert(payload).execute()
     except Exception as exc:
         if _is_missing(exc):
-            raise _phase_b(exc) from exc
+            raise (_need_sql("047_pedido_varios_proveedores.sql") if batch_code else _phase_b(exc)) from exc
         raise
     order_id = res.data[0]["id"]
     client.table("purchase_order_items").insert(
@@ -693,6 +696,18 @@ def create_order(
     ).execute()
     _invalidate_orders()
     return code
+
+
+def next_batch_code() -> str:
+    """El siguiente código de pedido (PD-0001, PD-0002...). Necesita el SQL del parche 072 (`047_pedido_varios_proveedores.sql`)."""
+    try:
+        rows = get_client().table("purchase_orders").select("batch_code").not_.is_("batch_code", "null").execute().data or []
+    except Exception as exc:
+        if _is_missing(exc):
+            raise _need_sql("047_pedido_varios_proveedores.sql") from exc
+        raise
+    numbers = [int(r["batch_code"].split("-")[1]) for r in rows if str(r["batch_code"]).startswith("PD-") and r["batch_code"].split("-")[1].isdigit()]
+    return f"PD-{(max(numbers) if numbers else 0) + 1:04d}"
 
 
 def set_order_status(order_id: str, status: str) -> None:
