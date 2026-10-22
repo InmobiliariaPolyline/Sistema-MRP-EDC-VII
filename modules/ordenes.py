@@ -14,10 +14,10 @@ import pandas as pd
 import streamlit as st
 
 from db import repository as repo
-from modules import attachments_ui, forms, sugerencias, ui
-from utils import audit, money, pricing
+from modules import attachments_ui, forms, orden_form, sugerencias, ui
+from utils import audit, money, pricing, units
 from utils.mail import mailto_url
-from utils.reports import order_pdf, order_whatsapp_text
+from utils.reports import order_pdf, order_whatsapp_text, payment_pdf, payment_schedule_pdf
 from utils.timeago import age_days
 from utils import clock
 
@@ -39,7 +39,7 @@ STATUSES = {
 OPEN_STATUSES = ("pendiente", "enviada", "parcial")
 ALL_STATUSES = "Todos los estados"
 NO_SITE = "Sin obra destino"
-NO_PAYMENT = "No indicada"
+NO_PAYMENT = orden_form.NO_PAYMENT
 
 
 def status_pill(status: str) -> str:
@@ -92,79 +92,20 @@ def attention_orders(orders: pd.DataFrame) -> pd.DataFrame:
     return orders[orders["id"].isin(ids)]
 
 
-def _terms_inputs(
-    prefix: str, expected_date=None, currency: str = money.BASE, exchange_rate: float = 3.75, tax_mode: str = "add", payment_terms: str | None = None,
-) -> dict:
-    """Fecha prometida, moneda, tipo de cambio, tratamiento del IGV y condición de pago de una orden. Devuelve las condiciones para guardar."""
-    default_date = None
-    if expected_date and str(expected_date) not in ("None", "nan", "NaT"):
-        try:
-            default_date = date.fromisoformat(str(expected_date)[:10])
-        except ValueError:
-            default_date = None
-    c1, c2, c3 = st.columns([2, 2, 2])
-    picked = c1.date_input(
-        "Fecha prometida de entrega (opcional)", value=default_date, key=f"{prefix}_date", format="DD/MM/YYYY",
-        min_value=clock.today() if not default_date or default_date >= clock.today() else None,
-        help="Cuándo prometió entregar el proveedor. Si pasa y la orden sigue abierta, se marca como atrasada.",
-    )
-    currencies = list(money.CURRENCIES)
-    chosen = c2.selectbox(
-        "Moneda", currencies, index=currencies.index(currency) if currency in currencies else 0, key=f"{prefix}_currency",
-        format_func=lambda c: money.CURRENCY_NAMES[c],
-        help="Los precios del catálogo del proveedor se toman tal cual en esta moneda. Elige dólares solo si ese proveedor cotiza en dólares.",
-    )
-    rate = 1.0
-    if chosen != money.BASE:
-        rate = c3.number_input(
-            "Tipo de cambio (S/ por US$)", min_value=0.0, value=float(exchange_rate or 3.75), step=0.01, format="%.3f", key=f"{prefix}_rate",
-            help="Sirve para sumar esta orden en soles en el dashboard y en el presupuesto de la obra.",
-        )
-    t1, t2 = st.columns([3, 2])
-    modes = list(money.TAX_MODES)
-    mode = t1.selectbox(
-        "IGV (18 %)", modes, index=modes.index(tax_mode) if tax_mode in modes else 0, key=f"{prefix}_taxmode",
-        format_func=lambda m: money.TAX_MODES[m][0],
-        help="En el Perú el IGV es 18 % (16 % de IGV + 2 % del Impuesto de Promoción Municipal). La mayoría de proveedores cotiza sin IGV: se suma 18 % "
-             "al valor de venta. Si su precio ya lo incluye, el sistema separa el IGV del total. Marca «sin IGV» solo para compras exoneradas o inafectas.",
-    )
-    options = [NO_PAYMENT, *money.PAYMENT_TERMS]
-    pay = t2.selectbox(
-        "Condición de pago (informativa)", options, index=options.index(payment_terms) if payment_terms in options else 0, key=f"{prefix}_pay",
-        help="Lo pactado con el proveedor, para saber cuánto y hasta cuándo. El sistema no cobra ni paga: el pago se hace fuera. Con crédito se muestra la fecha límite.",
-    )
-    tax_rate, include = money.tax_from_mode(mode)
-    return {
-        "expected_date": picked, "currency": chosen, "exchange_rate": rate, "tax_rate": tax_rate, "prices_include_tax": include,
-        "payment_terms": None if pay == NO_PAYMENT else pay,
-    }
+def _terms_inputs(*args, **kwargs) -> dict:
+    """Fecha prometida, moneda, IGV y forma de pago de una orden (ver `orden_form.terms_inputs`)."""
+    return orden_form.terms_inputs(*args, **kwargs)
 
 
 def _totals_block(subtotal: float, terms: dict) -> None:
-    """Valor de venta, IGV e importe total de una orden (como en una factura), en su moneda y en soles si es otra moneda."""
-    amounts = money.amounts(subtotal, terms["tax_rate"], terms["exchange_rate"], terms.get("prices_include_tax", False))
-    cur = terms["currency"]
-    if terms["tax_rate"]:
-        c1, c2, c3 = st.columns(3)
-        c1.metric("Valor de venta", money.fmt(amounts["net"], cur))
-        c2.metric(f"IGV ({terms['tax_rate']:.0%})", money.fmt(amounts["tax"], cur))
-        c3.metric("Importe total", money.fmt(amounts["total"], cur))
-        if terms.get("prices_include_tax"):
-            st.caption("Los precios ya incluyen IGV: el valor de venta es el total entre 1,18.")
-    else:
-        st.metric("Importe total", money.fmt(amounts["total"], cur))
-        st.caption("Sin IGV (operación exonerada o inafecta).")
-    if cur != money.BASE:
-        st.caption(f"Equivale a {money.fmt(amounts['total_base'], money.BASE)} al tipo de cambio {terms['exchange_rate']:g}.")
-    due = money.due_date(clock.today(), terms.get("payment_terms"))
-    if terms.get("payment_terms"):
-        st.caption(f"Condición de pago: {terms['payment_terms']}" + (f" · pago pactado hasta el {due:%d/%m/%Y} si se emite hoy." if due else "."))
+    """Valor de venta, IGV e importe total de una orden, con su plan de pagos si lo tiene (ver `orden_form.totals_block`)."""
+    orden_form.totals_block(subtotal, terms)
 
 
 def _clear_order_draft() -> None:
     for key in (
-        LINES_KEY, SUPPLIER_KEY, PRESET_KEY, "new_order_supplier", "new_order_site", "new_order_notes",
-        "new_order_date", "new_order_currency", "new_order_rate", "new_order_taxmode", "new_order_pay",
+        LINES_KEY, SUPPLIER_KEY, PRESET_KEY, "new_order_supplier", "new_order_site", "new_order_notes", "new_order_material",
+        "new_order_date", "new_order_currency", "new_order_rate", "new_order_taxmode", *orden_form.payment_keys("new_order"),
     ):
         st.session_state.pop(key, None)
 
@@ -267,7 +208,7 @@ def _new_order_dialog() -> None:
         st.session_state["new_order_currency"] = preset.get("currency") or money.BASE
         st.session_state["new_order_rate"] = float(preset.get("exchange_rate") or 3.75)
         st.session_state["new_order_taxmode"] = money.tax_mode(preset.get("tax_rate"), preset.get("prices_include_tax"))
-        st.session_state["new_order_pay"] = preset.get("payment_terms") or NO_PAYMENT
+        orden_form.seed_payment("new_order", preset.get("payment_terms"))
         st.session_state[SUPPLIER_KEY] = preset["supplier_id"]
         st.session_state[LINES_KEY] = preset["lines"]
 
@@ -290,35 +231,22 @@ def _new_order_dialog() -> None:
     forms.section("2. Entrega, moneda, IGV y pago", "La fecha prometida activa el aviso de atraso. El IGV (18 %) se suma o se separa según cómo cotiza el proveedor. La condición de pago es solo informativa.")
     terms = _terms_inputs("new_order")
 
-    forms.section("3. Agrega materiales", "La cantidad se indica en la unidad del material. El precio unitario viene fijo del catálogo del proveedor y no se cambia aquí: lo que sube con la cantidad es el total. Agregar de nuevo un material suma cantidades.")
+    forms.section("3. Agrega materiales", "Elige el material, indica la cantidad y pulsa «Agregar al pedido». El precio unitario es fijo: viene del catálogo del proveedor; lo que sube con la cantidad es el subtotal. Agregar de nuevo un material suma cantidades.")
     catalog = repo.get_supplier_catalog(supplier_id)
     offered = catalog[catalog["offered"]] if not catalog.empty else catalog
     if offered.empty:
         st.warning("Este proveedor todavía no tiene materiales asignados. Márcalos como «Lo ofrece» en su catálogo.")
     else:
-        options = {f"{r['category']} · {r['name']}": r for r in offered.to_dict("records")}
-        c1, c2, c3 = st.columns([4, 2, 2])
-        choice = c1.selectbox("Material", list(options))
-        record = options[choice]
-        qty = c2.number_input("Cantidad", min_value=0.0, value=1.0, step=1.0, key=f"oqty_{record['id']}",
-                               help=f"Unidad: {record['metric_label'] or 'unid.'}. Admite decimales; debe ser mayor que 0.")
-        catalog_price = float(record["price"]) if pd.notna(record["price"]) else 0.0
-        # El precio unitario es el del catálogo del proveedor y no se puede modificar al comprar:
-        # solo informa. Para cambiarlo se edita en la ficha del proveedor.
-        price = catalog_price
-        c3.number_input(
-            "Precio unit.", value=catalog_price, format="%.2f", disabled=True, key=f"oprice_{supplier_id}_{record['id']}",
-            help="Fijo: es el precio del catálogo de este proveedor. Para cambiarlo, edítalo en su ficha (Proveedores → Catálogo).",
-        )
-        if catalog_price <= 0:
+        if st.session_state.get("new_order_material") not in [f"{r['category']} · {r['name']}" for r in offered.to_dict("records")]:
+            st.session_state.pop("new_order_material", None)      # otro proveedor: la elección anterior ya no existe
+        record, qty, price = orden_form.material_picker("new_order", offered, terms["currency"], price_max_age())
+        if price <= 0:
             st.warning(
                 "Este material no tiene precio en el catálogo del proveedor, así que no se puede agregar. "
                 "Regístralo en Proveedores → Catálogo (o importa su lista de precios) y vuelve.",
                 icon=":material/sell:",
             )
-        else:
-            st.caption(f"Esta selección: {qty:g} {record['metric_label'] or 'unid.'} × {money.fmt(price, terms['currency'])} = **{money.fmt(qty * price, terms['currency'])}**")
-        if catalog_price > 0 and pricing.is_stale(record.get("price_updated_at"), price_max_age()):
+        if price > 0 and pricing.is_stale(record.get("price_updated_at"), price_max_age()):
             st.warning(
                 f"Este precio está vencido ({pricing.describe(record.get('price_updated_at'), price_max_age())}). "
                 "Confirma la cotización con el proveedor antes de comprar.",
@@ -327,7 +255,7 @@ def _new_order_dialog() -> None:
         if not record.get("available", True):
             st.caption("El catálogo indica que este material no está disponible. Confirma la entrega con el proveedor.")
         _material_quotes(record["id"], supplier_id, offers)
-        if st.button(":material/add: Agregar al pedido", width="stretch", disabled=catalog_price <= 0):
+        if st.button(":material/add: Agregar al pedido", width="stretch", disabled=price <= 0, key="order_add_line"):
             existing = next((ln for ln in lines if ln["material_id"] == record["id"]), None)
             issues = forms.validate({"Cantidad": qty, "Precio unit.": price})
             if existing:
@@ -344,7 +272,8 @@ def _new_order_dialog() -> None:
                         {
                             "material_id": record["id"],
                             "material_name": record["name"],
-                            "unit": record["metric_label"] or None,
+                            "category": record["category"],
+                            "unit": units.primary(record["metric_label"]),
                             "quantity": qty,
                             "unit_price": price,
                             "price_updated_at": record.get("price_updated_at"),
@@ -352,15 +281,13 @@ def _new_order_dialog() -> None:
                     )
                 st.rerun(scope="fragment")
 
-    forms.section("4. Revisa y crea", "Comprueba las cantidades, el destino y el total del pedido.")
+    forms.section("4. Revisa y crea", "Comprueba cada material, su cantidad y su subtotal, el IGV y el total del pedido.")
     total = 0.0
     for index, line in enumerate(lines):
-        subtotal = line["quantity"] * line["unit_price"]
-        total += subtotal
-        l1, l2, l3 = st.columns([6, 3, 1])
-        l1.write(f"{line['material_name']}  ·  {line['quantity']:g} {line['unit'] or ''} × {line['unit_price']:,.2f}")
-        l2.write(f"**{money.fmt(subtotal, terms['currency'])}**")
-        if l3.button(":material/close:", key=f"oline_del_{index}", help="Quitar línea"):
+        total += line["quantity"] * line["unit_price"]
+        card, remove = st.columns([12, 1], vertical_alignment="center")
+        card.markdown(orden_form.line_card_html(index, line, terms["currency"]), unsafe_allow_html=True)
+        if remove.button(":material/close:", key=f"oline_del_{index}", help="Quitar del pedido"):
             lines.pop(index)
             st.rerun(scope="fragment")
     if lines:
@@ -376,20 +303,6 @@ def _new_order_dialog() -> None:
                 f"Cotizaciones con más de {price_max_age()} días sin actualizarse: {', '.join(stale_lines)}. Conviene confirmar el precio con el proveedor.",
                 icon=":material/history:",
             )
-        totals = _supplier_totals(lines, offers)
-        if len(totals) > 1:
-            cheapest_name, cheapest_total = totals[0]
-            mine = next((t for n, t in totals if n == supplier_name), None)
-            with st.expander(":material/lightbulb: Este mismo pedido con otros proveedores", expanded=cheapest_name != supplier_name):
-                st.dataframe(
-                    pd.DataFrame({"Proveedor": [("★ " if i == 0 else "") + n for i, (n, _) in enumerate(totals)], "Total del pedido (sin IGV)": [t for _, t in totals]}),
-                    hide_index=True,
-                    width="stretch",
-                    column_config={"Total del pedido (sin IGV)": st.column_config.NumberColumn(format="%.2f")},
-                )
-                if mine is not None and cheapest_name != supplier_name:
-                    st.caption(f"Con {cheapest_name} el pedido completo costaría {mine - cheapest_total:,.2f} menos.")
-
     else:
         ui.empty_state("Tu pedido está vacío", "Selecciona un material y pulsa «Agregar al pedido». Después podrás crear la orden.", icon="🧾")
 
@@ -452,7 +365,7 @@ def _budget_warning(site_id: str, site_name: str, lines: list[dict], total: floa
 
 def _edit_state_keys(order_id: str) -> list[str]:
     return [f"edit_draft_{order_id}", f"edit_ver_{order_id}", f"edit_site_{order_id}", f"edit_notes_{order_id}",
-            f"edit_add_mat_{order_id}", f"edit_add_qty_{order_id}", f"edit_{order_id}_date", f"edit_{order_id}_currency",
+            f"edit_add_{order_id}_material", f"edit_{order_id}_date", f"edit_{order_id}_currency",
             f"edit_{order_id}_rate", f"edit_{order_id}_taxmode", f"edit_{order_id}_pay"]
 
 
@@ -528,17 +441,9 @@ def _edit_order_dialog(order: dict, items: pd.DataFrame) -> None:
     if offered.empty:
         st.caption("El proveedor de esta orden ya no existe o no tiene materiales en su catálogo: solo puedes editar cantidades.")
     else:
-        options = {f"{r['category']} · {r['name']}": r for r in offered.to_dict("records")}
-        a1, a2, a3 = st.columns([4, 2, 2])
-        choice = a1.selectbox("Material", list(options), key=f"edit_add_mat_{oid}")
-        record = options[choice]
-        qty = a2.number_input("Cantidad", min_value=0.0, value=1.0, step=1.0, key=f"edit_add_qty_{oid}",
-                              help=f"Unidad: {record['metric_label'] or 'unid.'}. Debe ser mayor que 0.")
+        record, qty, _ = orden_form.material_picker(f"edit_add_{oid}", offered, terms["currency"], price_max_age())
         existing = next((l for l in draft if l["material_id"] == record["id"]), None)
         catalog_price = float(record["price"]) if pd.notna(record["price"]) else 0.0
-        shown = existing["unit_price"] if existing else catalog_price
-        a3.number_input("Precio unit.", value=float(shown), format="%.2f", disabled=True, key=f"edit_add_price_{oid}_{record['id']}",
-                        help="Fijo: precio del catálogo del proveedor (o el que ya tiene la línea de la orden).")
         if not existing and catalog_price <= 0:
             st.warning("Este material no tiene precio en el catálogo del proveedor. Regístralo en Proveedores → Catálogo para poder agregarlo.", icon=":material/sell:")
         if st.button(":material/add: Agregar a la orden", width="stretch", key=f"edit_add_btn_{oid}", disabled=(not existing and catalog_price <= 0)):
@@ -551,7 +456,7 @@ def _edit_order_dialog(order: dict, items: pd.DataFrame) -> None:
                 else:
                     draft.append(
                         {
-                            "material_id": record["id"], "material_name": record["name"], "unit": record["metric_label"] or None,
+                            "material_id": record["id"], "material_name": record["name"], "unit": units.primary(record["metric_label"]),
                             "quantity": float(qty), "unit_price": catalog_price, "remove": False,
                         }
                     )
@@ -939,6 +844,9 @@ def _render_detail(order_id: str) -> None:
         st.caption(f":material/credit_card: Condición de pago: {order['payment_terms']}" + (f" · pago pactado hasta el {due:%d/%m/%Y}" if due else "") + " (informativo: la compra y el pago se hacen fuera del sistema).")
     if order.get("notes"):
         st.caption(f":material/edit_note: {order['notes']}")
+    schedule = money.payment_schedule(order["created_at"], order["total"], order.get("payment_terms")) if order.get("payment_terms") else []
+    if len(schedule) > 1:
+        st.markdown(orden_form.schedule_html(schedule, order.get("currency")), unsafe_allow_html=True)
 
     suppliers = repo.list_suppliers()
     supplier_rows = suppliers[suppliers["id"] == order["supplier_id"]]
@@ -1027,3 +935,11 @@ def _render_detail(order_id: str) -> None:
         )
         if d3.button("⧉ Duplicar", width="stretch", help="Crea una orden nueva con estos mismos materiales"):
             _duplicate(order, items)
+        if len(schedule) > 1:
+            st.markdown('<div class="mrp-eyebrow">PDF de los pagos</div>', unsafe_allow_html=True)
+            cols = st.columns(min(len(schedule) + 1, 4))
+            cols[0].download_button(":material/event_note: Cronograma", data=payment_schedule_pdf(order, items, supplier, company), file_name=f"{order['code']}-cronograma.pdf",
+                                    mime="application/pdf", width="stretch", key=f"sched_pdf_{order_id}")
+            for k, pay in enumerate(schedule):
+                cols[(k + 1) % len(cols)].download_button(f":material/receipt: {pay['label']}", data=payment_pdf(order, items, pay["n"], supplier, company),
+                                                         file_name=f"{order['code']}-P{pay['n']}.pdf", mime="application/pdf", width="stretch", key=f"pay_pdf_{order_id}_{pay['n']}")

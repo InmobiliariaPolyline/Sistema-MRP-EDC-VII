@@ -152,9 +152,10 @@ def order_pdf(order: dict, items: pd.DataFrame, supplier: dict | None = None, co
     pdf.set_y(y0 + max(h1, h2) + 5)
 
     due = money.due_date(order["created_at"], order.get("payment_terms"))
+    plan = money.parse_plan(order.get("payment_terms"))
     pdf.info_card(
         [("Obra destino", order.get("site_name") or "Sin obra destino", "pin"), ("Entrega prometida", _date(order.get("expected_date")), "calendar"),
-         ("Condición de pago", order.get("payment_terms"), "coin"), ("Pago pactado hasta el", f"{due:%d/%m/%Y}" if due else None, "clock"),
+         ("Condición de pago", order.get("payment_terms"), "coin"), ("Último pago el" if plan else "Pago pactado hasta el", f"{due:%d/%m/%Y}" if due else None, "clock"),
          ("Enviada el", _date(order.get("sent_at"), True), "truck"), ("Tratamiento del IGV", money.TAX_MODES[money.tax_mode(tax_rate, include)][0].replace(" (18 %)", ""), "scale")],
         columns=3, title="Entrega y pago",
     )
@@ -208,8 +209,65 @@ def order_pdf(order: dict, items: pd.DataFrame, supplier: dict | None = None, co
         pdf.set_x(pdf.l_margin)
         pdf.cell(0, 5, f"Equivale a {money.symbol(money.BASE)} {amounts['total_base']:,.2f} al tipo de cambio {float(order['exchange_rate']):g}.", align="R", new_x="LMARGIN", new_y="NEXT")
         pdf.ln(2)
+    schedule = money.payment_schedule(order["created_at"], amounts["total"], order.get("payment_terms"))
+    if len(schedule) > 1:
+        pdf.section("Plan de pagos", "coin", len(schedule))
+        pdf.table(["Pago", "Vence", "Importe"], [[p["label"], f"{p['due']:%d/%m/%Y}", f"{sym} {p['amount']:,.2f}"] for p in schedule], [3, 2, 2], ["L", "L", "R"])
     pdf.note_box("Notas del pedido", order.get("notes"))
     pdf.signatures([("Autoriza", company.get("legal_name")), ("Recibe proveedor", order["supplier_name"])])
+    return bytes(pdf.output())
+
+
+def _order_total(order: dict, items: pd.DataFrame) -> tuple[dict, str]:
+    subtotal = sum(float(r["quantity"]) * float(r["unit_price"]) for r in items.to_dict("records"))
+    amounts = money.amounts(subtotal, float(order.get("tax_rate") or 0), order.get("exchange_rate") or 1, bool(order.get("prices_include_tax")))
+    return amounts, money.symbol(order.get("currency") or money.BASE)
+
+
+def payment_pdf(order: dict, items: pd.DataFrame, number: int, supplier: dict | None = None, company: dict | None = None) -> bytes:
+    """Aviso de un pago de la orden (el N.º `number` de su plan): cuánto, cuándo y a quién. Es un recordatorio para tesorería; el sistema no paga."""
+    supplier, company = supplier or {}, company or {}
+    amounts, sym = _order_total(order, items)
+    schedule = money.payment_schedule(order["created_at"], amounts["total"], order.get("payment_terms"))
+    if not 1 <= number <= len(schedule):
+        raise ValueError("Esa orden no tiene un pago con ese número.")
+    pay = schedule[number - 1]
+    code = f"{order['code']}-P{number}"
+    pdf = BrandPDF("Aviso de pago", code, theme="amber", style="ticket")
+    pdf.add_page()
+    pdf.cover("Aviso de pago", code, [("Vence", f"{pay['due']:%d/%m/%Y}"), ("Orden", order["code"])], (f"Pago {number} de {len(schedule)}", "warn"), icon="coin")
+    pdf.info_card(
+        [("Concepto", pay["label"], "coin"), ("Importe a pagar", f"{sym} {pay['amount']:,.2f}", "scale"), ("Fecha de vencimiento", f"{pay['due']:%d/%m/%Y}", "calendar"),
+         ("Proveedor", order["supplier_name"], "building"), ("RUC", supplier.get("ruc"), "list"), ("Condición pactada", order.get("payment_terms"), "clock")],
+        columns=3, title="Datos del pago",
+    )
+    before = sum(p["amount"] for p in schedule[: number - 1])
+    after = max(amounts["total"] - before - pay["amount"], 0.0)
+    pdf.section("Dónde cae este pago", "chart")
+    top = pdf.get_y()
+    pdf.hbars(pdf.l_margin, top, pdf.usable, [
+        ("Pagos anteriores", before, "good", f"{sym} {before:,.2f}"), ("Este pago", pay["amount"], "warn", f"{sym} {pay['amount']:,.2f}"), ("Pagos posteriores", after, "info", f"{sym} {after:,.2f}"),
+    ])
+    pdf.set_y(top + 3 * 8.5 + 4)
+    pdf.totals([("Importe de la orden", f"{sym} {amounts['total']:,.2f}")], ("Este pago", f"{sym} {pay['amount']:,.2f}"))
+    pdf.note_box("Aviso", "Documento informativo para tesorería: el sistema no realiza ni registra pagos; la compra y el pago se hacen fuera de él.")
+    pdf.signatures([("Tesorería", company.get("legal_name")), ("Proveedor", order["supplier_name"])])
+    return bytes(pdf.output())
+
+
+def payment_schedule_pdf(order: dict, items: pd.DataFrame, supplier: dict | None = None, company: dict | None = None) -> bytes:
+    """Cronograma completo de pagos de la orden, del primero al último, con importes y vencimientos."""
+    company = company or {}
+    amounts, sym = _order_total(order, items)
+    schedule = money.payment_schedule(order["created_at"], amounts["total"], order.get("payment_terms"))
+    pdf = BrandPDF("Cronograma de pagos", order["code"], theme="amber", style="minimal")
+    pdf.add_page()
+    pdf.cover("Cronograma de pagos", order["code"], [("Proveedor", order["supplier_name"]), ("Total", f"{sym} {amounts['total']:,.2f}")], (f"{len(schedule)} pago(s)", "warn"), icon="coin")
+    pdf.section("Pagos", "coin", len(schedule))
+    pdf.table(["N.º", "Concepto", "Vence", "Importe"], [[str(p["n"]), p["label"], f"{p['due']:%d/%m/%Y}", f"{sym} {p['amount']:,.2f}"] for p in schedule], [0.7, 3, 2, 2], ["L", "L", "L", "R"])
+    pdf.totals([("Pagos", str(len(schedule)))], ("Total", f"{sym} {amounts['total']:,.2f}"))
+    pdf.note_box("Aviso", "Documento informativo para tesorería: el sistema no realiza ni registra pagos.")
+    pdf.signatures([("Tesorería", company.get("legal_name"))])
     return bytes(pdf.output())
 
 
@@ -237,6 +295,9 @@ def order_whatsapp_text(order: dict, items: pd.DataFrame, company: dict | None =
         lines.append(f"Fecha de entrega solicitada: {expected[8:10]}/{expected[5:7]}/{expected[:4]}")
     if order.get("payment_terms"):
         lines.append(f"Condición de pago: {order['payment_terms']}")
+        schedule = money.payment_schedule(order.get("created_at"), amounts["total"], order["payment_terms"])
+        if len(schedule) > 1:
+            lines += [f"  {p['label']}: {money.fmt(p['amount'], cur)} · {p['due']:%d/%m/%Y}" for p in schedule]
     if order.get("site_name"):
         lines.append(f"Entrega en: {order['site_name']}")
     if order.get("notes"):

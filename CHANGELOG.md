@@ -6,6 +6,22 @@ Formato de cada parche: **Agregado** · **Corregido** · **Problemas y causa** �
 
 ---
 
+## Parche 070 — Orden de compra más exacta: IGV claro, pagos en cuotas y PDF por pago · 2026-10-21
+
+Se rehízo el formulario «Nueva orden de compra» a partir de los errores señalados.
+
+**Agregado**
+- **IGV en dos opciones claras**: «Se suma 18 % de IGV a los precios» o «Los precios ya incluyen IGV». Antes aparecía una tercera opción confusa.
+- **Forma de pago**: contado, contra entrega, crédito a un plazo o **en cuotas** (de 2 a 24, mensuales/quincenales/semanales, primera cuota a 0–60 días, inicial opcional). El sistema calcula importes y vencimientos (la última cuota absorbe los céntimos).
+- **PDF por pago**: aviso de cada pago («OC-…-P1», «P2»…) y **cronograma** completo, desde el primero hasta el último. La orden y el texto de WhatsApp incluyen el plan.
+- Ficha del material elegido, tarjetas de «Precio unitario» y «Subtotal», líneas del pedido como tarjetas y resumen con la etiqueta de IGV.
+
+**Corregido**
+- El precio unitario ya no es un campo gris con +/−: es una tarjeta (viene del catálogo del proveedor).
+- La lista de materiales no se reduce al agregar uno (claves estables y reinicio al cambiar de proveedor).
+- Se quitó «Este mismo pedido con otros proveedores» del formulario; se conserva «Comparar cotizaciones» por material.
+- La unidad de la línea es la principal del material (kg, m, unid.), no la lista completa.
+
 ## Parche 069 — Búsqueda de direcciones más precisa · 2026-10-21
 
 La búsqueda de la ubicación de una obra seguía siendo la de OpenStreetMap «a secas». Se midió contra 24 lugares conocidos del Perú escritos como los escribiría una persona (con abreviaturas, sin tildes, con errores): **antes acertaba a la primera 12 de 24 y ahora 18 de 24; entre los candidatos mostrados, de 14 a 21.**

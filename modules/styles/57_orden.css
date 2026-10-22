@@ -1,0 +1,56 @@
+/* =========================================================================
+   57 · ORDEN DE COMPRA — ficha del material, tarjetas de precio y subtotal,
+   líneas del pedido, resumen con el IGV y plan de pagos
+   ========================================================================= */
+
+/* ficha del material elegido */
+.mrp-matcard { display: flex; align-items: center; gap: .85rem; flex-wrap: wrap; padding: .8rem 1rem; margin: .15rem 0 .35rem; border-radius: 1rem; background: var(--mrp-soft); border: 1px solid color-mix(in srgb, var(--mrp-accent) 22%, transparent); animation: mrpPop var(--dur-base) var(--ease-out) both; }
+.mrp-matcard-ico { flex: 0 0 auto; width: 2.6rem; height: 2.6rem; display: grid; place-items: center; border-radius: .85rem; color: #fff; background: var(--mrp-grad); box-shadow: 0 10px 22px -12px rgba(90, 63, 240, .8); }
+.mrp-matcard-body { flex: 1 1 12rem; min-width: 0; }
+.mrp-matcard-name { font-weight: 800; letter-spacing: -.01em; color: var(--mrp-text); overflow-wrap: anywhere; }
+.mrp-matcard-meta { margin-top: .1rem; font-size: var(--fs-sm); color: var(--mrp-muted); }
+.mrp-matcard-pills { display: flex; flex-wrap: wrap; gap: .3rem; }
+.mrp-matcard-pills .mrp-pill { margin: 0; }
+
+/* tarjetas pequeñas: precio unitario y subtotal (solo informan, no se editan) */
+.mrp-tile { display: grid; gap: .1rem; align-content: center; min-height: 4.4rem; padding: .65rem .9rem; border-radius: .9rem; background: var(--mrp-surface); border: 1px solid var(--mrp-border); box-shadow: var(--mrp-shadow); transition: transform var(--dur-base) var(--ease-out), border-color var(--dur-base); }
+.mrp-tile:hover { transform: translateY(-2px); border-color: color-mix(in srgb, var(--mrp-accent) 40%, var(--mrp-border)); }
+.mrp-tile .k { font-size: .64rem; font-weight: 800; letter-spacing: .08em; text-transform: uppercase; color: var(--mrp-muted); }
+.mrp-tile b { font-size: 1.18rem; font-weight: 800; letter-spacing: -.02em; color: var(--mrp-text); font-variant-numeric: tabular-nums; }
+.mrp-tile small { font-size: .72rem; color: var(--mrp-muted); overflow-wrap: anywhere; }
+.mrp-tile.accent { border-color: transparent; background: linear-gradient(135deg, var(--mrp-soft), var(--mrp-surface)); border-top: 3px solid var(--mrp-accent); }
+.mrp-tile.accent b { color: var(--mrp-accent); }
+.mrp-tile.muted b { color: var(--mrp-muted); font-weight: 650; }
+
+/* línea del pedido */
+.mrp-line { display: flex; align-items: center; gap: .9rem; padding: .8rem 1rem; border-radius: 1rem; background: var(--mrp-surface); border: 1px solid var(--mrp-border); box-shadow: var(--mrp-shadow); animation: mrpSlideLeft var(--dur-base) var(--ease-out) both; transition: transform var(--dur-base) var(--ease-out), border-color var(--dur-base); }
+.mrp-line:hover { transform: translateX(3px); border-color: color-mix(in srgb, var(--mrp-accent) 45%, var(--mrp-border)); }
+.mrp-line-no { flex: 0 0 auto; width: 1.9rem; height: 1.9rem; display: grid; place-items: center; border-radius: 50%; font-size: .8rem; font-weight: 800; color: #fff; background: var(--mrp-grad); }
+.mrp-line-body { flex: 1; min-width: 0; }
+.mrp-line-name { font-weight: 800; color: var(--mrp-text); overflow-wrap: anywhere; }
+.mrp-line-meta { font-size: var(--fs-sm); color: var(--mrp-muted); margin-top: .05rem; }
+.mrp-line-calc { display: flex; flex-wrap: wrap; align-items: baseline; gap: .4rem; margin-top: .35rem; font-size: var(--fs-sm); color: var(--mrp-muted); font-variant-numeric: tabular-nums; }
+.mrp-line-calc .qty { padding: .1rem .5rem; border-radius: .5rem; font-weight: 800; color: var(--mrp-accent); background: var(--mrp-soft); }
+.mrp-line-calc i { font-style: normal; opacity: .7; }
+.mrp-line-total { text-align: right; flex: 0 0 auto; }
+.mrp-line-total small { display: block; font-size: .64rem; font-weight: 800; letter-spacing: .08em; text-transform: uppercase; color: var(--mrp-muted); }
+.mrp-line-total b { font-size: 1.15rem; font-weight: 800; letter-spacing: -.02em; color: var(--mrp-text); font-variant-numeric: tabular-nums; }
+
+/* resumen con el IGV */
+.mrp-ordsum { padding: 1rem; border-radius: 1.1rem; background: var(--mrp-field); border: 1px solid var(--mrp-border); animation: mrpUp var(--dur-slow) var(--ease-out) both; }
+.mrp-ordsum-tiles { display: grid; grid-template-columns: repeat(auto-fit, minmax(10rem, 1fr)); gap: .7rem; }
+.mrp-ordsum-note { margin-top: .6rem; font-size: var(--fs-sm); color: var(--mrp-muted); }
+.mrp-igv-badge { display: inline-flex; align-items: center; gap: .45rem; margin-bottom: .75rem; padding: .35rem .8rem; border-radius: var(--r-full); font-size: var(--fs-sm); font-weight: 750; }
+.mrp-igv-badge.added { color: var(--mrp-info); background: var(--mrp-info-bg); }
+.mrp-igv-badge.included { color: var(--mrp-good); background: var(--mrp-good-bg); }
+.mrp-igv-badge.none { color: var(--mrp-warn); background: var(--mrp-warn-bg); }
+
+/* plan de pagos en cuotas */
+.mrp-plan-title { display: flex; align-items: center; gap: .45rem; margin: .8rem 0 .4rem; font-size: .72rem; font-weight: 800; letter-spacing: .08em; text-transform: uppercase; color: var(--mrp-accent); }
+.mrp-plan { display: grid; gap: .35rem; }
+.mrp-plan-row { display: grid; grid-template-columns: 2rem 1fr auto auto; align-items: center; gap: .75rem; padding: .5rem .8rem; border-radius: .8rem; background: var(--mrp-surface); border: 1px solid var(--mrp-border); font-size: var(--fs-sm); font-variant-numeric: tabular-nums; animation: mrpSlideLeft var(--dur-base) var(--ease-out) both; }
+.mrp-plan-row .no { width: 1.6rem; height: 1.6rem; display: grid; place-items: center; border-radius: 50%; font-size: .72rem; font-weight: 800; color: var(--mrp-accent); background: var(--mrp-soft); }
+.mrp-plan-row .lbl { font-weight: 700; color: var(--mrp-text); }
+.mrp-plan-row .due { color: var(--mrp-muted); }
+.mrp-plan-row b { color: var(--mrp-text); }
+@media (max-width: 640px) { .mrp-line { flex-wrap: wrap; } .mrp-plan-row { grid-template-columns: 2rem 1fr auto; } .mrp-plan-row .due { grid-column: 2; } }

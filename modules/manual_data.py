@@ -347,7 +347,7 @@ CHAPTERS: list[dict] = [
                 "where": "Órdenes de compra › ＋ Nueva orden",
                 "mock": {
                     "title": "Nueva orden de compra",
-                    "source": ["ordenes.py"],
+                    "source": ["ordenes.py", "orden_form.py"],
                     "rows": [
                         {"sec": "1. Proveedor y destino"},
                         {"fields": [
@@ -361,13 +361,12 @@ CHAPTERS: list[dict] = [
                         ]},
                         {"fields": [
                             {"field": "IGV (18 %)", "kind": "select", "value": "Los precios NO incluyen IGV: se suma 18 %", "mark": 3},
-                            {"field": "Condición de pago (informativa)", "kind": "select", "value": "Crédito 30 días", "mark": 3},
+                            {"field": "Forma de pago (informativa)", "kind": "select", "value": "En cuotas", "mark": 3},
                         ]},
                         {"sec": "3. Agrega materiales"},
                         {"fields": [
                             {"field": "Material", "kind": "select", "value": "Concreto · Concreto f'c=210", "mark": 4},
                             {"field": "Cantidad", "kind": "number", "value": "12.00", "mark": 4},
-                            {"field": "Precio unit.", "kind": "number", "value": "280.00", "disabled": True, "mark": 4},
                         ]},
                         {"buttons": [("＋ Agregar al pedido", "ghost", 4)]},
                         {"sec": "4. Revisa y crea"},
