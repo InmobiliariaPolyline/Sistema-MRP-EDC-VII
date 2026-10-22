@@ -8,7 +8,7 @@ import pandas as pd
 
 from db import local_repository as repo
 from modules import ordenes
-from utils import money
+from utils import clock, money
 
 
 class MoneyTests(unittest.TestCase):
@@ -85,9 +85,9 @@ class OrderTermsTests(unittest.TestCase):
         self.assertAlmostEqual(float(repo.list_orders().iloc[0]["total"]), 1180.0)
 
     def test_late_orders_are_only_open_orders_past_their_promised_date(self):
-        past = date.today() - timedelta(days=5)
+        past = clock.today() - timedelta(days=5)
         late = self._order({"expected_date": past})
-        self._order({"expected_date": date.today() + timedelta(days=5)})
+        self._order({"expected_date": clock.today() + timedelta(days=5)})
         self._order()
         done = self._order({"expected_date": past})
         repo.set_order_status(done["id"], "cancelada")
