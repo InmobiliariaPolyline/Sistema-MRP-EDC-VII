@@ -376,7 +376,7 @@ CHAPTERS: list[dict] = [
                     ],
                 },
                 "steps": [
-                    {"title": "Elige proveedor y obra", "text": "Toda la orden es de **un proveedor**. La obra destino es opcional; si la eliges, el sistema avisa cuando el pedido supera su presupuesto."},
+                    {"title": "Elige proveedor y obra", "text": "Cada orden es de **un proveedor**, pero puedes cambiar de proveedor mientras armas el pedido: lo ya agregado se conserva y al final se crea una orden por proveedor. La obra destino es opcional; si la eliges, el sistema avisa cuando el pedido supera su presupuesto."},
                     {"title": "Fecha prometida y moneda", "text": "La **fecha prometida** activa el aviso de atraso. Si el proveedor cotiza en dólares, elige la moneda e indica el tipo de cambio."},
                     {"title": "IGV y condición de pago", "text": "Elige cómo cotiza el proveedor: **sin IGV** (se suma 18 %), **con IGV incluido** (el sistema lo separa) o **exonerado**. La **condición de pago** es solo informativa: lo pactado, para saber cuánto y hasta cuándo."},
                     {"title": "Agrega los materiales", "text": "Elige el material y la cantidad. El **precio unitario es fijo**: viene del catálogo del proveedor. Repite por cada material."},

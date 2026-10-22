@@ -93,7 +93,7 @@ GUIDES: dict[str, dict] = {
                     {"title": "Empieza una orden nueva", "text": "Pulsa **＋ Nueva orden** y elige el **proveedor**. La **obra destino** es opcional; si la eliges, el sistema avisa cuando el pedido supera su presupuesto.", "where": "Botón de arriba a la derecha"},
                     {"title": "Define entrega, IGV y pago", "text": "La **fecha prometida** activa el aviso de atraso. En **IGV (18 %)** eliges cómo cotiza el proveedor: sin IGV (se suma), con IGV incluido (se separa) o exonerado. La **condición de pago** es solo informativa."},
                     {"title": "Agrega los materiales", "text": "Elige un material, escribe la cantidad y pulsa **＋ Agregar al pedido**. El **precio unitario es el del catálogo** y no se cambia aquí: lo que sube con la cantidad es el total."},
-                    {"title": "Revisa los importes", "text": "Verás el **valor de venta**, el **IGV** y el **importe total**, como en una factura. Abajo, **Este mismo pedido con otros proveedores** te dice si alguien lo tiene más barato."},
+                    {"title": "Revisa los importes", "text": "Verás el **valor de venta**, el **IGV** y el **importe total**, como en una factura. Si otro proveedor tiene un material más barato, **Comparar cotizaciones** te deja agregarlo desde ahí sin perder lo anterior: se crea **una orden por proveedor**."},
                     {"title": "Crea la orden", "text": "Pulsa **Crear orden**. Queda en estado **Pendiente**."},
                 ],
             },

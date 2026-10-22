@@ -242,3 +242,18 @@ def totals_block(subtotal: float, terms: dict) -> None:
     elif schedule:
         item = schedule[0]
         st.caption(f"{payment} · pago por {money.fmt(item['amount'], terms['currency'])} el {item['due']:%d/%m/%Y} si se emite hoy.")
+
+
+def group_head_html(supplier: str, count: int, total: str, current: bool = False) -> str:
+    """Encabezado de la tarjeta de un proveedor dentro del pedido: quién, cuántos materiales y cuánto suma su orden."""
+    badge = ui.pill("Eligiendo ahora", "purple") if current else ""
+    return (
+        f'<div class="mrp-grouphead"><div class="mrp-grouphead-ico">{icons.svg("building", 18, 1.9)}</div>'
+        f'<div class="mrp-grouphead-body"><b>{html.escape(supplier)}</b><small>{count} material(es) · una orden</small></div>'
+        f'{badge}<div class="mrp-grouphead-total"><small>Total</small><b>{html.escape(total)}</b></div></div>'
+    )
+
+
+def grand_total_html(count: int, total: str) -> str:
+    """Lo que suman todas las órdenes del pedido (en soles)."""
+    return f'<div class="mrp-grand"><span>Total de las {count} órdenes</span><b>{html.escape(total)}</b></div>'

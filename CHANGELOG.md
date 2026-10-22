@@ -6,6 +6,18 @@ Formato de cada parche: **Agregado** · **Corregido** · **Problemas y causa** �
 
 ---
 
+## Parche 071 — Un pedido con varios proveedores · 2026-10-22
+
+Al crear una orden, cambiar de proveedor ya no borra lo agregado: el pedido es un carrito agrupado por proveedor y al crearlo se genera **una orden por proveedor**.
+
+**Agregado**
+- Cambiar de proveedor conserva los materiales ya elegidos; el selector indica cuántos materiales lleva cada uno («Sodimac · 2 en el pedido»).
+- **Condiciones por proveedor**: fecha prometida, moneda, IGV y forma de pago se guardan para cada uno y se recuperan al volver.
+- «Comparar cotizaciones» muestra cada proveedor con su precio, si es el más barato y cuánto menos/más cuesta, con el botón **Agregar desde aquí** que cambia de proveedor con ese material ya elegido.
+- Cada línea tiene **Mover a otro proveedor** (con su precio y la diferencia); si el destino ya tenía el material, suma cantidades.
+- «Revisa y crea» muestra una tarjeta por proveedor con su IGV y su plan de pagos, el total de todas las órdenes y el botón «Crear N órdenes».
+- El aviso de presupuesto de la obra suma todas las órdenes del pedido.
+
 ## Parche 070 — Orden de compra más exacta: IGV claro, pagos en cuotas y PDF por pago · 2026-10-21
 
 Se rehízo el formulario «Nueva orden de compra» a partir de los errores señalados.

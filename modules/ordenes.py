@@ -2,6 +2,7 @@
 material (cantidad y precio), la obra destino y un estado que avanza de
 pendiente a enviada, recibida (o parcial si llegó solo una parte) o cancelada.
 
+Un pedido puede juntar materiales de varios proveedores (carrito): al crearlo se genera una orden por proveedor.
 Incluye comparador de cotizaciones al armar el pedido, recepción parcial por
 línea (que alimenta el inventario), duplicar una orden, PDF de la orden y
 mensaje listo para WhatsApp."""
@@ -22,8 +23,7 @@ from utils.timeago import age_days
 from utils import clock
 
 SELECTED_KEY = "selected_order_id"
-LINES_KEY = "_order_lines"
-SUPPLIER_KEY = "_order_supplier"
+CART_KEY = "_order_cart"      # {id del proveedor: {"name", "lines", "terms"}}: el pedido en curso, agrupado por proveedor
 PRESET_KEY = "_order_preset"
 ALERT_DAYS_KEY = "alert_days"
 DEFAULT_ALERT_DAYS = 3
@@ -103,10 +103,9 @@ def _totals_block(subtotal: float, terms: dict) -> None:
 
 
 def _clear_order_draft() -> None:
-    for key in (
-        LINES_KEY, SUPPLIER_KEY, PRESET_KEY, "new_order_supplier", "new_order_site", "new_order_notes", "new_order_material",
-        "new_order_date", "new_order_currency", "new_order_rate", "new_order_taxmode", *orden_form.payment_keys("new_order"),
-    ):
+    for key in [k for k in st.session_state if str(k).startswith("new_order_") and k != "new_order_open"]:
+        st.session_state.pop(key, None)
+    for key in (CART_KEY, PRESET_KEY):
         st.session_state.pop(key, None)
 
 
@@ -143,52 +142,92 @@ def render() -> None:
 # Alta de orden
 # ---------------------------------------------------------------------------
 
-def _supplier_totals(lines: list[dict], offers: pd.DataFrame) -> list[tuple[str, float]]:
-    """Cuánto costaría el pedido completo con cada proveedor que ofrece TODOS
-    los materiales (con precio), de menor a mayor."""
-    wanted = {ln["material_id"]: ln["quantity"] for ln in lines}
-    if offers.empty or not wanted:
+def _default_terms() -> dict:
+    """Condiciones iniciales de un proveedor al que se le agrega un material sin haber pasado por su formulario."""
+    rate, include = money.tax_from_mode("add")
+    return {"expected_date": None, "currency": money.BASE, "exchange_rate": 1.0, "tax_rate": rate, "prices_include_tax": include, "payment_terms": None}
+
+
+def _terms_defaults(terms: dict) -> dict:
+    """Las condiciones guardadas de un proveedor → valores iniciales de sus controles."""
+    return {
+        "expected_date": terms.get("expected_date"), "currency": terms.get("currency") or money.BASE, "exchange_rate": terms.get("exchange_rate") or 3.75,
+        "tax_mode": money.tax_mode(terms.get("tax_rate"), terms.get("prices_include_tax")), "payment_terms": terms.get("payment_terms"),
+    }
+
+
+def _jump_to_supplier(supplier_name: str, material_label: str | None = None) -> None:
+    """Cambia el proveedor del que se agregan materiales (y, si se indica, deja elegido ese material). Lo ya agregado se conserva."""
+    st.session_state["new_order_supplier"] = supplier_name
+    if material_label:
+        st.session_state["new_order_material"] = material_label
+
+
+def _move_line(from_id: str, material_id: str, to_id: str, to_name: str, price: float, updated=None) -> None:
+    """Pasa una línea del pedido a otro proveedor, con el precio de ese proveedor (suma la cantidad si ya tenía ese material)."""
+    cart = st.session_state.get(CART_KEY, {})
+    source = cart.get(from_id)
+    line = next((ln for ln in source["lines"] if ln["material_id"] == material_id), None) if source else None
+    if line is None:
+        return
+    source["lines"].remove(line)
+    target = cart.setdefault(to_id, {"name": to_name, "lines": [], "terms": _default_terms()})
+    same = next((ln for ln in target["lines"] if ln["material_id"] == material_id), None)
+    if same:
+        same["quantity"] += line["quantity"]
+        same["unit_price"], same["price_updated_at"] = price, updated
+    else:
+        target["lines"].append({**line, "unit_price": price, "price_updated_at": updated})
+    if not source["lines"]:
+        cart.pop(from_id, None)
+
+
+def _alternatives(offers: pd.DataFrame, material_id: str, current_supplier_id: str) -> list[dict]:
+    """Otros proveedores que ofrecen este material con precio, del más barato al más caro."""
+    if offers.empty:
         return []
-    priced = offers[offers["material_id"].isin(wanted) & offers["price"].notna()]
-    priced = priced[priced["price"].astype(float) > 0]
-    results = []
-    for supplier_name, group in priced.groupby("supplier_name"):
-        if set(group["material_id"]) >= set(wanted):
-            total = sum(float(r["price"]) * wanted[r["material_id"]] for r in group.to_dict("records") if r["material_id"] in wanted)
-            results.append((supplier_name, total))
-    return sorted(results, key=lambda r: r[1])
+    rows = offers[(offers["material_id"] == material_id) & (offers["supplier_id"] != current_supplier_id) & offers["price"].notna()]
+    rows = rows[rows["price"].astype(float) > 0]
+    return rows.assign(price=rows["price"].astype(float)).sort_values("price").to_dict("records")
 
 
-def _material_quotes(material_id: str, current_supplier_id: str, offers: pd.DataFrame) -> None:
-    """Precio de este material en cada proveedor, lado a lado, sugiriendo el más barato."""
+def _material_quotes(record: dict, current_supplier_id: str, offers: pd.DataFrame, label: str) -> None:
+    """Precio de este material en cada proveedor, con un botón para agregarlo desde el más barato sin perder lo ya elegido."""
     if offers.empty:
         return
-    rows = offers[offers["material_id"] == material_id]
-    rows = rows[rows["price"].notna()]
+    rows = offers[(offers["material_id"] == record["id"]) & offers["price"].notna()]
     rows = rows[rows["price"].astype(float) > 0]
     if len(rows) < 2:
         return
     rows = rows.assign(price=rows["price"].astype(float)).sort_values("price")
     best = rows.iloc[0]
-    table = pd.DataFrame(
-        {
-            "Proveedor": [("★ " if i == 0 else "") + r["supplier_name"] + (" (este pedido)" if r["supplier_id"] == current_supplier_id else "") for i, r in enumerate(rows.to_dict("records"))],
-            "Precio": rows["price"].tolist(),
-            "Disponible": ["Sí" if r["available"] else "No" for r in rows.to_dict("records")],
-        }
-    )
-    with st.expander(f":material/lightbulb: Comparar cotizaciones ({len(rows)} proveedores)", expanded=best["supplier_id"] != current_supplier_id):
-        st.dataframe(table, hide_index=True, width="stretch", column_config={"Precio": st.column_config.NumberColumn(format="%.2f")})
-        mine = rows[rows["supplier_id"] == current_supplier_id]
-        if best["supplier_id"] != current_supplier_id and not mine.empty:
-            mine_price = float(mine.iloc[0]["price"])
+    mine = rows[rows["supplier_id"] == current_supplier_id]
+    mine_price = float(mine.iloc[0]["price"]) if not mine.empty else None
+    cheaper = best["supplier_id"] != current_supplier_id and mine_price is not None
+    with st.expander(f":material/lightbulb: Comparar cotizaciones ({len(rows)} proveedores)", expanded=cheaper):
+        for index, row in enumerate(rows.to_dict("records")):
+            is_mine = row["supplier_id"] == current_supplier_id
+            c1, c2, c3, c4 = st.columns([3.2, 1.4, 2.4, 2.6], vertical_alignment="center")
+            c1.markdown(f"**{row['supplier_name']}**" + (" · este proveedor" if is_mine else ""))
+            c2.markdown(f"{float(row['price']):,.2f}")
+            note = ui.pill("Más barato", "green") if index == 0 else ""
+            if mine_price and not is_mine:
+                delta = (float(row["price"]) / mine_price - 1) * 100
+                note += ui.pill(f"{abs(delta):.0f} % {'menos' if delta < 0 else 'más'} que aquí", "green" if delta < 0 else "gray")
+            if not row["available"]:
+                note += ui.pill("No disponible", "red")
+            c3.markdown(note, unsafe_allow_html=True)
+            if not is_mine:
+                c4.button(":material/swap_horiz: Agregar desde aquí", key=f"jump_{row['supplier_id']}", width="stretch", on_click=_jump_to_supplier,
+                          args=(row["supplier_name"], label), help="Cambia de proveedor con este material elegido. Lo que ya agregaste se conserva.")
+        if cheaper:
             saving = (1 - float(best["price"]) / mine_price) * 100
-            st.caption(f"{best['supplier_name']} lo ofrece {saving:.0f}% más barato ({float(best['price']):,.2f} vs {mine_price:,.2f}). Cambia el proveedor arriba si te conviene.")
+            st.caption(f"{best['supplier_name']} lo ofrece {saving:.0f} % más barato. Si lo agregas desde ahí, se crea una orden aparte para ese proveedor.")
 
 
 @st.dialog("Nueva orden de compra", width="large")
 def _new_order_dialog() -> None:
-    forms.header("Prepara tu pedido", "Elige el destino, agrega los materiales y revisa el total antes de crear la orden.")
+    forms.header("Prepara tu pedido", "Elige proveedor y destino, agrega los materiales (puedes cambiar de proveedor) y revisa el total antes de crear.")
     suppliers = repo.list_suppliers()
     if suppliers.empty:
         ui.empty_state("Falta un proveedor", "Registra uno en Proveedores para preparar tu primera orden.", icon="🏭")
@@ -196,48 +235,49 @@ def _new_order_dialog() -> None:
             _clear_order_draft()
             st.rerun()
         return
-    ui.tip("Ejemplo: elige el proveedor, la obra destino, luego un material con cantidad 12 y pulsa «Agregar al pedido». Repite por cada material y al final «Crear orden».")
+    ui.tip("Ejemplo: elige el proveedor, agrega un material con cantidad 12 y pulsa «Agregar al pedido». Si otro proveedor tiene otro material más barato, cambia de proveedor y agrégalo: "
+           "lo anterior se conserva y al final se crea una orden por proveedor.")
     sites = repo.list_project_sites()
     offers = repo.list_offers()
+    cart: dict = st.session_state.setdefault(CART_KEY, {})
 
     preset = st.session_state.pop(PRESET_KEY, None)
-    if preset:  # viene de «Duplicar»: precarga proveedor, obra, notas y líneas
+    if preset:  # viene de «Duplicar»: precarga proveedor, obra, notas, condiciones y líneas
+        cart.clear()
         st.session_state["new_order_supplier"] = preset["supplier_name"]
         st.session_state["new_order_site"] = preset["site_name"] if preset["site_name"] in sites["name"].tolist() else NO_SITE
         st.session_state["new_order_notes"] = preset["notes"] or ""
-        st.session_state["new_order_currency"] = preset.get("currency") or money.BASE
-        st.session_state["new_order_rate"] = float(preset.get("exchange_rate") or 3.75)
-        st.session_state["new_order_taxmode"] = money.tax_mode(preset.get("tax_rate"), preset.get("prices_include_tax"))
-        orden_form.seed_payment("new_order", preset.get("payment_terms"))
-        st.session_state[SUPPLIER_KEY] = preset["supplier_id"]
-        st.session_state[LINES_KEY] = preset["lines"]
+        cart[preset["supplier_id"]] = {
+            "name": preset["supplier_name"], "lines": preset["lines"],
+            "terms": {**_default_terms(), "currency": preset.get("currency") or money.BASE, "exchange_rate": float(preset.get("exchange_rate") or 1.0),
+                      "tax_rate": float(preset.get("tax_rate") or 0), "prices_include_tax": bool(preset.get("prices_include_tax")), "payment_terms": preset.get("payment_terms")},
+        }
 
-    forms.section("1. Proveedor y destino", "Toda la orden corresponde a un proveedor. La obra destino es opcional.")
+    forms.section("1. Proveedor y destino", "Elige el proveedor del que vas a agregar materiales. Puedes cambiarlo cuando quieras: lo ya agregado se conserva y se crea una orden por proveedor. La obra destino es opcional.")
+    counts = {entry["name"]: len(entry["lines"]) for entry in cart.values() if entry["lines"]}
     supplier_name = st.selectbox("Proveedor", suppliers["name"].tolist(), key="new_order_supplier",
-                                 help="Al cambiar de proveedor se vacían los materiales del borrador para revisar sus precios.")
+                                 format_func=lambda n: f"{n} · {counts[n]} en el pedido" if counts.get(n) else n,
+                                 help="Cada proveedor tiene su catálogo, sus precios y sus condiciones. Al cambiar de proveedor no pierdes lo que ya agregaste.")
     supplier_id = suppliers.loc[suppliers["name"] == supplier_name, "id"].iloc[0]
-    if st.session_state.get(SUPPLIER_KEY) != supplier_id:
-        if st.session_state.get(LINES_KEY):
-            st.warning("Cambiaste de proveedor: vuelve a agregar los materiales con sus nuevas cotizaciones.")
-        st.session_state[SUPPLIER_KEY] = supplier_id
-        st.session_state[LINES_KEY] = []
-    lines: list[dict] = st.session_state.setdefault(LINES_KEY, [])
-
     site_choice = st.selectbox("Obra destino (opcional)", [NO_SITE] + sites["name"].tolist(), key="new_order_site",
-                               help="Asigna una obra para incluir esta compra en su control de presupuesto.")
+                               help="Asigna una obra para incluir estas compras en su control de presupuesto. Vale para todas las órdenes del pedido.")
     notes = st.text_input("Notas (opcional)", placeholder="Ej. Entregar antes del viernes", key="new_order_notes", max_chars=500,
-                          help="Condiciones de entrega o indicaciones para el proveedor. Hasta 500 caracteres.")
+                          help="Condiciones de entrega o indicaciones para los proveedores. Hasta 500 caracteres.")
 
-    forms.section("2. Entrega, moneda, IGV y pago", "La fecha prometida activa el aviso de atraso. El IGV (18 %) se suma o se separa según cómo cotiza el proveedor. La condición de pago es solo informativa.")
-    terms = _terms_inputs("new_order")
+    forms.section(f"2. Condiciones con {supplier_name}", "Cada proveedor tiene las suyas: fecha prometida, moneda, IGV y forma de pago (informativa). El IGV (18 %) se suma o se separa según cómo cotiza.")
+    entry = cart.get(supplier_id)
+    terms = orden_form.terms_inputs(f"new_order_{supplier_id}", **(_terms_defaults(entry["terms"]) if entry else {}))
+    if entry:
+        entry["terms"] = terms
 
-    forms.section("3. Agrega materiales", "Elige el material, indica la cantidad y pulsa «Agregar al pedido». El precio unitario es fijo: viene del catálogo del proveedor; lo que sube con la cantidad es el subtotal. Agregar de nuevo un material suma cantidades.")
+    forms.section("3. Agrega materiales", f"Del catálogo de {supplier_name}. El precio unitario viene del catálogo; lo que sube con la cantidad es el subtotal. Agregar de nuevo un material suma cantidades.")
     catalog = repo.get_supplier_catalog(supplier_id)
     offered = catalog[catalog["offered"]] if not catalog.empty else catalog
     if offered.empty:
         st.warning("Este proveedor todavía no tiene materiales asignados. Márcalos como «Lo ofrece» en su catálogo.")
     else:
-        if st.session_state.get("new_order_material") not in [f"{r['category']} · {r['name']}" for r in offered.to_dict("records")]:
+        labels = [f"{r['category']} · {r['name']}" for r in offered.to_dict("records")]
+        if st.session_state.get("new_order_material") not in labels:
             st.session_state.pop("new_order_material", None)      # otro proveedor: la elección anterior ya no existe
         record, qty, price = orden_form.material_picker("new_order", offered, terms["currency"], price_max_age())
         if price <= 0:
@@ -254,8 +294,9 @@ def _new_order_dialog() -> None:
             )
         if not record.get("available", True):
             st.caption("El catálogo indica que este material no está disponible. Confirma la entrega con el proveedor.")
-        _material_quotes(record["id"], supplier_id, offers)
+        _material_quotes(record, supplier_id, offers, f"{record['category']} · {record['name']}")
         if st.button(":material/add: Agregar al pedido", width="stretch", disabled=price <= 0, key="order_add_line"):
+            lines = cart[supplier_id]["lines"] if supplier_id in cart else []
             existing = next((ln for ln in lines if ln["material_id"] == record["id"]), None)
             issues = forms.validate({"Cantidad": qty, "Precio unit.": price})
             if existing:
@@ -264,6 +305,7 @@ def _new_order_dialog() -> None:
             if not math.isfinite(line_qty * price):
                 issues.append("Subtotal: revisa la cantidad y el precio para obtener un total finito.")
             if not forms.errors(issues):
+                lines = cart.setdefault(supplier_id, {"name": supplier_name, "lines": [], "terms": terms})["lines"]
                 if existing:
                     existing["quantity"] += qty
                     existing["unit_price"] = price  # siempre el precio vigente del catálogo
@@ -281,23 +323,51 @@ def _new_order_dialog() -> None:
                     )
                 st.rerun(scope="fragment")
 
-    forms.section("4. Revisa y crea", "Comprueba cada material, su cantidad y su subtotal, el IGV y el total del pedido.")
-    total = 0.0
-    for index, line in enumerate(lines):
-        total += line["quantity"] * line["unit_price"]
-        card, remove = st.columns([12, 1], vertical_alignment="center")
-        card.markdown(orden_form.line_card_html(index, line, terms["currency"]), unsafe_allow_html=True)
-        if remove.button(":material/close:", key=f"oline_del_{index}", help="Quitar del pedido"):
-            lines.pop(index)
-            st.rerun(scope="fragment")
-    if lines:
-        _totals_block(total, terms)
-        st.caption(f"{len(lines)} material(es) · Proveedor: {supplier_name} · Destino: {site_choice}")
+    for empty_id in [sid for sid, e in cart.items() if not e["lines"]]:
+        cart.pop(empty_id)
+    forms.section("4. Revisa y crea", "Una tarjeta por proveedor: cada material con su cantidad y subtotal, el IGV y el total. Cada proveedor genera su propia orden.")
+    grand_base, spent_base, every_line = 0.0, 0.0, []
+    for group_id, group in list(cart.items()):
+        g_terms, g_lines = group["terms"], group["lines"]
+        subtotal = sum(ln["quantity"] * ln["unit_price"] for ln in g_lines)
+        amounts = money.amounts(subtotal, g_terms["tax_rate"], g_terms["exchange_rate"], g_terms.get("prices_include_tax", False))
+        grand_base += amounts["total_base"]
+        spent_base += subtotal * g_terms["exchange_rate"]
+        every_line += g_lines
+        head, edit = st.columns([5, 2], vertical_alignment="center")
+        head.markdown(orden_form.group_head_html(group["name"], len(g_lines), money.fmt(amounts["total"], g_terms["currency"]), group_id == supplier_id), unsafe_allow_html=True)
+        if group_id != supplier_id:
+            edit.button(":material/tune: Ver este proveedor", key=f"cond_{group_id}", width="stretch", on_click=_jump_to_supplier, args=(group["name"],),
+                        help="Cambia a este proveedor para agregar más materiales o ajustar sus condiciones.")
+        for index, line in enumerate(g_lines):
+            card, move, remove = st.columns([11, 1, 1], vertical_alignment="center")
+            card.markdown(orden_form.line_card_html(index, line, g_terms["currency"]), unsafe_allow_html=True)
+            alternatives = _alternatives(offers, line["material_id"], group_id)
+            if alternatives:
+                with move.popover(":material/swap_horiz:", help="Mover este material a otro proveedor"):
+                    st.caption("Mover a otro proveedor (con su precio):")
+                    for alt in alternatives:
+                        delta = (alt["price"] / line["unit_price"] - 1) * 100 if line["unit_price"] else 0
+                        tag = f" · {abs(delta):.0f} % {'menos' if delta < 0 else 'más'}" if abs(delta) >= 0.5 else ""
+                        st.button(f"{'★ ' if alt is alternatives[0] else ''}{alt['supplier_name']} · {alt['price']:,.2f}{tag}", key=f"mv_{group_id}_{line['material_id']}_{alt['supplier_id']}",
+                                  width="stretch", on_click=_move_line, args=(group_id, line["material_id"], alt["supplier_id"], alt["supplier_name"], alt["price"], alt.get("price_updated_at")))
+            if remove.button(":material/close:", key=f"oline_del_{group_id}_{index}", help="Quitar del pedido"):
+                g_lines.pop(index)
+                st.rerun(scope="fragment")
+        orden_form.totals_block(subtotal, g_terms)
+    if cart:
+        if len(cart) > 1:
+            st.markdown(orden_form.grand_total_html(len(cart), money.fmt(grand_base, money.BASE)), unsafe_allow_html=True)
+        st.caption(f"{len(every_line)} material(es) en {len(cart)} orden(es) · Destino: {site_choice}")
         if site_choice != NO_SITE:
-            _budget_warning(sites.loc[sites["name"] == site_choice, "id"].iloc[0], site_choice, lines, total * terms["exchange_rate"])
-        if any(line["unit_price"] == 0 for line in lines):
+            by_material: dict[str, dict] = {}
+            for ln in every_line:
+                merged = by_material.setdefault(ln["material_id"], {**ln, "quantity": 0.0})
+                merged["quantity"] += ln["quantity"]
+            _budget_warning(sites.loc[sites["name"] == site_choice, "id"].iloc[0], site_choice, list(by_material.values()), spent_base)
+        if any(ln["unit_price"] == 0 for ln in every_line):
             st.warning("Hay materiales con precio 0. El total solo incluye los precios registrados.")
-        stale_lines = [line["material_name"] for line in lines if pricing.is_stale(line.get("price_updated_at"), price_max_age())]
+        stale_lines = [ln["material_name"] for ln in every_line if pricing.is_stale(ln.get("price_updated_at"), price_max_age())]
         if stale_lines:
             st.warning(
                 f"Cotizaciones con más de {price_max_age()} días sin actualizarse: {', '.join(stale_lines)}. Conviene confirmar el precio con el proveedor.",
@@ -310,24 +380,28 @@ def _new_order_dialog() -> None:
     if cancel.button(":material/close: Cancelar", key="order_cancel", width="stretch"):
         _clear_order_draft()
         st.rerun()
-    if save.button(":material/add_circle: Crear orden", type="primary", width="stretch", disabled=not lines):
+    if save.button(":material/add_circle: Crear orden" if len(cart) <= 1 else f":material/add_circle: Crear {len(cart)} órdenes", type="primary", width="stretch", disabled=not cart):
         issues = forms.validate({"Notas (opcional)": notes})
-        if not lines:
+        if not cart:
             issues.append("Materiales del pedido: agrega al menos un material.")
-        for line in lines:
-            issues.extend(f"{line['material_name']}: {issue}" for issue in forms.validate({"Cantidad": line["quantity"], "Precio unit.": line["unit_price"]}))
-        if not math.isfinite(total):
+        for group in cart.values():
+            for line in group["lines"]:
+                issues.extend(f"{line['material_name']}: {issue}" for issue in forms.validate({"Cantidad": line["quantity"], "Precio unit.": line["unit_price"]}))
+        if not math.isfinite(grand_base):
             issues.append("Total del pedido: revisa las cantidades y precios para obtener un total finito.")
         if forms.errors(issues):
             return
         site_id = None if site_choice == NO_SITE else sites.loc[sites["name"] == site_choice, "id"].iloc[0]
-        try:
-            code = repo.create_order(supplier_id, supplier_name, site_id, notes.strip() or None, lines, terms)
-        except ValueError as exc:
-            st.error(f"No se pudo crear la orden: {exc}")
-            return
+        codes: list[str] = []
+        for group_id, group in list(cart.items()):
+            try:
+                codes.append(repo.create_order(group_id, group["name"], site_id, notes.strip() or None, group["lines"], group["terms"]))
+            except ValueError as exc:
+                st.error(f"No se pudo crear la orden de {group['name']}: {exc}" + (f" Ya se crearon: {', '.join(codes)}." if codes else ""))
+                return
+            cart.pop(group_id)
         _clear_order_draft()
-        ui.flash(f"Orden {code} creada.", ":material/receipt_long:")
+        ui.flash(f"Orden {codes[0]} creada." if len(codes) == 1 else f"Órdenes creadas: {', '.join(codes)}.", ":material/receipt_long:")
         st.rerun()
 
 
