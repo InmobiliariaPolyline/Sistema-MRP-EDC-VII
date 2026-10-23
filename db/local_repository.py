@@ -621,6 +621,12 @@ def create_project_site(name: str, address: str | None, latitude: float | None, 
         )
 
 
+def update_project_site(site_id: str, name: str, address: str | None, latitude: float | None, longitude: float | None) -> None:
+    """Cambia nombre, dirección y ubicación de una obra; sus órdenes, presupuestos y trabajadores siguen unidos a ella."""
+    with _connect() as conn:
+        conn.execute("update project_sites set name = ?, address = ?, latitude = ?, longitude = ? where id = ?", (name, address, latitude, longitude, site_id))
+
+
 def delete_project_site(site_id: str) -> None:
     with _connect() as conn:
         conn.execute("delete from project_sites where id = ?", (site_id,))

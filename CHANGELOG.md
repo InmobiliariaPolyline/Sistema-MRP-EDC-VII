@@ -6,6 +6,18 @@ Formato de cada parche: **Agregado** · **Corregido** · **Problemas y causa** �
 
 ---
 
+## Parche 073 — Editar obras ya creadas · 2026-10-22
+
+**Agregado**
+- **Editar obra**: botón en la ficha de la obra (Obras › Información) y en la lista de Trabajadores › Obras / Proyectos. Permite cambiar el nombre, la dirección y la ubicación (buscar la dirección, pegar un enlace de Google Maps o coordenadas, o quitar la ubicación), con vista previa en el mapa antes de guardar.
+- Las órdenes, presupuestos, trabajadores y despachos de la obra siguen unidos a ella: solo cambia el nombre que se muestra. El cambio queda en el Historial («Nombre: A → B»).
+- No deja repetir el nombre de otra obra (sin distinguir mayúsculas ni espacios de más) y avisa si no hay cambios que guardar.
+
+**Corregido**
+- Se cierra el pendiente más antiguo: antes, para corregir una obra había que borrarla y crearla de nuevo.
+
+---
+
 ## Parche 072 — Un pedido, una ficha: varios proveedores juntos · 2026-10-22
 
 Cuando un pedido junta materiales de varios proveedores, ahora queda como **un solo pedido con un código (PD-0001)** y una sola ficha, en lugar de órdenes sueltas.
@@ -611,7 +623,6 @@ Basado en cómo se usa el sistema: **un solo administrador** opera el almacén; 
 
 ## Problemas conocidos y pendientes
 La lista vigente de lo que falta y de las mejoras propuestas está en [MEJORAS.md](MEJORAS.md). Resumen:
-- Las obras ya guardadas no se pueden editar (para corregir su ubicación hay que borrarlas y crearlas de nuevo).
 - Un pedido con varios proveedores (PD-) no tiene todavía acciones conjuntas (cancelar o enviar todas sus órdenes a la vez).
 - El rol Operador tiene permisos amplios (ve todo menos Trabajadores, Historial y Respaldo).
 - La recepción de una orden no valida cantidades en la capa de datos (la pantalla sí limita lo que se puede recibir).

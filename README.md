@@ -48,7 +48,7 @@ Sistema con login propio, dashboard y varios módulos:
 - **Stock mínimo y sugerencia de compra**: cada material puede tener un stock mínimo (alerta en el tablero). *Órdenes de compra → Sugerencia de compra* calcula qué falta pedir (presupuestos de obra − despachado, más mínimos, menos stock y lo que ya viene en camino) y crea las órdenes por el proveedor más barato.
 - **Importar precios** (en la ficha de cada proveedor): carga la lista de precios del proveedor desde Excel o CSV, enlazada con el catálogo, con vista previa y plantilla descargable; cada cambio de precio queda en el historial.
 - **Obras**: presupuesto de materiales por obra frente a lo pedido, recibido
-  y despachado desde el almacén, con aviso cuando un material excede lo previsto.
+  y despachado desde el almacén, con aviso cuando un material excede lo previsto. Cada obra se puede **editar** (nombre, dirección y ubicación en el mapa).
 - **Asistencia**: pasar lista por día (estado y obra de cada trabajador) y
   resumen por trabajador y por obra.
 - **Manual de usuario** (Sistema › Manual de Usuario): capítulos ilustrados con maquetas de cada formulario, pasos numerados, buscador y glosario.
@@ -227,6 +227,7 @@ modules/ordenes.py           # Módulo de Órdenes de compra (pedido con varios 
 modules/orden_form.py        # Piezas del formulario de orden: IGV, forma de pago y cuotas, tarjetas de material, líneas y resumen
 modules/inventario.py        # Stock y movimientos
 modules/obras.py             # Presupuesto por obra vs. pedido/recibido/despachado
+modules/obra_form.py         # Editar una obra (nombre, dirección, ubicación)
 modules/asistencia.py        # Pasar lista y resumen
 modules/historial.py         # Auditoría (quién hizo qué)
 modules/reportes.py          # Módulo de Reportes (Excel y PDF)

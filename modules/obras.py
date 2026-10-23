@@ -7,7 +7,7 @@ import pandas as pd
 import streamlit as st
 
 from db import repository as repo
-from modules import forms, inventario, materiales, ui
+from modules import forms, inventario, materiales, obra_form, ui
 from utils.reports import site_report_pdf
 from utils import audit
 from utils import icons
@@ -286,7 +286,11 @@ def _tab_info(site: dict) -> None:
     orders = repo.list_orders()
     n_orders = int((orders["project_site_id"] == site["id"]).sum()) if not orders.empty else 0
 
-    st.markdown(f'<div class="mrp-panel-title">{site["name"]}</div>', unsafe_allow_html=True)
+    title, edit = st.columns([5, 1.4], vertical_alignment="center")
+    title.markdown(f'<div class="mrp-panel-title">{site["name"]}</div>', unsafe_allow_html=True)
+    if edit.button(":material/edit: Editar obra", key=f"edit_site_{site['id']}", width="stretch", help="Cambia el nombre, la dirección o la ubicación en el mapa."):
+        obra_form.clear(site["id"])
+        obra_form.edit_dialog(site)
     st.write(f"**Dirección:** {site['address'] or 'sin dirección registrada'}")
     st.write(f"**Registrada el:** {clock.local(site['created_at'], False)}  ·  **Trabajadores:** {n_workers}  ·  **Órdenes de compra:** {n_orders}")
 

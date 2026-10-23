@@ -10,7 +10,7 @@ import streamlit as st
 
 from db import repository as repo
 from db.auth import hash_password
-from modules import forms, ui, security
+from modules import forms, obra_form, ui, security
 from modules.proveedores import company_name
 from utils import icons
 from utils.geocode import google_maps_search_url, parse_coordinates, search_address
@@ -214,7 +214,10 @@ def _render_sites_panel() -> None:
         if sites.empty:
             ui.empty_state("Sin obras", "Registra una obra arriba para asignar personal y consultar su ubicación.", icon="🏗️")
         for row in sites.to_dict("records"):
-            c1, c2 = st.columns([4, 1])
+            c1, c_edit, c2 = st.columns([4, 1, 1])
+            if c_edit.button(":material/edit:", key=f"edit_site_{row['id']}", help="Editar obra"):
+                obra_form.clear(row["id"])
+                obra_form.edit_dialog(row)
             if _has_coordinates(row.get("latitude"), row.get("longitude")):
                 url = google_maps_search_url(coords=(float(row["latitude"]), float(row["longitude"])))
                 c1.markdown(icons.render_tokens(f'{html.escape(row["name"])} <a class="mrp-link" href="{url}" target="_blank" rel="noopener">📍 Ver en Google Maps</a>'), unsafe_allow_html=True)

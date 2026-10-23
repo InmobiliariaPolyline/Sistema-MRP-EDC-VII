@@ -29,7 +29,7 @@ Toda mejora debe caber en eso: más claridad, más datos útiles, mejores docume
 **B. Huecos que conviene tapar antes de entregar (por objetivo)**
 | Objetivo | # | Qué | Por qué |
 |----------|---|-----|---------|
-| Obras | 1 | **Editar una obra ya creada** (nombre, dirección, ubicación) | Hoy solo se puede borrar y recrear; es el pendiente más antiguo. |
+| Obras | 1 | ~~Editar una obra ya creada~~ **Hecho (parche 073)** | Nombre, dirección y ubicación, con historial. |
 | Importar | 2 | **Acciones sobre un pedido completo (PD-)**: cancelar o marcar como enviadas todas sus órdenes de una vez y un estado resumen | Hoy cada orden del pedido se maneja por separado. |
 | General | 3 | **Permisos del Operador** más acotados (p. ej. sin cancelar ni eliminar órdenes ni ajustar inventario) | Hoy ve todo menos Trabajadores, Historial y Respaldo. |
 | Importar | 4 | **Fechas de las cuotas visibles en el Dashboard** (próximos 7 días y vencidas), como información para quien lleva el control | Las cuotas ya se calculan; falta que se vean donde se mira cada día. |

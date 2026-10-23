@@ -439,6 +439,17 @@ def create_project_site(name: str, address: str | None, latitude: float | None, 
     list_project_sites.clear()
 
 
+def update_project_site(site_id: str, name: str, address: str | None, latitude: float | None, longitude: float | None) -> None:
+    """Cambia nombre, dirección y ubicación de una obra; sus órdenes, presupuestos y trabajadores siguen unidos a ella."""
+    try:
+        get_client().table("project_sites").update({"name": name, "address": address, "latitude": latitude, "longitude": longitude}).eq("id", site_id).execute()
+    except Exception as exc:
+        raise _friendly(exc) from exc
+    list_project_sites.clear()
+    list_workers.clear()
+    _invalidate_orders()
+
+
 def delete_project_site(site_id: str) -> None:
     get_client().table("project_sites").delete().eq("id", site_id).execute()
     list_project_sites.clear()
