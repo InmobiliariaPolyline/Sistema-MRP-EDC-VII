@@ -1,5 +1,7 @@
 # Sistema MRP (Streamlit + Supabase)
 
+Sistema de compras, almacén y obras para una constructora: **proveedor → orden de compra → recepción → almacén (entrada) → despacho a obra con vale (salida)**. Un solo administrador, un solo almacén y un catálogo maestro de 501 materiales. Versión vigente: ver el pie del menú lateral (`core/version.py`); historial en [CHANGELOG.md](CHANGELOG.md) y lo que falta o se puede mejorar en [MEJORAS.md](MEJORAS.md).
+
 Sistema con login propio, dashboard y varios módulos:
 
 - **Dashboard**: totales generales, gasto por mes y por proveedor, órdenes
@@ -13,6 +15,7 @@ Sistema con login propio, dashboard y varios módulos:
   agrupado por categoría, marcando cuáles ofrece, si está disponible ahora
   mismo y a qué precio. Cada tarjeta trae contacto rápido (llamar, WhatsApp,
   correo), búsqueda, edición y baja con confirmación.
+- **Contacto rápido**: llamar (celeste), WhatsApp (verde) y correo por Gmail u Outlook, con mensajes preestablecidos distintos para proveedores (pedir catálogo, cotización, confirmar entrega…) y para trabajadores (citar a obra, avisar horario…). Los proveedores pueden llevar **logotipo**.
 - **Trabajadores** (solo administradores, reemplaza al antiguo módulo
   "Usuarios"): catálogo de personal de obra — nombre, documento, teléfono,
   puesto, a qué **cuadrilla** pertenece y en qué **obra/proyecto** está
@@ -21,11 +24,20 @@ Sistema con login propio, dashboard y varios módulos:
   entrar al sistema, se le puede dar acceso (usuario/contraseña/rol) desde
   la misma ficha; ese acceso vive en la tabla `users` de siempre.
 - **Órdenes de compra**: pedidos a un proveedor con sus líneas de material
-  (cantidad y precio, que se precarga del catálogo del proveedor), obra
-  destino y un estado que avanza de pendiente a enviada y recibida (o
-  cancelada). Al armar el pedido, un **comparador de cotizaciones** muestra
-  el precio de cada proveedor lado a lado y sugiere el más barato (por
-  material y para el pedido completo). La **recepción es parcial por
+  (cantidad y precio, que se toma del catálogo del proveedor y se muestra en
+  tarjetas de «Precio unitario» y «Subtotal»), obra destino y un estado que
+  avanza de pendiente a enviada y recibida (o cancelada). El **IGV** tiene dos
+  opciones claras (se suma 18 % o el precio ya lo incluye) y la **forma de
+  pago** es informativa: contado, contra entrega, crédito a un plazo o **en
+  cuotas** (de 2 a 24, mensuales, quincenales o semanales, con inicial
+  opcional); el sistema calcula montos y vencimientos y genera el **PDF de
+  cada pago** y el **cronograma**. Un pedido puede **juntar materiales de
+  varios proveedores**: cambiar de proveedor no pierde lo ya elegido, cada
+  proveedor tiene sus condiciones, el **comparador de cotizaciones** permite
+  agregar el material desde el más barato («Agregar desde aquí») y cada línea
+  se puede mover a otro proveedor. Al crearlo se genera un **pedido** (PD-0001)
+  con una orden por proveedor, mostrado como una sola tarjeta y una sola ficha
+  con el total general y su PDF. La **recepción es parcial por
   línea** (lo que llega se suma al inventario y la orden queda «Recibida
   parcial» hasta completarse). Cada orden se puede **duplicar**, bajar en
   **PDF** o enviar por **WhatsApp** con el pedido ya escrito. Las órdenes
@@ -52,6 +64,8 @@ Sistema con login propio, dashboard y varios módulos:
 En todos los módulos: buscadores y filtros, edición, confirmación antes de
 borrar, avisos (toast) al guardar, y diseño adaptado a móvil.
 
+**Interfaz «next gen»** (parches 061 en adelante): iconos vectoriales en lugar de emojis, animaciones y transiciones con una sola escala de movimiento, modo claro y oscuro, y todo el sistema en **hora de Lima** (UTC−5, `utils/clock.py`). Los PDF tienen seis temas de color y cinco estilos de portada, código de barras, sellos y gráficos.
+
 Todavía no incluye expedientes/tareas del planner original; se evaluará más
 adelante.
 
@@ -68,6 +82,12 @@ El historial completo de parches, correcciones, problemas encontrados y pendient
 - **Acceso:** bloqueo de 15 min tras 5 contraseñas incorrectas, contraseñas de al menos 8 caracteres con letras y números, y «Mi cuenta» para cambiarla. Define `SESSION_SECRET` para firmar la cookie de sesión.
 - **Respaldo:** pantalla *Respaldo* (ZIP con un CSV por tabla, cifrado AES-256 opcional), `python scripts/backup.py` y restauración con `python scripts/restore_backup.py`. El flujo de GitHub *Respaldo semanal* lo hace solo (repositorio privado y secretos `SUPABASE_URL`, `SUPABASE_SERVICE_KEY`, `BACKUP_PASSWORD`).
 - **Pruebas:** `pip install -r requirements-dev.txt` y `python -m unittest discover -s tests`. GitHub Actions las corre en cada subida.
+
+## Limpieza y datos de ejemplo
+
+- `python scripts/clean_data.py` borra todo lo registrado (órdenes, movimientos, obras, trabajadores…) y **conserva** el catálogo de 501 materiales, los usuarios y la empresa. Pide confirmación escrita; úsalo antes de entregar el sistema.
+- `scripts/seed_proveedores.py` (10 proveedores de ejemplo con su catálogo y precios), `scripts/definir_stock_minimo.py` (stock mínimo para los 501 materiales) y `scripts/probar_direcciones.py` (banco de pruebas del buscador de direcciones, ver «Ubicaciones»).
+- La búsqueda de direcciones (`utils/geocode.py`) usa OpenStreetMap con respaldo en Photon, solo Perú, con variantes y ranking; acierta a la primera ~75 % de un banco de 24 lugares. Para un punto exacto, pega el enlace de Google Maps.
 
 ## Operación del almacén (Fase B)
 
@@ -151,7 +171,7 @@ le pertenecen a ningún módulo en particular.
    `work_groups`, `project_sites`, `workers`, `purchase_orders`,
    `purchase_order_items`, `stock_movements`, `site_budgets`, `attendance`
    `audit_log`, `price_history` y `dispatch_vouchers`). Si actualizas un proyecto existente, corre solo
-   las migraciones de `db/migrations/` que falten (la última: `043_fase_e.sql`; una instalación nueva ya las trae todas en `schema.sql`). Si alguna queda con Row Level Security activado,
+   las migraciones de `db/migrations/` que falten (la última: `047_pedido_varios_proveedores.sql`; una instalación nueva ya las trae todas en `schema.sql`). Si alguna queda con Row Level Security activado,
    la app no podrá escribir en ella: el propio `schema.sql` trae los
    `alter table ... disable row level security`.
 2. Instala las dependencias:
@@ -203,7 +223,8 @@ modules/dashboard.py         # Totales generales
 modules/materiales.py        # Módulo de Materiales
 modules/proveedores.py       # Módulo de Proveedores
 modules/trabajadores.py      # Módulo de Trabajadores (cuadrillas, obras, acceso)
-modules/ordenes.py           # Módulo de Órdenes de compra (alta, estados, detalle)
+modules/ordenes.py           # Módulo de Órdenes de compra (pedido con varios proveedores, estados, detalle, pedidos PD-)
+modules/orden_form.py        # Piezas del formulario de orden: IGV, forma de pago y cuotas, tarjetas de material, líneas y resumen
 modules/inventario.py        # Stock y movimientos
 modules/obras.py             # Presupuesto por obra vs. pedido/recibido/despachado
 modules/asistencia.py        # Pasar lista y resumen
@@ -215,7 +236,11 @@ modules/ui.py                # CSS y componentes visuales compartidos (tarjetas,
 
 scripts/seed_catalog.py       # Carga única del catálogo de materiales desde Excel
 
-utils/geocode.py              # Geocodificación de direcciones (Nominatim)
+utils/geocode.py              # Geocodificación de direcciones (Nominatim + Photon, solo Perú)
+utils/money.py                # IGV, monedas y plan de pagos en cuotas (cronograma)
+utils/clock.py                # Hora de Lima: now(), today(), local()
+utils/contact.py              # Mensajes y enlaces de WhatsApp, Gmail y Outlook
+utils/pdf_style.py            # BrandPDF: temas, portadas, códigos de barras, sellos y gráficos
 utils/reports.py              # Generación de Excel (openpyxl) y PDF (fpdf2)
 utils/timeago.py              # Fechas relativas ("hace 5 min")
 ```

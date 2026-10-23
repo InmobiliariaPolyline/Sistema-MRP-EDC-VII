@@ -610,16 +610,13 @@ Basado en cómo se usa el sistema: **un solo administrador** opera el almacén; 
 ---
 
 ## Problemas conocidos y pendientes
-**Seguridad (fuera de alcance por decisión del equipo; pendiente)**
-- La tabla `users` es legible con la clave pública de Supabase (hay que activar RLS con políticas o mover la autenticación al servidor).
-- No hay límite de intentos de inicio de sesión ni cambio de contraseña.
-- El secreto de la cookie de sesión usa por defecto la clave de Supabase; define `SESSION_SECRET`.
-
-**Funcionales**
+La lista vigente de lo que falta y de las mejoras propuestas está en [MEJORAS.md](MEJORAS.md). Resumen:
 - Las obras ya guardadas no se pueden editar (para corregir su ubicación hay que borrarlas y crearlas de nuevo).
+- Un pedido con varios proveedores (PD-) no tiene todavía acciones conjuntas (cancelar o enviar todas sus órdenes a la vez).
+- El rol Operador tiene permisos amplios (ve todo menos Trabajadores, Historial y Respaldo).
 - La recepción de una orden no valida cantidades en la capa de datos (la pantalla sí limita lo que se puede recibir).
 - Ubicar por dirección es aproximado (OpenStreetMap); para el punto exacto pega el enlace de Google Maps.
-- La barra de Guardar/Cancelar de los diálogos es fija: con contenido largo flota sobre los campos que quedan debajo (comportamiento esperado).
+- Seguridad: la base se cierra con la clave de servicio (parche 041); define `SESSION_SECRET` y rota las claves si alguna se filtra.
 
 **Técnicos**
 - Hasta el parche 034, tras editar un `.css` había que reiniciar Streamlit; desde el 035 se recargan solos.
