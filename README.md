@@ -37,7 +37,7 @@ Sistema con login propio, dashboard y varios módulos:
   agregar el material desde el más barato («Agregar desde aquí») y cada línea
   se puede mover a otro proveedor. Al crearlo se genera un **pedido** (PD-0001)
   con una orden por proveedor, mostrado como una sola tarjeta y una sola ficha
-  con el total general y su PDF. La **recepción es parcial por
+  con el total general y su PDF. Desde la ficha del pedido se pueden marcar todas sus órdenes como enviadas, cancelarlo o eliminarlo, y bajar el PDF o abrir WhatsApp de cada orden. La **recepción es parcial por
   línea** (lo que llega se suma al inventario y la orden queda «Recibida
   parcial» hasta completarse). Cada orden se puede **duplicar**, bajar en
   **PDF** o enviar por **WhatsApp** con el pedido ya escrito. Las órdenes

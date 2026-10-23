@@ -30,7 +30,7 @@ Toda mejora debe caber en eso: más claridad, más datos útiles, mejores docume
 | Objetivo | # | Qué | Por qué |
 |----------|---|-----|---------|
 | Obras | 1 | ~~Editar una obra ya creada~~ **Hecho (parche 073)** | Nombre, dirección y ubicación, con historial. |
-| Importar | 2 | **Acciones sobre un pedido completo (PD-)**: cancelar o marcar como enviadas todas sus órdenes de una vez y un estado resumen | Hoy cada orden del pedido se maneja por separado. |
+| Importar | 2 | ~~Acciones sobre un pedido completo (PD-)~~ **Hecho (parche 074)** | Estado resumen, marcar enviadas, cancelar y eliminar el pedido; PDF y WhatsApp por orden. |
 | General | 3 | **Permisos del Operador** más acotados (p. ej. sin cancelar ni eliminar órdenes ni ajustar inventario) | Hoy ve todo menos Trabajadores, Historial y Respaldo. |
 | Importar | 4 | **Fechas de las cuotas visibles en el Dashboard** (próximos 7 días y vencidas), como información para quien lleva el control | Las cuotas ya se calculan; falta que se vean donde se mira cada día. |
 | General | 5 | **Revisar en celular y en modo oscuro** los formularios nuevos (orden, pedido, ficha del pedido) | Se diseñaron y probaron en escritorio. |

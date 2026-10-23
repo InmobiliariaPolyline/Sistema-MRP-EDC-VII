@@ -712,10 +712,10 @@ def _batch_totals(members: list[dict]) -> tuple[float, int]:
 def _render_batch_card(code: str, members: list[dict], stale_ids: set, late_days: dict) -> None:
     """Un pedido con varias órdenes (una por proveedor) en una sola tarjeta, con su total general."""
     total, lines = _batch_totals(members)
-    states = sorted({r["status"] for r in members}, key=list(STATUSES).index)
+    label, color = batch_status(members)
     with st.container(border=True):
         head, view = st.columns([8, 1.6], vertical_alignment="center")
-        head.markdown(orden_form.batch_head_html(code, len(members), lines, money.fmt(total, money.BASE), " ".join(status_pill(s) for s in states)), unsafe_allow_html=True)
+        head.markdown(orden_form.batch_head_html(code, len(members), lines, money.fmt(total, money.BASE), ui.pill(label, color)), unsafe_allow_html=True)
         if view.button(":material/visibility: Ver pedido", key=f"open_batch_{code}", width="stretch"):
             st.session_state[BATCH_KEY] = code
             st.rerun()
@@ -763,8 +763,74 @@ def _render_order_row(row: dict, stale_ids: set, late_days: dict) -> None:
 # Detalle
 # ---------------------------------------------------------------------------
 
+def batch_status(members: list[dict]) -> tuple[str, str]:
+    """Estado resumen de un pedido: el de sus órdenes si todas coinciden; si no, «En curso» (o «Recibido» si solo quedan recibidas y canceladas)."""
+    states = {m["status"] for m in members}
+    if len(states) == 1:
+        label, color = STATUSES.get(next(iter(states)), ("—", "gray"))
+        return label, color
+    live = states - {"cancelada"}
+    if live == {"recibida"}:
+        return "Recibido", "green"
+    return "En curso", "blue"
+
+
+def batch_targets(members: list[dict], status: str) -> list[dict]:
+    """Órdenes del pedido a las que se puede aplicar el cambio: «enviada» solo a las pendientes; «cancelada» a las pendientes y enviadas
+    (las que ya recibieron material no se cancelan juntas: se revisan una por una)."""
+    allowed = {"enviada": ("pendiente",), "cancelada": ("pendiente", "enviada")}[status]
+    return [m for m in members if m["status"] in allowed]
+
+
+def batch_can_delete(members: list[dict], items_by_order: dict) -> bool:
+    """Un pedido se elimina entero solo si ninguna de sus órdenes recibió material (el stock quedaría descuadrado)."""
+    for member in members:
+        items = items_by_order.get(member["id"])
+        if member["status"] in ("parcial", "recibida") or (items is not None and not items.empty and (items["received_qty"].astype(float) > 0).any()):
+            return False
+    return True
+
+
+def _apply_batch_status(code: str, members: list[dict], status: str) -> None:
+    """Cambia el estado de todas las órdenes elegibles del pedido y lo anota en el Historial (una línea por orden)."""
+    done = []
+    for member in batch_targets(members, status):
+        repo.set_order_status(member["id"], status)
+        ui.log_change(
+            f"Orden {member['code']} ({code}): {STATUSES[status][0].lower()}", "orden", member["id"],
+            [{"field": "Estado", "before": STATUSES.get(member["status"], (member["status"],))[0], "after": STATUSES[status][0]}],
+        )
+        done.append(member["code"])
+    skipped = len(members) - len(done)
+    text = f"Pedido {code}: {len(done)} orden(es) {STATUSES[status][0].lower()}s" if done else f"Pedido {code}: ninguna orden cambió"
+    ui.flash(text + (f" ({skipped} sin cambio)." if skipped and done else "."), ":material/sync:")
+
+
+def _delete_batch(code: str, members: list[dict]) -> None:
+    for member in members:
+        try:
+            repo.delete_order(member["id"])
+        except ValueError as exc:
+            ui.flash(f"No se pudo eliminar {member['code']}: {exc}", ":material/warning:", log=False)
+            return
+    st.session_state[BATCH_KEY] = None
+    ui.flash(f"Pedido {code} eliminado con sus {len(members)} órdenes.", ":material/delete:")
+
+
+@st.dialog("Cancelar el pedido")
+def _cancel_batch_dialog(code: str, members: list[dict]) -> None:
+    targets = batch_targets(members, "cancelada")
+    st.write(f"Se cancelarán {len(targets)} orden(es) del pedido {code}: {', '.join(m['code'] for m in targets)}. Las órdenes ya recibidas no se tocan.")
+    c1, c2 = st.columns(2)
+    if c1.button(":material/close: Volver", width="stretch"):
+        st.rerun()
+    if c2.button(":material/cancel: Sí, cancelar el pedido", type="primary", width="stretch"):
+        _apply_batch_status(code, members, "cancelada")
+        st.rerun()
+
+
 def _render_batch(code: str) -> None:
-    """Un pedido con varios proveedores como una sola ficha: sus materiales agrupados por proveedor, el total general y el PDF del pedido."""
+    """Un pedido con varios proveedores como una sola ficha: sus materiales agrupados por proveedor, el total general, acciones sobre todo el pedido y su PDF."""
     orders = repo.list_orders()
     members = orders[orders["batch_code"] == code].to_dict("records") if not orders.empty and "batch_code" in orders.columns else []
     if not members:
@@ -775,6 +841,8 @@ def _render_batch(code: str) -> None:
         st.session_state[BATCH_KEY] = None
         st.rerun()
     ui.page_header("Pedido", code)
+    label, color = batch_status(members)
+    st.markdown(ui.pill(label, color), unsafe_allow_html=True)
     total, lines = _batch_totals(members)
     ui.stat_grid(
         [
@@ -785,9 +853,27 @@ def _render_batch(code: str) -> None:
         ]
     )
     st.caption(f"{lines} línea(s) en {len(members)} órdenes, una por proveedor: cada una tiene su propio PDF, IGV, forma de pago y recepción.")
+
+    items_by_order = {m["id"]: repo.list_order_items(m["id"]) for m in sorted(members, key=lambda r: r["code"])}
+    pending, cancellable = batch_targets(members, "enviada"), batch_targets(members, "cancelada")
+    a1, a2, a3 = st.columns(3)
+    if a1.button(f":material/send: Marcar {len(pending)} como enviada(s)", key=f"batch_sent_{code}", width="stretch", disabled=not pending,
+                 help="Pasa a «enviada» todas las órdenes pendientes del pedido (anota la hora de envío de cada una)."):
+        _apply_batch_status(code, members, "enviada")
+        st.rerun()
+    if a2.button(":material/cancel: Cancelar el pedido", key=f"batch_cancel_{code}", width="stretch", disabled=not cancellable,
+                 help="Cancela las órdenes pendientes y enviadas. Las que ya recibieron material se revisan una por una."):
+        _cancel_batch_dialog(code, members)
+    can_delete = batch_can_delete(members, items_by_order)
+    if a3.button(":material/delete: Eliminar el pedido", key=f"batch_delete_{code}", width="stretch", disabled=not can_delete,
+                 help="Elimina el pedido y todas sus órdenes." if can_delete else "Alguna orden ya recibió material: cancélala en lugar de eliminarla."):
+        ui.confirm_delete(f"¿Eliminar el pedido {code}? Se borran sus {len(members)} órdenes y sus líneas.", lambda: _delete_batch(code, members))
+
+    company = repo.get_company()
+    suppliers = repo.list_suppliers()
     with_items = []
     for row in sorted(members, key=lambda r: r["code"]):
-        items = repo.list_order_items(row["id"])
+        items = items_by_order[row["id"]]
         with_items.append({"order": row, "items": items})
         head, open_btn = st.columns([8, 2], vertical_alignment="center")
         head.markdown(orden_form.group_head_html(f"{row['supplier_name']} · {row['code']}", len(items), money.fmt(row["total"], row.get("currency")), False), unsafe_allow_html=True)
@@ -798,8 +884,19 @@ def _render_batch(code: str) -> None:
         st.markdown(status_pill(row["status"]), unsafe_allow_html=True)
         for index, line in enumerate(items.to_dict("records")):
             st.markdown(orden_form.line_card_html(index, {**line, "quantity": float(line["quantity"]), "unit_price": float(line["unit_price"]), "category": None}, row.get("currency")), unsafe_allow_html=True)
+        if not items.empty and row["status"] != "cancelada":
+            match = suppliers[suppliers["id"] == row["supplier_id"]]
+            supplier = match.to_dict("records")[0] if not match.empty else None
+            p1, p2, _ = st.columns([2, 2.6, 3])
+            p1.download_button(":material/description: PDF de esta orden", data=order_pdf(row, items, supplier, company), file_name=f"{row['code']}.pdf", mime="application/pdf",
+                               key=f"batch_order_pdf_{row['id']}", width="stretch")
+            phone = re.sub(r"\D", "", (supplier or {}).get("phone") or "")
+            p2.link_button(":material/chat: Enviar esta orden por WhatsApp", f"https://wa.me/{phone}?text={quote(order_whatsapp_text(row, items, company))}", width="stretch",
+                           on_click=_mark_sent_from_link, args=(row["id"], row["code"], row["status"]),
+                           help="Abre WhatsApp con la orden escrita y, si estaba pendiente, la marca como enviada.")
     st.markdown(orden_form.grand_total_html(len(members), money.fmt(total, money.BASE)), unsafe_allow_html=True)
-    st.download_button(":material/description: PDF del pedido", data=batch_pdf(code, with_items, repo.get_company()), file_name=f"{code}.pdf", mime="application/pdf", key=f"batch_pdf_{code}")
+    st.download_button(":material/description: PDF del pedido", data=batch_pdf(code, with_items, company), file_name=f"{code}.pdf", mime="application/pdf", key=f"batch_pdf_{code}")
+
 
 def _mark_sent_from_link(order_id: str, code: str, status: str) -> None:
     """Al abrir WhatsApp con el pedido, la orden pendiente pasa sola a «enviada» y anota la hora de envío."""

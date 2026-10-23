@@ -6,6 +6,18 @@ Formato de cada parche: **Agregado** · **Corregido** · **Problemas y causa** �
 
 ---
 
+## Parche 074 — Acciones sobre el pedido completo · 2026-10-22
+
+**Agregado** (ficha del pedido PD-)
+- **Estado resumen** del pedido: el de sus órdenes si todas coinciden; «En curso» si están en estados distintos; «Recibido» si solo quedan recibidas y canceladas. Se ve en la ficha y en la tarjeta de la lista.
+- **Marcar como enviadas** todas las órdenes pendientes de una vez (anota la hora de envío de cada una).
+- **Cancelar el pedido**: cancela las órdenes pendientes y enviadas, con confirmación que lista cuáles. Las que ya recibieron material no se tocan: se revisan una por una.
+- **Eliminar el pedido** con todas sus órdenes, solo si ninguna recibió material (si no, el botón queda desactivado y explica por qué).
+- En cada proveedor del pedido: **PDF de esa orden** y **enviarla por WhatsApp** (la marca como enviada), sin salir de la ficha.
+- Cada cambio queda en el Historial, una línea por orden.
+
+---
+
 ## Parche 073 — Editar obras ya creadas · 2026-10-22
 
 **Agregado**
@@ -623,7 +635,6 @@ Basado en cómo se usa el sistema: **un solo administrador** opera el almacén; 
 
 ## Problemas conocidos y pendientes
 La lista vigente de lo que falta y de las mejoras propuestas está en [MEJORAS.md](MEJORAS.md). Resumen:
-- Un pedido con varios proveedores (PD-) no tiene todavía acciones conjuntas (cancelar o enviar todas sus órdenes a la vez).
 - El rol Operador tiene permisos amplios (ve todo menos Trabajadores, Historial y Respaldo).
 - La recepción de una orden no valida cantidades en la capa de datos (la pantalla sí limita lo que se puede recibir).
 - Ubicar por dirección es aproximado (OpenStreetMap); para el punto exacto pega el enlace de Google Maps.

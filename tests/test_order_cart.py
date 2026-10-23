@@ -113,5 +113,43 @@ class BatchTests(unittest.TestCase):
         self.assertEqual(lines, 2)
 
 
+class BatchActionTests(unittest.TestCase):
+    def _m(self, status, oid="x"):
+        return {"id": oid, "code": f"OC-{oid}", "status": status}
+
+    def test_summary_status(self):
+        self.assertEqual(ordenes.batch_status([self._m("pendiente"), self._m("pendiente")])[0], "Pendiente")
+        self.assertEqual(ordenes.batch_status([self._m("pendiente"), self._m("enviada")])[0], "En curso")
+        self.assertEqual(ordenes.batch_status([self._m("recibida"), self._m("cancelada")])[0], "Recibido")
+        self.assertEqual(ordenes.batch_status([self._m("cancelada"), self._m("cancelada")])[0], "Cancelada")
+        self.assertEqual(ordenes.batch_status([self._m("recibida"), self._m("parcial")])[0], "En curso")
+
+    def test_targets_respect_each_state(self):
+        members = [self._m("pendiente", "1"), self._m("enviada", "2"), self._m("parcial", "3"), self._m("recibida", "4"), self._m("cancelada", "5")]
+        self.assertEqual([m["id"] for m in ordenes.batch_targets(members, "enviada")], ["1"])
+        self.assertEqual([m["id"] for m in ordenes.batch_targets(members, "cancelada")], ["1", "2"])
+
+    def test_can_delete_only_without_received_material(self):
+        members = [self._m("pendiente", "1"), self._m("enviada", "2")]
+        none = pd.DataFrame({"received_qty": [0, 0]})
+        some = pd.DataFrame({"received_qty": [0, 1.5]})
+        self.assertTrue(ordenes.batch_can_delete(members, {"1": none, "2": none}))
+        self.assertFalse(ordenes.batch_can_delete(members, {"1": none, "2": some}))
+        self.assertFalse(ordenes.batch_can_delete([self._m("parcial", "3")], {}))
+
+
+class BatchStatusDbTests(BatchTests):
+    def test_apply_status_changes_only_eligible_orders(self):
+        a = repo.create_order(self.sup["Uno"], "Uno", None, None, self.items, None, "PD-0001")
+        repo.create_order(self.sup["Dos"], "Dos", None, None, self.items, None, "PD-0001")
+        first = repo.list_orders().query("code == @a").iloc[0]["id"]
+        repo.set_order_status(first, "enviada")
+        members = repo.list_orders().to_dict("records")
+        ordenes._apply_batch_status("PD-0001", members, "enviada")      # solo la pendiente cambia
+        self.assertEqual(sorted(repo.list_orders()["status"]), ["enviada", "enviada"])
+        ordenes._apply_batch_status("PD-0001", repo.list_orders().to_dict("records"), "cancelada")
+        self.assertEqual(set(repo.list_orders()["status"]), {"cancelada"})
+
+
 if __name__ == "__main__":
     unittest.main()
