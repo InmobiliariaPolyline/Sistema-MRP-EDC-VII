@@ -10,7 +10,7 @@ from db import repository as repo
 from db.auth import hash_password, verify_password
 from db.repository import USING_LOCAL
 from modules import forms, security, session, ui, ui_styles
-from utils import icons
+from utils import access, icons
 
 SESSION_KEY = "auth_user"
 BOOTED_KEY = "_mrp_booted"
@@ -285,6 +285,8 @@ def _render_login() -> None:
         "materiales y proveedores.</div>",
         unsafe_allow_html=True,
     )
+    if st.session_state.pop("_access_expired", False):
+        st.warning("Tu acceso temporal terminó. Pide al administrador que lo reactive; tu usuario y contraseña se conservan.", icon=":material/schedule:")
     with st.form("login_form"):
         username = st.text_input("Usuario", placeholder="Escribe tu usuario", help="Usa el usuario que te asignó el administrador.")
         password = st.text_input("Contraseña", type="password", placeholder="Escribe tu contraseña", help="Puedes mostrarla con el icono del ojo.")
@@ -315,14 +317,15 @@ def _render_login() -> None:
         else:
             st.error(f"Usuario o contraseña incorrectos. Te quedan {left} intento(s).")
         return
+    if not access.allowed(user):
+        st.error(
+            "Tu acceso temporal venció o todavía no está activo. Pide al administrador que lo reactive; tu usuario y contraseña se conservan.",
+            icon=":material/schedule:",
+        )
+        return
     security.register_success(username)
 
-    st.session_state[SESSION_KEY] = {
-        "id": user["id"],
-        "username": user["username"],
-        "name": user["name"],
-        "role": user["role"],
-    }
+    st.session_state[SESSION_KEY] = session.user_state(user)
     session.remember(user["username"])
     st.rerun()
 

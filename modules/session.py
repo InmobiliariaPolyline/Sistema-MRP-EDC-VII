@@ -19,6 +19,7 @@ import time
 import streamlit as st
 
 from db import repository as repo
+from utils import access
 
 COOKIE = "mrp_session"
 TTL_SECONDS = 7 * 24 * 3600
@@ -60,6 +61,11 @@ def _username_from(token: str) -> str | None:
         return None
 
 
+def user_state(user: dict) -> dict:
+    """Lo que se guarda de la persona que inició sesión (el rol ya normalizado a admin o invitado)."""
+    return {"id": user["id"], "username": user["username"], "name": user["name"], "role": access.normalize_role(user.get("role")), "access_until": user.get("access_until")}
+
+
 def restore() -> None:
     """Si no hay sesión pero el navegador trae una cookie válida, la reabre."""
     if SESSION_KEY in st.session_state or st.session_state.get(LOGGED_OUT_KEY):
@@ -69,14 +75,9 @@ def restore() -> None:
     if not username:
         return
     user = repo.get_user_by_username(username)
-    if not user or not user.get("active", True):
+    if not user or not user.get("active", True) or not access.allowed(user):
         return
-    st.session_state[SESSION_KEY] = {
-        "id": user["id"],
-        "username": user["username"],
-        "name": user["name"],
-        "role": user["role"],
-    }
+    st.session_state[SESSION_KEY] = user_state(user)
     st.session_state["_mrp_booted"] = True  # ya hay sesión: sin pantalla de carga
 
 

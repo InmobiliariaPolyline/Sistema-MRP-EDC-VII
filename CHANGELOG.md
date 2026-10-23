@@ -6,6 +6,19 @@ Formato de cada parche: **Agregado** · **Corregido** · **Problemas y causa** �
 
 ---
 
+## Parche 075 — Un solo administrador y el rol «invitado» con acceso de 24 horas · 2026-10-22
+
+**Cambia**
+- El rol **operador desaparece**: solo existe **administrador** (sin vencimiento) e **invitado**. Al dar acceso a un trabajador ya no se elige rol: entra como invitado.
+- **Invitado = acceso limitado y temporal**: ve el Dashboard (sin los accesos rápidos), el Manual de Usuario y Sistema; no puede crear, editar ni borrar nada. Dura **24 horas** desde que el administrador da o reactiva el acceso.
+- **Las credenciales se conservan** cuando el acceso vence. Para volver a entrar, el administrador pulsa **«Reactivar 24 h»** en la fila del trabajador (Trabajadores); «Renovar 24 h» extiende uno activo, «Suspender ahora» lo corta de inmediato y «Eliminar la cuenta» borra usuario y contraseña.
+- El acceso se comprueba al iniciar sesión, al restaurar la sesión y **en cada pantalla**: si vence o el administrador lo suspende, la persona sale sola al siguiente movimiento y ve un aviso. El menú muestra «Invitado · quedan 5 h 20 min».
+- Los antiguos operadores pasan a invitados **sin acceso activo** (conservan usuario y contraseña; el administrador los reactiva).
+
+**Hay que hacer:** correr `db/migrations/048_rol_invitado.sql` en el SQL Editor de Supabase (agrega `users.access_until` y convierte los operadores en invitados). Sin ese SQL la pantalla sigue funcionando, pero dar o reactivar accesos avisará que falta correrlo.
+
+---
+
 ## Parche 074 — Acciones sobre el pedido completo · 2026-10-22
 
 **Agregado** (ficha del pedido PD-)
@@ -635,7 +648,6 @@ Basado en cómo se usa el sistema: **un solo administrador** opera el almacén; 
 
 ## Problemas conocidos y pendientes
 La lista vigente de lo que falta y de las mejoras propuestas está en [MEJORAS.md](MEJORAS.md). Resumen:
-- El rol Operador tiene permisos amplios (ve todo menos Trabajadores, Historial y Respaldo).
 - La recepción de una orden no valida cantidades en la capa de datos (la pantalla sí limita lo que se puede recibir).
 - Ubicar por dirección es aproximado (OpenStreetMap); para el punto exacto pega el enlace de Google Maps.
 - Seguridad: la base se cierra con la clave de servicio (parche 041); define `SESSION_SECRET` y rota las claves si alguna se filtra.

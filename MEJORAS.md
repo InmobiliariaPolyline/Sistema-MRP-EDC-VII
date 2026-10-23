@@ -31,7 +31,7 @@ Toda mejora debe caber en eso: más claridad, más datos útiles, mejores docume
 |----------|---|-----|---------|
 | Obras | 1 | ~~Editar una obra ya creada~~ **Hecho (parche 073)** | Nombre, dirección y ubicación, con historial. |
 | Importar | 2 | ~~Acciones sobre un pedido completo (PD-)~~ **Hecho (parche 074)** | Estado resumen, marcar enviadas, cancelar y eliminar el pedido; PDF y WhatsApp por orden. |
-| General | 3 | **Permisos del Operador** más acotados (p. ej. sin cancelar ni eliminar órdenes ni ajustar inventario) | Hoy ve todo menos Trabajadores, Historial y Respaldo. |
+| General | 3 | ~~Permisos del Operador~~ **Hecho (parche 075)**: ahora hay un solo administrador e invitados de solo consulta con acceso de 24 h | Si se quiere que el invitado vea más pantallas, se agregan en `GUEST_ROUTES` (`utils/access.py`) cuando sean de solo lectura. |
 | Importar | 4 | **Fechas de las cuotas visibles en el Dashboard** (próximos 7 días y vencidas), como información para quien lleva el control | Las cuotas ya se calculan; falta que se vean donde se mira cada día. |
 | General | 5 | **Revisar en celular y en modo oscuro** los formularios nuevos (orden, pedido, ficha del pedido) | Se diseñaron y probaron en escritorio. |
 | Todos | 6 | **Prueba de punta a punta con datos reales** en la app desplegada: pedido a dos proveedores, recepción parcial, despacho con vale y reporte | Es la mejor red de seguridad antes de entregar. |

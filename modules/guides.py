@@ -246,7 +246,7 @@ GUIDES: dict[str, dict] = {
                     {"title": "Crea cuadrillas y obras", "text": "Empieza por las **cuadrillas** y las **obras**. En la obra puedes pegar el **enlace de Google Maps** para guardar su ubicación exacta."},
                     {"title": "Registra a cada trabajador", "text": "Pulsa **＋ Nuevo trabajador**: nombre, documento, teléfono, puesto, cuadrilla y obra.", "where": "Botón de arriba a la derecha"},
                     {"title": "Escríbele por WhatsApp", "text": "En la tarjeta de cada trabajador, **WhatsApp** se despliega con mensajes pensados para tu equipo: convocar a trabajar, recordar la asistencia, cambio de obra o turno, material listo en almacén, aviso de seguridad, pedir el reporte del día o pedir documentos. Ya llevan su obra y su puesto; completas lo que dice «____» y lo envías."},
-                    {"title": "Dale acceso si lo necesita", "text": "Si alguien debe entrar al sistema, créale un usuario con contraseña y rol."},
+                    {"title": "Dale acceso si lo necesita", "text": "Si alguien debe entrar al sistema, créale un usuario con contraseña: será Invitado (solo consulta) por 24 horas. Cuando venza, pulsa «Reactivar 24 h» en su fila."},
                 ],
             }
         ],

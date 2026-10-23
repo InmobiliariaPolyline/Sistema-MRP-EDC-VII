@@ -11,7 +11,7 @@ import streamlit as st
 from db import repository as repo
 from modules import obras, ordenes, ui
 from utils.timeago import time_ago
-from utils import clock
+from utils import access, clock
 
 MESES = [
     "enero", "febrero", "marzo", "abril", "mayo", "junio",
@@ -56,7 +56,8 @@ def render(user: dict) -> None:
         chips,
     )
     ui.guide_button("Dashboard")
-    _render_quick_actions()
+    if access.is_admin(user):
+        _render_quick_actions()
 
     monthly = _monthly_spend(orders)
     ui.stat_grid(

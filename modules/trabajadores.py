@@ -12,10 +12,9 @@ from db import repository as repo
 from db.auth import hash_password
 from modules import forms, obra_form, ui, security
 from modules.proveedores import company_name
-from utils import icons
+from utils import access, icons
 from utils.geocode import google_maps_search_url, parse_coordinates, search_address
 
-ROLES = ["operador", "admin"]
 NO_GROUP = "Sin cuadrilla"
 NO_SITE = "Sin obra asignada"
 
@@ -269,6 +268,24 @@ def _delete_worker(worker_id: str, name: str) -> None:
     ui.flash(f"Trabajador «{name}» eliminado.", ":material/delete:")
 
 
+def _reactivate_access(user_id: str, name: str) -> None:
+    try:
+        repo.set_user_access(user_id, access.new_expiry())
+    except Exception as exc:
+        ui.flash(f"No se pudo reactivar el acceso de {name}: {exc}", ":material/warning:", log=False)
+        return
+    ui.flash(f"Acceso de {name} activo por {access.GUEST_HOURS} horas.", ":material/lock_open:")
+
+
+def _suspend_access(user_id: str, name: str) -> None:
+    try:
+        repo.set_user_access(user_id, None)
+    except Exception as exc:
+        ui.flash(f"No se pudo suspender el acceso de {name}: {exc}", ":material/warning:", log=False)
+        return
+    ui.flash(f"Acceso de {name} suspendido. Sus credenciales se conservan.", ":material/lock:")
+
+
 def _revoke_access(worker_id: str, user_id: str, name: str) -> None:
     repo.revoke_worker_access(worker_id, user_id)
     ui.flash(f"Se quitó el acceso al sistema de {name}.", ":material/lock:")
@@ -341,7 +358,7 @@ def _new_worker_dialog() -> None:
         forms.section("Acceso al sistema", "Opcional. Marca la casilla y completa las credenciales solo si debe ingresar a la aplicación.")
         grant_access = st.checkbox("Dar acceso al sistema (usuario y contraseña)")
         with st.expander("Configurar usuario y contraseña", expanded=grant_access):
-            username, password, role = _access_fields()
+            username, password = _access_fields()
         cancel_col, save_col = st.columns([1, 2])
         save = save_col.form_submit_button(":material/save: Guardar", type="primary", width="stretch")
         cancel = cancel_col.form_submit_button(":material/close: Cancelar", width="stretch")
@@ -350,11 +367,11 @@ def _new_worker_dialog() -> None:
         st.rerun()
     if preview:
         _worker_preview(fields, groups, sites)
-        st.caption(f"Acceso solicitado: @{username or 'usuario pendiente'} · {role}" if grant_access else "Sin acceso al sistema")
+        st.caption(f"Acceso solicitado: @{username or 'usuario pendiente'} · Invitado por {access.GUEST_HOURS} horas" if grant_access else "Sin acceso al sistema")
     if save:
         errors = _worker_errors(fields)
         if grant_access:
-            errors += _access_errors(username, password, role)
+            errors += _access_errors(username, password)
         if forms.errors(errors):
             return
         try:
@@ -367,7 +384,7 @@ def _new_worker_dialog() -> None:
             return
         if grant_access:
             try:
-                repo.grant_worker_access(worker_id, username, password_hash, fields["full_name"], role)
+                repo.grant_worker_access(worker_id, username, password_hash, fields["full_name"], access.GUEST, access.new_expiry())
             except Exception:
                 ui.flash(f"Trabajador «{fields['full_name']}» registrado. No se pudo crear su acceso; usa «Dar acceso» en el directorio para reintentar.", ":material/warning:")
                 st.rerun()
@@ -384,7 +401,7 @@ def _edit_worker_dialog(worker: dict) -> None:
     with st.form(f"edit_worker_form_{worker['id']}"):
         fields = _worker_fields(worker, groups, sites)
         if worker.get("username"):
-            st.caption(f"Acceso actual: @{worker['username']} · {worker.get('role') or 'operador'}")
+            st.caption(f"Acceso actual: @{worker['username']} · {access.describe(worker)}")
         cancel_col, save_col = st.columns([1, 2])
         save = save_col.form_submit_button(":material/save: Guardar cambios", type="primary", width="stretch")
         cancel = cancel_col.form_submit_button(":material/close: Cancelar", width="stretch")
@@ -412,7 +429,7 @@ def _grant_access_dialog(worker: dict) -> None:
     forms.header("Dar acceso al sistema", f"Crea una cuenta para {worker['full_name']}.")
     with st.form(f"grant_access_form_{worker['id']}"):
         forms.section("Credenciales", "Usuario y contraseña son obligatorios para crear la cuenta.")
-        username, password, role = _access_fields()
+        username, password = _access_fields()
         cancel_col, save_col = st.columns([1, 2])
         save = save_col.form_submit_button(":material/key: Dar acceso", type="primary", width="stretch")
         cancel = cancel_col.form_submit_button(":material/close: Cancelar", width="stretch")
@@ -422,12 +439,12 @@ def _grant_access_dialog(worker: dict) -> None:
     if preview:
         forms.section("Vista previa", "La cuenta todavía no se ha creado.")
         st.write(worker["full_name"])
-        st.caption(f"Usuario: @{username or 'pendiente'} · Rol: {role}")
+        st.caption(f"Usuario: @{username or 'pendiente'} · Rol: Invitado · acceso de {access.GUEST_HOURS} horas desde que lo des")
     if save:
-        if forms.errors(_access_errors(username, password, role)):
+        if forms.errors(_access_errors(username, password)):
             return
         try:
-            repo.grant_worker_access(worker["id"], username, hash_password(password), worker["full_name"], role)
+            repo.grant_worker_access(worker["id"], username, hash_password(password), worker["full_name"], access.GUEST, access.new_expiry())
         except Exception as exc:
             ui.db_error(exc, "No se pudo crear el acceso. Revisa que el usuario siga disponible e inténtalo de nuevo.")
             return
@@ -444,7 +461,7 @@ def _worker_errors(fields: dict) -> list[str]:
     })
 
 
-def _access_fields() -> tuple[str, str, str]:
+def _access_fields() -> tuple[str, str]:
     c1, c2 = st.columns(2)
     username = c1.text_input(
         "Usuario", placeholder="Ej. jperez", max_chars=forms.RULES["Usuario"]["max"],
@@ -454,18 +471,16 @@ def _access_fields() -> tuple[str, str, str]:
         "Contraseña", type="password", placeholder="Al menos 6 caracteres", max_chars=72,
         help="Al menos 6 caracteres. Combina letras, números y símbolos y evita contraseñas previsibles.",
     )
-    role = st.selectbox("Rol de acceso", ROLES, help="Operador: tareas operativas. Admin: también administra el personal y sus accesos.")
-    return username.strip(), password, role
+    st.caption(f":material/schedule: Rol **Invitado**: acceso limitado (solo consulta) y temporal de {access.GUEST_HOURS} horas. Al vencer, sus credenciales se conservan y tú lo reactivas desde esta lista.")
+    return username.strip(), password
 
 
-def _access_errors(username: str, password: str, role: str) -> list[str]:
+def _access_errors(username: str, password: str) -> list[str]:
     errors = forms.validate({"Usuario": username})
     if not password or not password.strip():
         errors.append("Contraseña: completa este campo obligatorio.")
     else:
         errors.extend(security.password_issues(password, username))
-    if role not in ROLES:
-        errors.append("Rol de acceso: selecciona operador o admin.")
     if not errors:
         try:
             existing = repo.get_user_by_username(username)
@@ -566,11 +581,20 @@ def _render_workers_list() -> None:
                 st.markdown(pills, unsafe_allow_html=True)
             with c3:
                 if row.get("user_id"):
-                    if st.button(":material/lock: Quitar acceso", key=f"revoke_{row['id']}", width="stretch"):
-                        ui.confirm_delete(
-                            f"¿Quitar el acceso al sistema de {row['full_name']}? Su cuenta de usuario se elimina; el trabajador se conserva.",
-                            lambda wid=row["id"], uid=row["user_id"], nm=row["full_name"]: _revoke_access(wid, uid, nm),
-                        )
+                    active = access.allowed({"role": row.get("role"), "access_until": row.get("access_until")})
+                    b1, b2 = st.columns([4, 1])
+                    b1.button(":material/lock_reset: Reactivar 24 h" if not active else ":material/update: Renovar 24 h", key=f"reactivate_{row['id']}", width="stretch",
+                              type="secondary" if active else "primary", on_click=_reactivate_access, args=(row["user_id"], row["full_name"]),
+                              help="Da 24 horas de acceso desde ahora (sus credenciales se conservan).")
+                    with b2.popover(":material/more_horiz:", help="Más opciones del acceso"):
+                        if active:
+                            st.button(":material/lock: Suspender ahora", key=f"suspend_{row['id']}", width="stretch", on_click=_suspend_access, args=(row["user_id"], row["full_name"]),
+                                      help="Corta el acceso de inmediato; se puede reactivar.")
+                        if st.button(":material/delete: Eliminar la cuenta", key=f"revoke_{row['id']}", width="stretch"):
+                            ui.confirm_delete(
+                                f"¿Eliminar la cuenta de {row['full_name']}? Se borran su usuario y contraseña; el trabajador se conserva.",
+                                lambda wid=row["id"], uid=row["user_id"], nm=row["full_name"]: _revoke_access(wid, uid, nm),
+                            )
                 else:
                     if st.button(":material/key: Dar acceso", key=f"grant_{row['id']}", width="stretch"):
                         _grant_access_dialog(row)
@@ -587,7 +611,7 @@ def _render_workers_list() -> None:
             if row.get("phone"):
                 st.markdown(ui.contact_links(row["phone"], None, row.get("full_name"), company, "worker", row.get("site_name"), row.get("position")), unsafe_allow_html=True)
             if row.get("username"):
-                st.caption(f"Acceso al sistema: @{row['username']} ({row.get('role') or 'operador'})")
+                st.caption(f"Acceso al sistema: @{row['username']} · {access.describe({'role': row.get('role'), 'access_until': row.get('access_until')})}")
 
             if _has_coordinates(row.get("latitude"), row.get("longitude")):
                 with st.expander(f":material/location_on: Ubicación — {row.get('site_name') or ''}"):

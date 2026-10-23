@@ -458,13 +458,21 @@ def delete_project_site(site_id: str) -> None:
 
 @st.cache_data(ttl=_CACHE_TTL, show_spinner=False)
 def list_workers() -> pd.DataFrame:
-    res = (
-        get_client()
-        .table("workers")
-        .select("*, work_groups(name), project_sites(name,address,latitude,longitude), users(username,role)")
-        .order("full_name")
-        .execute()
-    )
+    def fetch(user_columns: str):
+        return (
+            get_client()
+            .table("workers")
+            .select(f"*, work_groups(name), project_sites(name,address,latitude,longitude), users({user_columns})")
+            .order("full_name")
+            .execute()
+        )
+
+    try:
+        res = fetch("username,role,access_until")
+    except Exception as exc:
+        if not _is_missing(exc):
+            raise
+        res = fetch("username,role")      # antes del SQL del parche 075 (048_rol_invitado.sql)
     rows = []
     for row in res.data or []:
         group = row.pop("work_groups", None) or {}
@@ -480,6 +488,7 @@ def list_workers() -> pd.DataFrame:
                 "longitude": site.get("longitude"),
                 "username": user.get("username"),
                 "role": user.get("role"),
+                "access_until": user.get("access_until"),
             }
         )
     return _df(rows)
@@ -539,13 +548,30 @@ def delete_worker(worker_id: str) -> None:
     list_workers.clear()
 
 
-def grant_worker_access(worker_id: str, username: str, password_hash: str, name: str, role: str) -> None:
+def grant_worker_access(worker_id: str, username: str, password_hash: str, name: str, role: str, access_until: str | None = None) -> None:
     client = get_client()
-    res = client.table("users").insert(
-        {"username": username, "password_hash": password_hash, "name": name, "role": role}
-    ).execute()
+    payload = {"username": username, "password_hash": password_hash, "name": name, "role": role}
+    if access_until:
+        payload["access_until"] = access_until
+    try:
+        res = client.table("users").insert(payload).execute()
+    except Exception as exc:
+        if _is_missing(exc):
+            raise _need_sql("048_rol_invitado.sql") from exc
+        raise
     user_id = res.data[0]["id"]
     client.table("workers").update({"user_id": user_id}).eq("id", worker_id).execute()
+    list_workers.clear()
+
+
+def set_user_access(user_id: str, access_until: str | None) -> None:
+    """Fija hasta cuándo puede entrar un invitado (None = sin acceso). Sus credenciales se conservan."""
+    try:
+        get_client().table("users").update({"access_until": access_until}).eq("id", user_id).execute()
+    except Exception as exc:
+        if _is_missing(exc):
+            raise _need_sql("048_rol_invitado.sql") from exc
+        raise
     list_workers.clear()
 
 

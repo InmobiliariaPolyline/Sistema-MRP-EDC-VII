@@ -24,7 +24,7 @@ PROBES = {
     "suppliers": {"name": "zz-probe"},
     "work_groups": {"name": "zz-probe"},
     "project_sites": {"name": "zz-probe"},
-    "users": {"username": "zz-probe", "password_hash": "x", "name": "zz", "role": "operador"},
+    "users": {"username": "zz-probe", "password_hash": "x", "name": "zz", "role": "invitado"},
     "workers": {"full_name": "zz-probe"},
     "supplier_materials": {"supplier_id": Z, "material_id": Z},
     "purchase_orders": {"code": "zz-probe", "supplier_name": "zz"},

@@ -57,7 +57,8 @@ create table if not exists users (
   username text not null unique,
   password_hash text not null,
   name text not null,
-  role text not null default 'operador', -- 'admin' | 'operador'
+  role text not null default 'invitado', -- 'admin' | 'invitado'
+  access_until timestamptz,             -- hasta cuándo puede entrar un invitado (el admin no vence)
   active boolean not null default true,
   created_at timestamptz not null default now(),
   updated_at timestamptz not null default now()

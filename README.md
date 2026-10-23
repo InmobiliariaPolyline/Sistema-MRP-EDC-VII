@@ -8,7 +8,7 @@
   <img alt="Supabase" src="https://img.shields.io/badge/Supabase-Postgres-3ECF8E?logo=supabase&logoColor=white">
   <img alt="PDF" src="https://img.shields.io/badge/PDF-fpdf2-C0392B">
   <a href="https://github.com/InmobiliariaPolyline/Sistema-MRP-EDC-VII/actions/workflows/tests.yml"><img alt="Pruebas" src="https://github.com/InmobiliariaPolyline/Sistema-MRP-EDC-VII/actions/workflows/tests.yml/badge.svg"></a>
-  <img alt="Pruebas automáticas" src="https://img.shields.io/badge/pruebas-294-brightgreen">
+  <img alt="Pruebas automáticas" src="https://img.shields.io/badge/pruebas-306-brightgreen">
   <img alt="Idioma" src="https://img.shields.io/badge/idioma-espa%C3%B1ol-7c3aed">
 </p>
 
@@ -101,7 +101,7 @@ flowchart LR
 | 🏬 | **Inventario** | Stock, movimientos, **despacho con vale de salida**, devoluciones, conteos físicos, kardex y stock mínimo. | Todos |
 | 🏗️ | **Obras** | Presupuesto por obra y etapa frente a lo pedido, recibido y despachado; **edición de la obra**; mapa; reporte PDF. | Todos |
 | 🗓️ | **Asistencia** | Pasar lista por día y resumen por trabajador y obra. | Todos |
-| 👷 | **Trabajadores** | Personal, cuadrillas, obra asignada, ubicación y contacto por WhatsApp; acceso opcional al sistema. | Admin |
+| 👷 | **Trabajadores** | Personal, cuadrillas, obra asignada, ubicación y contacto por WhatsApp; acceso opcional como **invitado** (solo consulta, 24 h, reactivable). | Admin |
 | 📈 | **Reportes** | 17 conjuntos descargables en Excel y PDF, más el reporte de obra. | Todos |
 | 📖 | **Manual de Usuario** | Capítulos ilustrados con maquetas de cada formulario, buscador y glosario. | Todos |
 | 🕘 | **Historial** | Quién creó, editó, recibió o eliminó qué, con el valor anterior y el nuevo. | Admin |
@@ -161,7 +161,7 @@ flowchart TB
 
 ## 🚀 Puesta en marcha
 
-1. **Base de datos** — crea un proyecto en [Supabase](https://supabase.com) y corre `db/schema.sql` en el SQL Editor. Si actualizas una instalación existente, corre solo las migraciones de `db/migrations/` que falten (la última: `047_pedido_varios_proveedores.sql`).
+1. **Base de datos** — crea un proyecto en [Supabase](https://supabase.com) y corre `db/schema.sql` en el SQL Editor. Si actualizas una instalación existente, corre solo las migraciones de `db/migrations/` que falten (la última: `048_rol_invitado.sql`).
 2. **Dependencias** — `pip install -r requirements.txt`
 3. **Credenciales** — copia `.env.example` a `.env` (o `.streamlit/secrets.toml.example` a `.streamlit/secrets.toml` si despliegas en Streamlit Community Cloud) y completa `SUPABASE_URL`, `SUPABASE_SERVICE_KEY` y `SESSION_SECRET`.
 4. **Catálogo** (opcional, una vez) — `python scripts/seed_catalog.py ruta/al/listado_materiales.xlsx`
@@ -175,7 +175,7 @@ streamlit run app.py
 
 ## 🧪 Pruebas
 
-`pip install -r requirements-dev.txt` y `python -m unittest discover -s tests` (294 pruebas). GitHub Actions las corre en cada subida. Las de SQL usan un Postgres real (PGlite) vía Node: `cd tests/sql && npm ci` una vez. **Corre las pruebas con el `.env` apartado** para que no consulten la base real.
+`pip install -r requirements-dev.txt` y `python -m unittest discover -s tests` (306 pruebas). GitHub Actions las corre en cada subida. Las de SQL usan un Postgres real (PGlite) vía Node: `cd tests/sql && npm ci` una vez. **Corre las pruebas con el `.env` apartado** para que no consulten la base real.
 
 ---
 
@@ -201,8 +201,10 @@ Sistema con login propio, dashboard y varios módulos:
   puesto, a qué **cuadrilla** pertenece y en qué **obra/proyecto** está
   trabajando, con su ubicación en un mapa (geocodificación gratuita vía
   OpenStreetMap/Nominatim, sin API key). Cuando alguien también necesita
-  entrar al sistema, se le puede dar acceso (usuario/contraseña/rol) desde
-  la misma ficha; ese acceso vive en la tabla `users` de siempre.
+  entrar al sistema, se le puede dar acceso (usuario y contraseña) desde
+  la misma ficha: entra como **Invitado**, con acceso limitado (solo consulta) y
+  **temporal de 24 horas**; al vencer conserva sus credenciales y el administrador
+  lo reactiva con «Reactivar 24 h». Ese acceso vive en la tabla `users`.
 - **Órdenes de compra**: pedidos a un proveedor con sus líneas de material
   (cantidad y precio, que se toma del catálogo del proveedor y se muestra en
   tarjetas de «Precio unitario» y «Subtotal»), obra destino y un estado que
@@ -350,7 +352,7 @@ le pertenecen a ningún módulo en particular.
    `work_groups`, `project_sites`, `workers`, `purchase_orders`,
    `purchase_order_items`, `stock_movements`, `site_budgets`, `attendance`
    `audit_log`, `price_history` y `dispatch_vouchers`). Si actualizas un proyecto existente, corre solo
-   las migraciones de `db/migrations/` que falten (la última: `047_pedido_varios_proveedores.sql`; una instalación nueva ya las trae todas en `schema.sql`). Si alguna queda con Row Level Security activado,
+   las migraciones de `db/migrations/` que falten (la última: `048_rol_invitado.sql`; una instalación nueva ya las trae todas en `schema.sql`). Si alguna queda con Row Level Security activado,
    la app no podrá escribir en ella: el propio `schema.sql` trae los
    `alter table ... disable row level security`.
 2. Instala las dependencias:
@@ -379,9 +381,9 @@ le pertenecen a ningún módulo en particular.
    ```
 
 6. Como todavía no hay usuarios, la primera vez la app te pide crear el
-   Administrador (nombre, usuario y contraseña). Desde ahí puedes crear más
-   cuentas en el módulo **Trabajadores** (o dar acceso a un trabajador ya
-   registrado).
+   Administrador (nombre, usuario y contraseña). Es el único administrador:
+   desde el módulo **Trabajadores** solo se crean **invitados** (acceso de
+   solo consulta por 24 horas, reactivable).
 
 ## Estructura
 

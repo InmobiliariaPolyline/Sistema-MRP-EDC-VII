@@ -65,7 +65,7 @@ def _init_db() -> None:
                 username text not null unique,
                 password_hash text not null,
                 name text not null,
-                role text not null default 'operador',
+                role text not null default 'invitado',
                 active integer not null default 1,
                 created_at text default (datetime('now')),
                 updated_at text default (datetime('now'))
@@ -257,6 +257,7 @@ def _init_db() -> None:
             ("purchase_orders", "prices_include_tax", "integer not null default 0"),
             ("purchase_orders", "payment_terms", "text"),
             ("purchase_orders", "batch_code", "text"),
+            ("users", "access_until", "text"),
             ("suppliers", "lead_time_days", "integer"),
             ("suppliers", "min_order_amount", "real"),
             ("purchase_orders", "sent_at", "text"),
@@ -268,6 +269,7 @@ def _init_db() -> None:
             cols = [r[1] for r in conn.execute(f"pragma table_info({table})").fetchall()]
             if column not in cols:
                 conn.execute(f"alter table {table} add column {column} {ddl}")
+        conn.execute("update users set role = 'invitado' where role not in ('admin', 'invitado')")      # el antiguo «operador» pasa a invitado
         if "stage" not in [r[1] for r in conn.execute("pragma table_info(site_budgets)").fetchall()]:
             conn.executescript(
                 """
@@ -641,7 +643,7 @@ def list_workers() -> pd.DataFrame:
                 w.work_group_id, wg.name as group_name,
                 w.project_site_id, ps.name as site_name, ps.address as site_address,
                 ps.latitude, ps.longitude,
-                w.user_id, u.username, u.role
+                w.user_id, u.username, u.role, u.access_until
             from workers w
             left join work_groups wg on wg.id = w.work_group_id
             left join project_sites ps on ps.id = w.project_site_id
@@ -698,14 +700,20 @@ def delete_worker(worker_id: str) -> None:
         conn.execute("delete from workers where id = ?", (worker_id,))
 
 
-def grant_worker_access(worker_id: str, username: str, password_hash: str, name: str, role: str) -> None:
+def grant_worker_access(worker_id: str, username: str, password_hash: str, name: str, role: str, access_until: str | None = None) -> None:
     user_id = str(uuid.uuid4())
     with _connect() as conn:
         conn.execute(
-            "insert into users (id, username, password_hash, name, role) values (?, ?, ?, ?, ?)",
-            (user_id, username, password_hash, name, role),
+            "insert into users (id, username, password_hash, name, role, access_until) values (?, ?, ?, ?, ?, ?)",
+            (user_id, username, password_hash, name, role, access_until),
         )
         conn.execute("update workers set user_id = ?, updated_at = datetime('now') where id = ?", (user_id, worker_id))
+
+
+def set_user_access(user_id: str, access_until: str | None) -> None:
+    """Fija hasta cuándo puede entrar un invitado (None = sin acceso). Sus credenciales se conservan."""
+    with _connect() as conn:
+        conn.execute("update users set access_until = ?, updated_at = datetime('now') where id = ?", (access_until, user_id))
 
 
 def revoke_worker_access(worker_id: str, user_id: str) -> None:

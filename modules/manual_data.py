@@ -326,7 +326,7 @@ CHAPTERS: list[dict] = [
                 "steps": [
                     {"title": "Datos personales", "text": "Solo el nombre completo es obligatorio. Documento, teléfono y puesto son opcionales."},
                     {"title": "Asígnalo", "text": "Elige su **cuadrilla** y su **obra**. Puedes dejarlas vacías y completarlas después. Las cuadrillas y obras se crean en sus paneles del mismo módulo."},
-                    {"title": "Acceso al sistema (opcional)", "text": "Marca la casilla solo si esa persona debe entrar al sistema; completa usuario, contraseña y rol."},
+                    {"title": "Acceso al sistema (opcional)", "text": "Marca la casilla solo si esa persona debe entrar al sistema; completa usuario y contraseña. Entra como **Invitado**: acceso limitado (solo consulta) y **temporal de 24 horas**. Al vencer, sus credenciales se conservan y tú lo reactivas con «Reactivar 24 h»."},
                     {"title": "Guarda", "text": "Aparecerá en **Asistencia** para pasar lista."},
                 ],
                 "warnings": ["Las contraseñas deben tener al menos 8 caracteres, con letras y números."],

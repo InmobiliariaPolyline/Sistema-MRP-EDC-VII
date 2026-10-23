@@ -9,12 +9,13 @@ import html
 import streamlit as st
 
 from core.version import APP_VERSION
+from db import repository as repo
 from db.client import using_service_key
 from db.repository import USING_LOCAL
-from utils import icons
+from utils import access, icons
 from modules import (
     asistencia, dashboard, historial, inventario, login, manual_Usuario, materiales, obras, ordenes, proveedores, reportes,
-    respaldo, security, sistema, trabajadores, ui,
+    respaldo, security, session, sistema, trabajadores, ui,
 )
 
 # (etiqueta en el menú, icono Material, función que dibuja el módulo, solo-admin)
@@ -57,7 +58,15 @@ def render(user: dict) -> None:
             icon=":material/lock_open:",
         )
 
-    routes = {r[0]: r for r in _ROUTES if user["role"] == "admin" or not r[3]}
+    if not access.is_admin(user):
+        fresh = repo.get_user_by_username(user["username"])         # el administrador pudo reactivar, extender o suspender el acceso
+        if not access.allowed(fresh):
+            login.logout()
+            st.session_state["_access_expired"] = True
+            st.rerun()
+        user = st.session_state[login.SESSION_KEY] = session.user_state(fresh)
+    allowed = access.routes_for(user, [r[0] for r in _ROUTES])
+    routes = {r[0]: r for r in _ROUTES if r[0] in allowed and (access.is_admin(user) or not r[3])}
 
     options = list(routes)
     if st.session_state.get("mrp_active_route") not in options:
@@ -99,7 +108,10 @@ def _select_route(label: str) -> None:
 
 
 def _render_brand(user: dict) -> None:
-    role = "Administrador" if user["role"] == "admin" else "Operador"
+    role = access.ROLE_LABELS[access.normalize_role(user["role"])]
+    if not access.is_admin(user) and access.remaining(user) is not None:
+        left = access.remaining(user)
+        role += f" · quedan {int(left.total_seconds() // 3600)} h {int(left.total_seconds() % 3600 // 60):02d} min"
     name = html.escape(user["name"])
     st.markdown(
         '<div class="mrp-brand">'
