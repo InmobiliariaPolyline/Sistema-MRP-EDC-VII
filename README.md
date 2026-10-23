@@ -1,6 +1,6 @@
 # Sistema MRP (Streamlit + Supabase)
 
-Sistema de compras, almacén y obras para una constructora: **proveedor → orden de compra → recepción → almacén (entrada) → despacho a obra con vale (salida)**. Un solo administrador, un solo almacén y un catálogo maestro de 501 materiales. Versión vigente: ver el pie del menú lateral (`core/version.py`); historial en [CHANGELOG.md](CHANGELOG.md) y lo que falta o se puede mejorar en [MEJORAS.md](MEJORAS.md).
+Herramienta para **preparar documentación y gestionar los datos del almacén** de una constructora, sin ningún servicio real conectado (no envía mensajes ni correos por sí sola, no compra y no paga). Sus tres objetivos: **contactar con el proveedor**, **importar material** al almacén y **exportar material a las obras**. Flujo: **proveedor → orden de compra → recepción → almacén (entrada) → despacho a obra con vale (salida)**. Un solo administrador, un solo almacén y un catálogo maestro de 501 materiales. Versión vigente: ver el pie del menú lateral (`core/version.py`); historial en [CHANGELOG.md](CHANGELOG.md) y lo que falta o se puede mejorar en [MEJORAS.md](MEJORAS.md).
 
 Sistema con login propio, dashboard y varios módulos:
 
