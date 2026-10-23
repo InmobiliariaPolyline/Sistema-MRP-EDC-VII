@@ -1,0 +1,48 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1200 280" role="img" aria-label="Sistema MRP: compras, almacén y obras">
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#1e1b4b"/>
+      <stop offset="0.55" stop-color="#4338ca"/>
+      <stop offset="1" stop-color="#7c3aed"/>
+    </linearGradient>
+    <linearGradient id="chip" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#ffffff" stop-opacity="0.22"/>
+      <stop offset="1" stop-color="#ffffff" stop-opacity="0.08"/>
+    </linearGradient>
+  </defs>
+  <rect width="1200" height="280" rx="28" fill="url(#bg)"/>
+  <circle cx="1090" cy="40" r="170" fill="#ffffff" fill-opacity="0.06"/>
+  <circle cx="1010" cy="250" r="120" fill="#ffffff" fill-opacity="0.05"/>
+  <circle cx="90" cy="270" r="140" fill="#ffffff" fill-opacity="0.05"/>
+
+  <g transform="translate(64 62)">
+    <rect width="76" height="76" rx="20" fill="url(#chip)" stroke="#ffffff" stroke-opacity="0.35"/>
+    <g fill="none" stroke="#ffffff" stroke-width="3.2" stroke-linecap="round" stroke-linejoin="round">
+      <path d="M38 18 58 29v22L38 62 18 51V29z"/>
+      <path d="M18 29l20 11 20-11M38 40v22"/>
+    </g>
+  </g>
+  <text x="164" y="104" font-family="Inter, 'Segoe UI', Arial, sans-serif" font-size="54" font-weight="800" fill="#ffffff" letter-spacing="-1.5">Sistema MRP</text>
+  <text x="166" y="140" font-family="Inter, 'Segoe UI', Arial, sans-serif" font-size="22" fill="#e0e7ff">Documentación y datos del almacén para constructoras</text>
+
+  <g font-family="Inter, 'Segoe UI', Arial, sans-serif" font-size="17" font-weight="700" fill="#ffffff">
+    <g transform="translate(64 184)">
+      <rect width="300" height="56" rx="28" fill="url(#chip)" stroke="#ffffff" stroke-opacity="0.3"/>
+      <circle cx="30" cy="28" r="14" fill="#38bdf8"/>
+      <path d="M24 30c0-6 4-9 8-9 3 0 5 2 5 4m-7 6c1 2 3 3 6 3" fill="none" stroke="#fff" stroke-width="2.4" stroke-linecap="round"/>
+      <text x="56" y="34">1 · Contactar al proveedor</text>
+    </g>
+    <g transform="translate(386 184)">
+      <rect width="300" height="56" rx="28" fill="url(#chip)" stroke="#ffffff" stroke-opacity="0.3"/>
+      <circle cx="30" cy="28" r="14" fill="#34d399"/>
+      <path d="M22 28l6 6 11-12" fill="none" stroke="#fff" stroke-width="2.8" stroke-linecap="round" stroke-linejoin="round"/>
+      <text x="56" y="34">2 · Importar material</text>
+    </g>
+    <g transform="translate(708 184)">
+      <rect width="300" height="56" rx="28" fill="url(#chip)" stroke="#ffffff" stroke-opacity="0.3"/>
+      <circle cx="30" cy="28" r="14" fill="#fbbf24"/>
+      <path d="M22 28h16m-6-6 6 6-6 6" fill="none" stroke="#fff" stroke-width="2.8" stroke-linecap="round" stroke-linejoin="round"/>
+      <text x="56" y="34">3 · Exportar a obras</text>
+    </g>
+  </g>
+</svg>

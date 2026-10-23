@@ -1,6 +1,186 @@
-# Sistema MRP (Streamlit + Supabase)
+<p align="center">
+  <img src="docs/img/banner.svg" alt="Sistema MRP: documentación y datos del almacén para constructoras" width="100%">
+</p>
 
-Herramienta para **preparar documentación y gestionar los datos del almacén** de una constructora, sin ningún servicio real conectado (no envía mensajes ni correos por sí sola, no compra y no paga). Sus tres objetivos: **contactar con el proveedor**, **importar material** al almacén y **exportar material a las obras**. Flujo: **proveedor → orden de compra → recepción → almacén (entrada) → despacho a obra con vale (salida)**. Un solo administrador, un solo almacén y un catálogo maestro de 501 materiales. Versión vigente: ver el pie del menú lateral (`core/version.py`); historial en [CHANGELOG.md](CHANGELOG.md) y lo que falta o se puede mejorar en [MEJORAS.md](MEJORAS.md).
+<p align="center">
+  <img alt="Python" src="https://img.shields.io/badge/Python-3.12-3776AB?logo=python&logoColor=white">
+  <img alt="Streamlit" src="https://img.shields.io/badge/Streamlit-1.66-FF4B4B?logo=streamlit&logoColor=white">
+  <img alt="Supabase" src="https://img.shields.io/badge/Supabase-Postgres-3ECF8E?logo=supabase&logoColor=white">
+  <img alt="PDF" src="https://img.shields.io/badge/PDF-fpdf2-C0392B">
+  <a href="https://github.com/InmobiliariaPolyline/Sistema-MRP-EDC-VII/actions/workflows/tests.yml"><img alt="Pruebas" src="https://github.com/InmobiliariaPolyline/Sistema-MRP-EDC-VII/actions/workflows/tests.yml/badge.svg"></a>
+  <img alt="Pruebas automáticas" src="https://img.shields.io/badge/pruebas-294-brightgreen">
+  <img alt="Idioma" src="https://img.shields.io/badge/idioma-espa%C3%B1ol-7c3aed">
+</p>
+
+<p align="center">
+  <b>📦 Compras · 🏬 Almacén · 🏗️ Obras</b><br>
+  Una herramienta para <b>preparar documentación y gestionar los datos del almacén</b> de una constructora.<br>
+  Sin servicios reales conectados: no envía mensajes por sí sola, no compra y no paga.
+</p>
+
+<p align="center">
+  <a href="#-objetivos">🎯 Objetivos</a> ·
+  <a href="#-el-sistema-en-imágenes">🎨 Imágenes</a> ·
+  <a href="#-flujo-de-trabajo">🔄 Flujo</a> ·
+  <a href="#-módulos">🧩 Módulos</a> ·
+  <a href="#-documentos-pdf">📄 PDF</a> ·
+  <a href="#-arquitectura">🏢 Arquitectura</a> ·
+  <a href="#-puesta-en-marcha">🚀 Puesta en marcha</a> ·
+  <a href="MEJORAS.md">🗺️ Hoja de ruta</a> ·
+  <a href="CHANGELOG.md">📜 Cambios</a>
+</p>
+
+---
+
+## 🎯 Objetivos
+
+| | Objetivo | Qué hace el sistema |
+|:-:|---|---|
+| 📞 | **1 · Contactar con el proveedor** | Guarda sus datos, su catálogo y sus precios; abre **llamada, WhatsApp, Gmail u Outlook** con el mensaje ya escrito (pedir catálogo, cotizar, enviar la orden). |
+| 📥 | **2 · Importar material al almacén** | Orden de compra → **recepción** parcial o total → **entrada al inventario**. También importa listas de precios desde Excel o CSV. |
+| 📤 | **3 · Exportar material a las obras** | **Despacho** del almacén a la obra con su **vale de salida en PDF**, controlando el presupuesto de la obra. |
+
+> **Versión vigente:** la ves al pie del menú lateral («Sistema MRP · parche NNN», `core/version.py`).
+> **Qué falta y qué se puede mejorar:** [MEJORAS.md](MEJORAS.md) · **Historial de parches:** [CHANGELOG.md](CHANGELOG.md).
+
+## ✅ Qué hace y ❌ qué no hace
+
+| ✅ Sí hace | ❌ No hace |
+|---|---|
+| Prepara cada pedido con su **valor exacto (IGV 18 %)** antes de comprar. | No se conecta con el sistema ni la base de datos del proveedor. |
+| Registra **lo pedido**, **lo recibido** y **lo despachado** a cada obra. | No hace la compra ni **maneja dinero** (nada de tarjetas ni cuentas). |
+| Calcula el **cronograma de cuotas** (informativo) y genera su PDF. | No envía correos ni mensajes por sí solo: **tú** abres el enlace y lo mandas. |
+| Genera **PDF** (órdenes, vales, pedidos, reportes, kardex) y **Excel**. | No factura ni emite comprobantes electrónicos. |
+| Guarda el historial de **quién cambió qué** y respaldos cifrados. | Un solo administrador y un solo almacén. |
+
+Las cifras son siempre «valor de los pedidos», nunca «pérdida» ni «pagado».
+
+## 🎨 El sistema en imágenes
+
+<table>
+  <tr>
+    <td width="50%"><img src="docs/img/app-dashboard.jpg" alt="Dashboard"><br><sub><b>📊 Dashboard</b>: totales, alertas de stock bajo y accesos rápidos.</sub></td>
+    <td width="50%"><img src="docs/img/app-ordenes.jpg" alt="Órdenes de compra"><br><sub><b>🧾 Órdenes de compra</b>: un pedido con varios proveedores aparece como una sola tarjeta.</sub></td>
+  </tr>
+  <tr>
+    <td width="50%"><img src="docs/img/app-nuevo-pedido.jpg" alt="Nuevo pedido con dos proveedores"><br><sub><b>🛒 Nuevo pedido</b>: una tarjeta por proveedor, con su IGV, su plan de pagos y el total.</sub></td>
+    <td width="50%"><img src="docs/img/app-pedido.jpg" alt="Ficha del pedido"><br><sub><b>📦 Ficha del pedido (PD-)</b>: estado resumen y acciones sobre todas sus órdenes.</sub></td>
+  </tr>
+  <tr>
+    <td width="50%"><img src="docs/img/app-proveedores.jpg" alt="Proveedores"><br><sub><b>🏭 Proveedores</b>: logotipo y contacto con Llamar, WhatsApp, Gmail y Outlook.</sub></td>
+    <td width="50%"><img src="docs/img/app-inventario.jpg" alt="Inventario"><br><sub><b>🏬 Inventario</b>: stock por material con alerta de stock mínimo.</sub></td>
+  </tr>
+  <tr>
+    <td colspan="2" align="center"><img src="docs/img/app-oscuro.jpg" alt="Modo oscuro" width="60%"><br><sub><b>🌙 Modo oscuro</b>: todo el sistema tiene tema claro y oscuro, en hora de Lima.</sub></td>
+  </tr>
+</table>
+
+## 🔄 Flujo de trabajo
+
+```mermaid
+flowchart LR
+    P["🏭 Proveedor<br/>catálogo y precios"] -->|elegir materiales| OC["🧾 Orden de compra<br/>o pedido PD-"]
+    OC -->|"📞 WhatsApp · Gmail · Outlook · PDF"| P
+    OC -->|llega el material| R["📥 Recepción<br/>parcial o total"]
+    R --> A[("🏬 Almacén<br/>inventario")]
+    A -->|alerta de stock mínimo| S["💡 Sugerencia de compra"]
+    S --> OC
+    A -->|pide la obra| D["📤 Despacho a obra"]
+    D --> V["📄 Vale de salida<br/>PDF para firmar"]
+    D --> O["🏗️ Obra<br/>presupuesto vs. despachado"]
+```
+
+## 🧩 Módulos
+
+| | Módulo | Qué resuelve | Acceso |
+|:-:|---|---|:-:|
+| 📊 | **Dashboard** | Totales, gasto por mes y proveedor, órdenes por estado, alertas de atraso y de stock bajo, mapa de obras. | Todos |
+| 🧾 | **Órdenes de compra** | Pedidos con IGV claro, **pago en cuotas**, **varios proveedores en un pedido**, comparador de cotizaciones, recepción parcial, duplicar, PDF y WhatsApp. | Todos |
+| 🏭 | **Proveedores** | Ficha con logotipo, catálogo con precios y disponibilidad, **contacto rápido**, importar lista de precios, calificación por plazos. | Todos |
+| 🧱 | **Materiales** | Catálogo maestro de 501 materiales: categoría, densidad, métrica, mejor precio. El stock no se edita aquí. | Todos |
+| 🏬 | **Inventario** | Stock, movimientos, **despacho con vale de salida**, devoluciones, conteos físicos, kardex y stock mínimo. | Todos |
+| 🏗️ | **Obras** | Presupuesto por obra y etapa frente a lo pedido, recibido y despachado; **edición de la obra**; mapa; reporte PDF. | Todos |
+| 🗓️ | **Asistencia** | Pasar lista por día y resumen por trabajador y obra. | Todos |
+| 👷 | **Trabajadores** | Personal, cuadrillas, obra asignada, ubicación y contacto por WhatsApp; acceso opcional al sistema. | Admin |
+| 📈 | **Reportes** | 17 conjuntos descargables en Excel y PDF, más el reporte de obra. | Todos |
+| 📖 | **Manual de Usuario** | Capítulos ilustrados con maquetas de cada formulario, buscador y glosario. | Todos |
+| 🕘 | **Historial** | Quién creó, editó, recibió o eliminó qué, con el valor anterior y el nuevo. | Admin |
+| 💾 | **Respaldo** | ZIP con un CSV por tabla, con cifrado AES-256 opcional. | Admin |
+
+### 🧾 Lo nuevo en las órdenes de compra
+
+| 💡 Función | Cómo funciona |
+|---|---|
+| **IGV en dos opciones** | «Sin IGV en el precio» (se suma 18 %) o «Con IGV incluido» (se separa del total). |
+| **Pago en cuotas** | De 2 a 24 cuotas mensuales, quincenales o semanales, con inicial opcional. Calcula montos y vencimientos (informativo). |
+| **PDF por pago** | Un aviso por cada cuota («OC-0008-P2») y el cronograma completo. |
+| **Varios proveedores** | Cambiar de proveedor no pierde lo elegido; cada uno tiene sus condiciones; «Agregar desde aquí» y «Mover a otro proveedor» aprovechan el precio más bajo. |
+| **Pedido PD-0001** | Al crearlo genera una orden por proveedor, mostrada como una sola ficha con el total general, su PDF y acciones conjuntas (enviar, cancelar, eliminar). |
+
+## 📄 Documentos PDF
+
+Seis temas de color, cinco estilos de portada, código de barras, sellos de estado y gráficos, todo con la fuente Inter incluida.
+
+<table>
+  <tr>
+    <td width="33%" align="center"><img src="docs/img/pdf-orden.png" alt="Orden de compra"><br><sub><b>🧾 Orden de compra</b></sub></td>
+    <td width="33%" align="center"><img src="docs/img/pdf-pedido.png" alt="Pedido"><br><sub><b>📦 Pedido con varios proveedores</b></sub></td>
+    <td width="33%" align="center"><img src="docs/img/pdf-pago.png" alt="Aviso de pago"><br><sub><b>🗓️ Aviso de pago (cuota)</b></sub></td>
+  </tr>
+  <tr>
+    <td width="33%" align="center"><img src="docs/img/pdf-vale.png" alt="Vale de salida"><br><sub><b>🚚 Vale de salida</b></sub></td>
+    <td width="33%" align="center"><img src="docs/img/pdf-obra.png" alt="Reporte de obra"><br><sub><b>🏗️ Reporte de obra</b></sub></td>
+    <td width="33%" align="center"><img src="docs/img/pdf-kardex.png" alt="Kardex"><br><sub><b>📒 Kardex de inventario</b></sub></td>
+  </tr>
+</table>
+
+## 🏢 Arquitectura
+
+Streamlit **no separa frontend y backend**: es un solo proceso Python. Se organiza en capas, cada una en su carpeta.
+
+```mermaid
+flowchart TB
+    APP["🚪 app.py<br/>arranque y sesión"] --> CORE["🧭 core/shell.py<br/>menú y permisos"]
+    CORE --> MOD["🧩 modules/<br/>una pantalla por archivo"]
+    MOD --> REPO["🗄️ db/repository.py<br/>fachada de datos"]
+    REPO --> SUPA[("☁️ Supabase<br/>Postgres")]
+    REPO --> LOCAL[("💻 SQLite local<br/>modo demo")]
+    MOD --> UT["🛠️ utils/<br/>PDF · IGV y cuotas · hora de Lima<br/>contacto · direcciones"]
+```
+
+| Capa | Carpeta | Responsabilidad |
+|---|---|---|
+| 🚪 Arranque | `app.py` | Configura la página y exige sesión iniciada. |
+| 🧭 Cascarón | `core/` | Menú lateral, permisos por rol y versión. |
+| 🧩 Pantallas | `modules/` | Una pantalla por archivo; piden datos a `db/`, nunca a Supabase directo. |
+| 🗄️ Datos | `db/` | Fachada que usa Supabase o SQLite según haya credenciales, esquema y migraciones. |
+| 🛠️ Ayudas | `utils/` | PDF (`pdf_style.py`), dinero y cuotas (`money.py`), hora de Lima (`clock.py`), contacto, direcciones. |
+| 🎨 Estilos | `modules/styles/` | Hojas CSS numeradas, paletas clara y oscura. |
+
+**Stack:** Streamlit · Supabase (Postgres, `supabase-py`) · login propio con `bcrypt` · mapas con `st.map` y OpenStreetMap · `fpdf2` y `openpyxl` · caché de lecturas de 30 s.
+
+## 🚀 Puesta en marcha
+
+1. **Base de datos** — crea un proyecto en [Supabase](https://supabase.com) y corre `db/schema.sql` en el SQL Editor. Si actualizas una instalación existente, corre solo las migraciones de `db/migrations/` que falten (la última: `047_pedido_varios_proveedores.sql`).
+2. **Dependencias** — `pip install -r requirements.txt`
+3. **Credenciales** — copia `.env.example` a `.env` (o `.streamlit/secrets.toml.example` a `.streamlit/secrets.toml` si despliegas en Streamlit Community Cloud) y completa `SUPABASE_URL`, `SUPABASE_SERVICE_KEY` y `SESSION_SECRET`.
+4. **Catálogo** (opcional, una vez) — `python scripts/seed_catalog.py ruta/al/listado_materiales.xlsx`
+5. **Correr** — `streamlit run app.py`
+6. **Primer ingreso** — la app pide crear al Administrador; después se dan accesos desde **Trabajadores**.
+
+```bash
+pip install -r requirements.txt
+streamlit run app.py
+```
+
+## 🧪 Pruebas
+
+`pip install -r requirements-dev.txt` y `python -m unittest discover -s tests` (294 pruebas). GitHub Actions las corre en cada subida. Las de SQL usan un Postgres real (PGlite) vía Node: `cd tests/sql && npm ci` una vez. **Corre las pruebas con el `.env` apartado** para que no consulten la base real.
+
+---
+
+<details>
+<summary><b>📖 Descripción detallada de cada módulo</b> (texto completo)</summary>
 
 Sistema con login propio, dashboard y varios módulos:
 
@@ -71,12 +251,11 @@ adelante.
 
 El historial completo de parches, correcciones, problemas encontrados y pendientes está en [CHANGELOG.md](CHANGELOG.md).
 
-## Qué hace y qué no hace el sistema
+</details>
 
-- **Sí:** prepara cada pedido con su **valor exacto (IGV 18 % incluido)** para saber cuánto será antes de comprar; registra **lo pedido a cada proveedor**, **lo que entra al almacén** (recepción) y **lo que sale a cada obra** (despacho con vale); y deja los datos y reportes (Excel, PDF, kardex) a mano.
-- **No:** no se conecta con el sistema ni la base de datos del proveedor, no hace la compra y **no maneja dinero** (nada de tarjetas ni cuentas). La compra y el pago los hace el administrador por fuera, con el RUC de la empresa. Por eso las cifras son «valor de los pedidos», no pérdidas ni pagos hechos.
+# 📚 Documentación técnica
 
-## Seguridad y respaldos
+## 🔐 Seguridad y respaldos
 
 - **Dos claves de Supabase.** La app usa `SUPABASE_SERVICE_KEY` (service_role, solo en el servidor) si está configurada; si no, la pública (modo abierto). Con la clave de servicio se puede **cerrar la base** (`db/migrations/040_cerrar_base.sql`) para que la clave pública no lea ni escriba nada. Orden: configurar la clave → reiniciar → ejecutar el script → `python scripts/check_security.py`. Para deshacerlo: `040b_reabrir_base_emergencia.sql`.
 - **Acceso:** bloqueo de 15 min tras 5 contraseñas incorrectas, contraseñas de al menos 8 caracteres con letras y números, y «Mi cuenta» para cambiarla. Define `SESSION_SECRET` para firmar la cookie de sesión.
@@ -109,11 +288,11 @@ Los acumulados pesados (consumo por obra, contadores del dashboard) los calcula 
 
 `python -m unittest discover -s tests` corre todas las pruebas. Las de SQL usan un Postgres real (PGlite) vía Node: `cd tests/sql && npm ci` una vez. El historial de cambios guarda el valor anterior y el nuevo de las ediciones (`db/migrations/044_fase_f.sql`). `db/schema.sql` es el esquema completo para instalaciones nuevas.
 
-## PDF
+## 📄 PDF (detalle)
 
 Los PDF (orden de compra, vale de salida, reportes, reporte de obra, kardex) se arman con `utils/pdf_style.py` (fuente Inter incluida en `utils/fonts/`, colores de la app, portada, tarjetas, tablas e iconos dibujados). Para un documento nuevo basta con `BrandPDF`.
 
-## Arquitectura
+## Arquitectura (detalle)
 
 ### Formularios e interfaz (parche 030)
 
@@ -148,7 +327,7 @@ capas, cada una en su carpeta:
 `utils/` son helpers sin estado (geocodificación, fechas relativas) que no
 le pertenecen a ningún módulo en particular.
 
-## Stack
+## Stack (detalle)
 
 - **Todo en un proceso**: [Streamlit](https://streamlit.io) (sin API aparte;
   ver "Arquitectura" arriba).
@@ -164,7 +343,7 @@ le pertenecen a ningún módulo en particular.
   consulta de red en cada clic; cada escritura invalida el caché que
   corresponda.
 
-## Puesta en marcha
+## Puesta en marcha (detalle)
 
 1. Crea un proyecto en Supabase y corre `db/schema.sql` en su SQL Editor
    (crea las tablas `materials`, `suppliers`, `supplier_materials`, `users`,
