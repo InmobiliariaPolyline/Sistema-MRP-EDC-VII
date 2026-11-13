@@ -179,5 +179,51 @@ class EnganchesTests(unittest.TestCase):
             self.assertEqual(faltan, [], f"{archivo} no define: {faltan}")
 
 
+class ConexionNeonTests(unittest.TestCase):
+    """Regresión: el pooler de Neon rechaza `options=-c statement_timeout=...` al conectar."""
+
+    def _psycopg_falso(self):
+        import sys
+        import types
+
+        registro = {"connect": None, "sentencias": [], "commit": False}
+
+        class Cur:
+            def __enter__(self): return self
+            def __exit__(self, *a): return False
+            def execute(self, sql, params=None): registro["sentencias"].append(sql)
+
+        class Conn:
+            def __enter__(self): return self
+            def __exit__(self, *a): return False
+            def cursor(self): return Cur()
+            def commit(self): registro["commit"] = True
+
+        def connect(url, **kwargs):
+            registro["connect"] = (url, kwargs)
+            return Conn()
+
+        falso = types.ModuleType("psycopg")
+        falso.connect = connect
+        return falso, registro, sys
+
+    def test_no_manda_parametros_de_arranque_y_pide_el_limite_dentro_de_la_transaccion(self):
+        falso, registro, sys = self._psycopg_falso()
+        anterior = sys.modules.get("psycopg")
+        sys.modules["psycopg"] = falso
+        try:
+            vc._ejecutar_en_neon("postgresql://u:p@host-pooler/db", _fuente())
+        finally:
+            if anterior is None:
+                sys.modules.pop("psycopg", None)
+            else:
+                sys.modules["psycopg"] = anterior
+        url, kwargs = registro["connect"]
+        self.assertNotIn("options", kwargs)
+        self.assertEqual(registro["sentencias"][0], "SET LOCAL statement_timeout = '15s'")
+        self.assertEqual(len(registro["sentencias"]), 1 + len(vc.SENTENCIAS))
+        self.assertTrue(registro["commit"])
+
+
 if __name__ == "__main__":
     unittest.main()

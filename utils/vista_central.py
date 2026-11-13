@@ -256,11 +256,15 @@ def _ejecutar_en_neon(url: str, fuente: Fuente) -> None:
         log.warning("vista central: falta el paquete psycopg; no se sincroniza")
         return
     try:
-        with psycopg.connect(url, connect_timeout=5, options="-c statement_timeout=15000") as conn:
+        # Sin `options=`: el pooler de Neon (host «-pooler») rechaza parámetros de arranque como
+        # statement_timeout. El límite se pide dentro de la transacción con SET LOCAL, que sí admite.
+        with psycopg.connect(url, connect_timeout=5) as conn:
             with conn.cursor() as cur:
+                cur.execute("SET LOCAL statement_timeout = '15s'")
                 resultado = sincronizar(fuente, lambda sql, params: cur.execute(sql, params))
             conn.commit()
-        log.info("vista central: sincronizado %s", resultado)
+        # print (y no logging): el nivel INFO no sale en los registros de Streamlit y esta línea confirma que funcionó.
+        print(f"vista central: sincronizado {resultado}", flush=True)
     except Exception as err:  # noqa: BLE001
         log.warning("vista central: no se pudo sincronizar: %s", mensaje_seguro(err))
 
