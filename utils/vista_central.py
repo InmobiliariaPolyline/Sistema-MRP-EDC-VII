@@ -39,11 +39,19 @@ class Fuente(Protocol):
     def obras(self) -> list[dict]: ...
 
 
+# Las columnas de la base central son numeric(14,2): un valor mayor haría fallar TODA la sincronización por una sola fila.
+LIMITE_NUM = 999_999_999_999.99
+
+
 def _num(v: Any) -> float:
+    """Número seguro para la base central: texto o None => 0; NaN/infinito => 0; acotado a ±LIMITE_NUM."""
     try:
-        return float(v) if v is not None else 0.0
+        n = float(v) if v is not None else 0.0
     except (TypeError, ValueError):
         return 0.0
+    if n != n or n in (float("inf"), float("-inf")):
+        return 0.0
+    return max(-LIMITE_NUM, min(LIMITE_NUM, n))
 
 
 def _fecha(v: Any) -> str | None:

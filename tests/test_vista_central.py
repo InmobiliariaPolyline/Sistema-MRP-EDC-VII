@@ -179,6 +179,36 @@ class EnganchesTests(unittest.TestCase):
             self.assertEqual(faltan, [], f"{archivo} no define: {faltan}")
 
 
+class LimitesNumericosTests(unittest.TestCase):
+    """Una sola cantidad absurda no debe romper TODA la sincronización (la columna es numeric(14,2))."""
+
+    def test_num_acota_y_sanea(self):
+        self.assertEqual(vc._num(1e20), vc.LIMITE_NUM)
+        self.assertEqual(vc._num(-1e20), -vc.LIMITE_NUM)
+        self.assertEqual(vc._num("1e15"), vc.LIMITE_NUM)
+        self.assertEqual(vc._num(12.5), 12.5)
+        self.assertEqual(vc._num("12.5"), 12.5)
+        for raro in (None, "abc", "", "nan", "NaN", "inf", "-inf", float("nan"), float("inf")):
+            self.assertEqual(vc._num(raro), 0.0, repr(raro))
+
+    def test_la_vista_no_contiene_valores_que_jsonb_o_numeric_rechacen(self):
+        niveles = [
+            {"material_id": "a", "category": "C", "material_name": "Enorme", "unit": "kg", "min_stock": 5, "stock": 1e20},
+            {"material_id": "b", "category": "C", "material_name": "NaN", "unit": "kg", "min_stock": "nan", "stock": "inf"},
+            {"material_id": "c", "category": "C", "material_name": "Normal", "unit": "kg", "min_stock": 5, "stock": 2},
+        ]
+        items = [{"order_id": "o1", "quantity": 1e30, "received_qty": float("nan")}]
+        ordenes = [{"id": "o1", "code": "OC-1", "supplier_name": "P", "status": "pendiente"}]
+        v = vc.construir_vista(niveles, ordenes, items, [])
+        texto = json.dumps(v, allow_nan=False)  # lanza si quedara NaN o infinito
+        self.assertIn("999999999999.99", texto)
+        por_id = {r["material_id"]: r for r in v["stock"]}
+        self.assertEqual(set(por_id), {"a", "c"})            # "b" tiene mínimo no numérico => 0 => no se copia
+        self.assertEqual(por_id["a"]["cantidad"], vc.LIMITE_NUM)
+        self.assertEqual(v["pedidos"][0]["cantidad_pedida"], vc.LIMITE_NUM)
+        self.assertEqual(v["pedidos"][0]["cantidad_recibida"], 0.0)
+
+
 class ConexionNeonTests(unittest.TestCase):
     """Regresión: el pooler de Neon rechaza `options=-c statement_timeout=...` al conectar."""
 
