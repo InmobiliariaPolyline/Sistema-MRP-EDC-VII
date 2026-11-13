@@ -11,3 +11,4 @@ requests==2.34.2
 openpyxl==3.1.5
 fpdf2==2.8.9
 pyzipper==0.3.6
+psycopg[binary]==3.3.9  # solo para la vista central (CENTRAL_DATABASE_URL, opcional)

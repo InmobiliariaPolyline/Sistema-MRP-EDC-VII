@@ -236,6 +236,7 @@ Sistema con login propio, dashboard y varios módulos:
 - **Manual de usuario** (Sistema › Manual de Usuario): capítulos ilustrados con maquetas de cada formulario, pasos numerados, buscador y glosario.
 - **Ayuda en cada pantalla**: botón «❓ Cómo usar» junto al título de cada módulo, consejos con ejemplo en los formularios y **validación en vivo** mientras se escribe (contador de caracteres, qué falta, qué caracteres no se permiten, borde rojo/verde).
 - **Ficha de obra y de material**: en *Obras*, pestañas de información (mapa), materiales, trabajadores y progreso; en *Materiales*, el botón ℹ️ abre la ficha del material (qué significa su densidad, precios, stock y obras donde se usa).
+- **Vista central para Coze (opcional)**: si defines `CENTRAL_DATABASE_URL` (cadena de Neon del rol `writer_mrp`), tras cada cambio de stock, stock mínimo u órdenes (y al arrancar) se copia un resumen —materiales con mínimo y órdenes abiertas— a una base central de solo lectura para el agente. Sin esa variable no cambia nada.
 - **Sesión persistente**: al recargar la página no se pierde el login (cookie firmada, 7 días; define `SESSION_SECRET` en `.env`/secrets para tu propio secreto).
 - **Historial** (solo administradores): quién creó, editó, recibió o
   eliminó qué y cuándo.
